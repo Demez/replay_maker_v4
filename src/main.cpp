@@ -1,5 +1,7 @@
 #include "main.h"
 
+#include <locale.h>
+
 #include "imgui.h"
 #include "imgui_impl_win32.h"
 #include "imgui_impl_opengl3_loader.h"
@@ -202,6 +204,8 @@ void draw_imgui_window( int index, int size[ 2 ] )
 
 int main( int argc, char* argv[] )
 {
+	setlocale( LC_ALL, "en_US.UTF-8" );
+
 	// 2 imgui windows
 	if ( !win32_create_windows( 1600, 900, IMGUI_WINDOW_COUNT ) )
 	{

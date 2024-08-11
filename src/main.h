@@ -41,10 +41,10 @@ T CLAMP( T value, T low, T high )
 // ----------------------------------------------------
 
 // library loading
-module                             sys_load_library( const char* path );
+module                             sys_load_library( const wchar_t* path );
 void                               sys_close_library( module mod );
 void*                              sys_load_func( module mod, const char* path );
-const char*                        sys_get_error();
+const wchar_t*                     sys_get_error();
 
 bool                               win32_create_windows( int width, int height, int imgui_window_count );
 void                               win32_run();

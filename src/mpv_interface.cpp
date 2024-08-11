@@ -81,11 +81,11 @@ FUNC_PTR( mpv_render_context_free );
 
 bool load_mpv_dll()
 {
-	g_mpv_module = sys_load_library( "libmpv-2.dll" );
+	g_mpv_module = sys_load_library( L"libmpv-2.dll" );
 
 	if ( g_mpv_module == nullptr )
 	{
-		printf( "SDL_LoadObject failed: %s\n", sys_get_error() );
+		wprintf( L"SDL_LoadObject failed: %s\n", sys_get_error() );
 		return false;
 	}
 

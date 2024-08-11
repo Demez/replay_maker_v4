@@ -24,7 +24,7 @@ ULONG gDropFormats[] = {
 ULONG gDropFormatCount = ARR_SIZE( gDropFormats );
 
 
-struct ImgDropTarget : public IDropTarget
+struct window_drop_target : public IDropTarget
 {
 	HWND                    aHWND          = 0;
 	LONG                    nRef           = 0L;
@@ -61,7 +61,7 @@ struct ImgDropTarget : public IDropTarget
 		for ( UINT i = 0; i < fileCount; i++ )
 		{
 			TCHAR filepath[ MAX_PATH ];
-			DragQueryFileW( drop, i, filepath, ARR_SIZE( filepath ) );
+			DragQueryFile( drop, i, filepath, ARR_SIZE( filepath ) );
 			// NOTE: maybe check if we can load this file here?
 			// some callback function or ImageLoader_SupportsImage()?
 

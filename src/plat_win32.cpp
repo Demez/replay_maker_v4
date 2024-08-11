@@ -48,7 +48,7 @@ void              win32_render_all();
 //void                  win32_register_drag_drop( HWND window );
 
 
-module sys_load_library( const char* path )
+module sys_load_library( const wchar_t* path )
 {
 	return (module)LoadLibrary( path );
 }
@@ -66,12 +66,12 @@ void* sys_load_func( module mod, const char* name )
 }
 
 
-const char* sys_get_error()
+const wchar_t* sys_get_error()
 {
 	DWORD errorID = GetLastError();
 
 	if ( errorID == 0 )
-		return "";  // No error message
+		return L"";  // No error message
 
 	LPSTR strErrorMessage = NULL;
 
@@ -80,13 +80,13 @@ const char* sys_get_error()
 	  NULL,
 	  errorID,
 	  0,
-	  (LPSTR)&strErrorMessage,
+	  (LPTSTR)&strErrorMessage,
 	  0,
 	  NULL );
 
-	static char message[ 512 ];
+	static wchar_t message[ 512 ];
 	memset( message, 512, 0 );
-	snprintf( message, 512, "Win32 API Error %ud: %s", errorID, strErrorMessage );
+	_snwprintf( message, 512, L"Win32 API Error %ud: %s", errorID, strErrorMessage );
 
 	// Free the Win32 string buffer.
 	LocalFree( strErrorMessage );
@@ -318,7 +318,7 @@ void* get_proc_address_mpv( void* fn_ctx, const char* name )
 
 // TODO: check out CS_CLASSDC
 // https://learn.microsoft.com/en-us/windows/win32/winmsg/window-class-styles
-static ATOM create_window_class( const char* class_name, WNDPROC wnd_proc, bool main_window, bool brush, int bg_brush, LPSTR cursor = IDC_ARROW )
+static ATOM create_window_class( const wchar_t* class_name, WNDPROC wnd_proc, bool main_window, bool brush, int bg_brush, LPWSTR cursor = IDC_ARROW )
 {
 	WNDCLASSEX wc = { 0 };
 	ZeroMemory( &wc, sizeof( wc ) );
@@ -414,13 +414,13 @@ static bool create_gl_context( HWND window, gl_window_data_t& gl_data )
 
 bool win32_create_windows( int width, int height, int imgui_window_count )
 {
-	ATOM wc_main  = create_window_class( "replay_maker", Win32_WindowProc_Main, true, false, NULL_BRUSH );
-	ATOM wc_imgui = create_window_class( "replay_maker_imgui", Win32_WindowProc_ImGui, false, false, NULL_BRUSH );
-	ATOM wc_mpv   = create_window_class( "replay_maker_mpv", Win32_WindowProc_MPV, false, true, BLACK_BRUSH );
+	ATOM wc_main  = create_window_class( L"replay_maker", Win32_WindowProc_Main, true, false, NULL_BRUSH );
+	ATOM wc_imgui = create_window_class( L"replay_maker_imgui", Win32_WindowProc_ImGui, false, false, NULL_BRUSH );
+	ATOM wc_mpv   = create_window_class( L"replay_maker_mpv", Win32_WindowProc_MPV, false, true, BLACK_BRUSH );
 
 	ATOM wc_border[ 2 ];
-	wc_border[ 0 ] = create_window_class( "replay_maker_element_border_v", Win32_WindowProc_Border, false, true, LTGRAY_BRUSH, IDC_SIZENS );
-	wc_border[ 1 ] = create_window_class( "replay_maker_element_border_h", Win32_WindowProc_Border, false, true, LTGRAY_BRUSH, IDC_SIZEWE );
+	wc_border[ 0 ] = create_window_class( L"replay_maker_element_border_v", Win32_WindowProc_Border, false, true, LTGRAY_BRUSH, IDC_SIZENS );
+	wc_border[ 1 ] = create_window_class( L"replay_maker_element_border_h", Win32_WindowProc_Border, false, true, LTGRAY_BRUSH, IDC_SIZEWE );
 
 	if ( wc_main == 0 || wc_imgui == 0 || wc_mpv == 0 || wc_border[ 0 ] == 0 || wc_border[ 1 ] == 0 )
 	{
@@ -443,10 +443,10 @@ bool win32_create_windows( int width, int height, int imgui_window_count )
 
 		adjust_window_rect( dwStyle, new_width, new_height );
 
-		main_window = CreateWindowExA(
+		main_window = CreateWindowEx(
 		  dwExStyle,
 		  _ClassName,
-		  "Replay Maker",
+		  L"Replay Maker",
 		  dwStyle,
 		  CW_USEDEFAULT,
 		  CW_USEDEFAULT,
@@ -476,10 +476,10 @@ bool win32_create_windows( int width, int height, int imgui_window_count )
 
 		adjust_window_rect( dwStyle, width, height );
 
-		mpv_window = CreateWindowExA(
+		mpv_window = CreateWindowEx(
 		  dwExStyle,
 		  _ClassName,
-		  "Replay Maker - MPV Window",
+		  L"Replay Maker - MPV Window",
 		  dwStyle,
 		  CW_USEDEFAULT,
 		  CW_USEDEFAULT,
@@ -536,10 +536,10 @@ bool win32_create_windows( int width, int height, int imgui_window_count )
 
 		adjust_window_rect( dwStyle, width, height );
 
-		HWND window = CreateWindowExA(
+		HWND window = CreateWindowEx(
 			dwExStyle,
 			_ClassName,
-			"Replay Maker - ImGui Window",
+			L"Replay Maker - ImGui Window",
 			dwStyle,
 			CW_USEDEFAULT,
 			CW_USEDEFAULT,
@@ -584,10 +584,10 @@ bool win32_create_windows( int width, int height, int imgui_window_count )
 
 		adjust_window_rect( dwStyle, width, height );
 
-		HWND window = CreateWindowExA(
+		HWND window = CreateWindowEx(
 		  dwExStyle,
 		  _ClassName,
-		  "Replay Maker - ImGui Window Border",
+		  L"Replay Maker - ImGui Window Border",
 		  dwStyle,
 		  CW_USEDEFAULT,
 		  CW_USEDEFAULT,
