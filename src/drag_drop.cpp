@@ -1,17 +1,17 @@
 #include "main.h"
 
-#if 0
+#if 1
   #include <vector>
 
-#include <WinUser.h>
-#include <Windows.h>
-#include <direct.h>
-#include <fileapi.h>
-#include <handleapi.h>
-#include <io.h>
-#include <memory>
-#include <shlobj_core.h>
-#include <shlwapi.h>
+// #include <WinUser.h>
+// #include <Windows.h>
+// #include <direct.h>
+//#include <fileapi.h>
+// #include <handleapi.h>
+// #include <io.h>
+// #include <memory>
+ #include <shlobj_core.h>
+// #include <shlwapi.h>
 #include <windowsx.h>  // GET_X_LPARAM/GET_Y_LPARAM
 #include <wtypes.h>    // HWND
 
@@ -30,7 +30,64 @@ struct window_drop_target : public IDropTarget
 	LONG                    nRef           = 0L;
 
 	bool                    aDropSupported = false;
-	std::vector< fs::path > aDropFiles;
+
+	wchar_t**               drop_files     = nullptr;
+	u32*                    drop_files_len  = nullptr;
+	u32                     drop_file_count = 0;
+
+	bool add_drop_file( const wchar_t* file )
+	{
+		{
+			wchar_t** new_memory = (wchar_t**)realloc( drop_files, (drop_file_count + 1) * sizeof( wchar_t* ) );
+
+			if ( new_memory == nullptr )
+			{
+				printf( "realloc failed\n" );
+				return false;
+			}
+
+			drop_files = new_memory;
+		}
+
+		{
+			u32* new_memory = (u32*)realloc( drop_files_len, (drop_file_count + 1) * sizeof( u32 ) );
+
+			if ( new_memory == nullptr )
+			{
+				printf( "realloc failed\n" );
+				return false;
+			}
+
+			drop_files_len = new_memory;
+		}
+
+		// allocate memory for the string
+		drop_files_len[ drop_file_count ] = wcslen( file );
+		drop_files[ drop_file_count ]     = (wchar_t*)malloc( ( drop_files_len[ drop_file_count ] + 1 ) * sizeof( wchar_t ) );
+
+		wcscpy( drop_files[ drop_file_count ], file );
+
+		drop_file_count++;
+
+		return true;
+	}
+
+	void clear_drop_files()
+	{
+		for ( u32 i = 0; i < drop_file_count; i++ )
+		{
+			free( drop_files[ i ] );
+			drop_files[ i ] = nullptr;
+		}
+
+		// dont free these arrays, we can just realloc them later
+		//free( drop_files );
+		//free( drop_files_len );
+		//
+		//drop_files     = nullptr;
+		//drop_files_len = nullptr;
+		drop_file_count = 0;
+	}
 
 	bool                    IsValidClipboardType( IDataObject* pDataObj, FORMATETC& fmtetc )
 	{
@@ -66,9 +123,9 @@ struct window_drop_target : public IDropTarget
 			// some callback function or ImageLoader_SupportsImage()?
 
 			// TODO: DO ASYNC TO NOT LOCK UP FILE EXPLORER !!!!!!!!
-			if ( ImageLoader_SupportsImage( filepath ) )
+		// 	if ( ImageLoader_SupportsImage( filepath ) )
 			{
-				aDropFiles.push_back( filepath );
+				add_drop_file( filepath );
 			}
 		}
 
@@ -81,7 +138,7 @@ struct window_drop_target : public IDropTarget
 
 	HRESULT DragEnter( IDataObject* pDataObj, DWORD grfKeyState, POINTL pt, DWORD* pdwEffect ) override
 	{
-		aDropFiles.clear();
+		clear_drop_files();
 
 		// needed?
 		// FORMATETC formats;
@@ -95,7 +152,7 @@ struct window_drop_target : public IDropTarget
 		if ( !GetFilesFromDataObject( fmtetc, pDataObj ) )
 			return S_FALSE;
 
-		if ( aDropFiles.empty() )
+		if ( drop_file_count == 0 )
 		{
 			aDropSupported = false;
 			*pdwEffect     = DROPEFFECT_SCROLL;
@@ -140,7 +197,14 @@ struct window_drop_target : public IDropTarget
 			return S_FALSE;
 
 		// TODO: make async/non-blocking
-		ImageView_SetImage( aDropFiles[ 0 ] );
+	//	ImageView_SetImage( aDropFiles[ 0 ] );
+
+		if ( drop_file_count == 0 )
+			return S_FALSE;
+
+		wchar_t* file = drop_files[ 0 ];
+
+		mpv_cmd_loadfile( file );
 
 		// SetFocus( aHWND );
 
@@ -188,20 +252,39 @@ struct window_drop_target : public IDropTarget
 };
 
 
-std::vector< ImgDropTarget > gTargets;
+window_drop_target** g_drop_target = nullptr;
+u32                  g_drop_target_count = 0;
 
 // ---------------------------------------------------------------------
 
 
 bool win32_register_drag_drop( HWND hwnd )
 {
-//	auto& target = gTargets.emplace_back();
-//	target.aHWND = hwnd;
-//
-//	if ( RegisterDragDrop( hwnd, &target ) != S_OK )
-//	{
-//		return false;
-//	}
+	// allocate a new drop target
+	auto new_memory = (window_drop_target**)realloc( g_drop_target, (g_drop_target_count + 1) * sizeof( window_drop_target* ) );
+
+	if ( new_memory == nullptr )
+	{
+		printf( "realloc failed\n" );
+		return false;
+	}
+
+	g_drop_target = new_memory;
+
+	g_drop_target[ g_drop_target_count ] = new window_drop_target;
+	window_drop_target* target = g_drop_target[ g_drop_target_count ];
+
+	g_drop_target_count++;
+
+	target->aHWND = hwnd;
+
+	// window_drop_target* test   = new window_drop_target;
+
+	if ( RegisterDragDrop( hwnd, target ) != S_OK )
+	{
+		printf( "RegisterDragDrop failed\n" );
+		return false;
+	}
 
 	return true;
 }

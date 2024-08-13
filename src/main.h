@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstdio>
+#include <stdlib.h>
 
 #include "mpv/client.h"
 #include "mpv/render.h"
@@ -46,6 +47,13 @@ void                               sys_close_library( module mod );
 void*                              sys_load_func( module mod, const char* path );
 const wchar_t*                     sys_get_error();
 
+// also known as "sys_to_utf16"
+wchar_t*                           sys_to_wchar( const char* spStr, int sSize );
+wchar_t*                           sys_to_wchar( const char* spStr );
+
+char*                              sys_to_utf8( const wchar_t* spStr, int sSize );
+char*                              sys_to_utf8( const wchar_t* spStr );
+
 bool                               win32_create_windows( int width, int height, int imgui_window_count );
 void                               win32_run();
 
@@ -74,6 +82,10 @@ void*                              get_proc_address_mpv( void* fn_ctx, const cha
 
 bool                               start_mpv();
 void                               stop_mpv();
+
+void                               mpv_cmd_loadfile( const wchar_t* file );
+void                               mpv_cmd_loadfile( const char* file );
+void                               mpv_cmd_toggle_playback();
 
 extern mpv_handle*                 g_mpv;
 extern mpv_render_context*         g_mpv_gl;

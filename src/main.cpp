@@ -23,19 +23,11 @@ int            g_mpv_width        = 800;
 int            g_mpv_height       = 600;
 
 
-//#define TEST_VIDEO "H:\\videos\\av1_testing\\Replay 2024-07-21 23-10-44.mkv"
- #define TEST_VIDEO "D:\\projects\\replay_maker_v4\\out\\test.mp4"
+//#define TEST_VIDEO L"H:\\videos\\av1_testing\\Replay 2024-07-21 23-10-44.mkv"
+//#define TEST_VIDEO L"D:\\projects\\replay_maker_v4\\out\\test.mp4"
 
-
-void main_loop()
-{
-	// ------------------------------------------
-	// Draw Menu Bar
-
-	ImGui::ShowDemoWindow();
-
-	// how tf do you embed mpv into an SDL2 window
-}
+#define TEST_VIDEO L"D:\\usr\\Downloads\\[twitter] Sigida_plushies—2024.08.09—1821928888315814020—hHiapz5PrN8XJ76v.mp4"
+#define TEST_VIDEO_ANSI "D:\\usr\\Downloads\\[twitter] Sigida_plushies—2024.08.09—1821928888315814020—hHiapz5PrN8XJ76v.mp4"
 
 
 void run_logic()
@@ -161,7 +153,7 @@ void draw_replay_info( int size[ 2 ] )
 	// - buttons for making an output video
 
 	// for now just show the current video name idfk
-	ImGui::TextUnformatted( TEST_VIDEO );
+	// ImGui::TextUnformatted( TEST_VIDEO );
 }
 
 
@@ -206,19 +198,21 @@ int main( int argc, char* argv[] )
 {
 	setlocale( LC_ALL, "en_US.UTF-8" );
 
-	// 2 imgui windows
-	if ( !win32_create_windows( 1600, 900, IMGUI_WINDOW_COUNT ) )
-	{
-		printf( "win32_create_windows failed!\n" );
-		return 1;
-	}
-
 	// ------------------------------------------
 	// Load MPV First before anything else
 
 	if ( !load_mpv_dll() )
 	{
 		printf( "load_mpv_dll failed!\n" );
+		return 1;
+	}
+
+	// ------------------------------------------
+
+	// 2 imgui windows
+	if ( !win32_create_windows( 1600, 900, IMGUI_WINDOW_COUNT ) )
+	{
+		printf( "win32_create_windows failed!\n" );
 		return 1;
 	}
 
@@ -267,8 +261,7 @@ int main( int argc, char* argv[] )
 	printf( "loading video\n" );
 
 	// Play this file.
-	const char* cmd[] = { "loadfile", TEST_VIDEO, NULL };
-	int cmd_ret = p_mpv_command_async( g_mpv, 0, cmd );
+	mpv_cmd_loadfile( TEST_VIDEO_ANSI );
 
 	win32_run();
 

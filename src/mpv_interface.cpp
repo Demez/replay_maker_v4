@@ -282,3 +282,35 @@ void stop_mpv()
 }
 
 
+// ----------------------------------------------------
+
+
+void mpv_cmd_loadfile( const wchar_t* file )
+{
+	// convert to utf8
+	char*       file_utf8 = sys_to_utf8( file );
+
+	printf( "loading file: %s\n", file_utf8 );
+
+	const char* cmd[]     = { "loadfile", file_utf8, NULL };
+	int         cmd_ret   = p_mpv_command( g_mpv, cmd );
+
+	free( file_utf8 );
+}
+
+
+void mpv_cmd_loadfile( const char* file )
+{
+	printf( "loading file: %s\n", file );
+
+	const char* cmd[]     = { "loadfile", file, NULL };
+	int         cmd_ret   = p_mpv_command( g_mpv, cmd );
+}
+
+
+void mpv_cmd_toggle_playback()
+{
+	const char* cmd[]   = { "cycle", "pause", NULL };
+	int         cmd_ret = p_mpv_command_async( g_mpv, 0, cmd );
+}
+

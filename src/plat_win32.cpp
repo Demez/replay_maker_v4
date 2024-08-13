@@ -4,8 +4,8 @@
 #define WIN32_LEAN_AND_MEAN
 #endif
 
-#include <stdlib.h>
 #include <Windows.h>
+#include <ole2.h>
 #include <windowsx.h> // GET_X_LPARAM(), GET_Y_LPARAM()
 #include <GL/GL.h>
 
@@ -45,7 +45,7 @@ gl_window_data_t* g_imgui_window_gl         = nullptr;
 void              win32_render_imgui_window( u32 index );
 void              win32_render_border( u32 index );
 void              win32_render_all();
-//void                  win32_register_drag_drop( HWND window );
+bool              win32_register_drag_drop( HWND window );
 
 
 module sys_load_library( const wchar_t* path )
@@ -73,14 +73,14 @@ const wchar_t* sys_get_error()
 	if ( errorID == 0 )
 		return L"";  // No error message
 
-	LPSTR strErrorMessage = NULL;
+	LPTSTR strErrorMessage = NULL;
 
 	FormatMessage(
 	  FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS | FORMAT_MESSAGE_ARGUMENT_ARRAY | FORMAT_MESSAGE_ALLOCATE_BUFFER,
 	  NULL,
 	  errorID,
 	  0,
-	  (LPTSTR)&strErrorMessage,
+	  strErrorMessage,
 	  0,
 	  NULL );
 
@@ -97,7 +97,55 @@ const wchar_t* sys_get_error()
 
 void win32_print_last_error()
 {
-	fprintf( stderr, "Error: %s\n", sys_get_error() );
+	fwprintf( stderr, L"Error: %s\n", sys_get_error() );
+}
+
+
+wchar_t* sys_to_wchar( const char* spStr )
+{
+	int sSize = MultiByteToWideChar( CP_UTF8, 0, spStr, -1, NULL, 0 );
+
+	wchar_t* spDst = (wchar_t*)malloc( ( sSize + 1 ) * sizeof( wchar_t ) );
+	memset( spDst, 0, ( sSize + 1 ) * sizeof( wchar_t ) );
+
+	MultiByteToWideChar( CP_UTF8, 0, spStr, -1, spDst, sSize );
+
+	return spDst;
+}
+
+
+wchar_t* sys_to_wchar( const char* spStr, int sSize )
+{
+	wchar_t* spDst = (wchar_t*)malloc( ( sSize + 1 ) * sizeof( wchar_t ) );
+	memset( spDst, 0, ( sSize + 1 ) * sizeof( wchar_t ) );
+
+	MultiByteToWideChar( CP_UTF8, 0, spStr, -1, spDst, sSize );
+
+	return spDst;
+}
+
+
+char* sys_to_utf8( const wchar_t* spStr )
+{
+	int   sSize = WideCharToMultiByte( CP_UTF8, 0, spStr, -1, NULL, 0, NULL, NULL );
+
+	char* spDst = (char*)malloc( ( sSize + 1 ) * sizeof( char ) );
+	memset( spDst, 0, ( sSize + 1 ) * sizeof( char ) );
+
+	int ret = WideCharToMultiByte( CP_UTF8, 0, spStr, -1, spDst, sSize, NULL, NULL );
+
+	return spDst;
+}
+
+
+char* sys_to_utf8( const wchar_t* spStr, int sSize )
+{
+	char* spDst = (char*)malloc( ( sSize + 1 ) * sizeof( char ) );
+	memset( spDst, 0, ( sSize + 1 ) * sizeof( char ) );
+
+	WideCharToMultiByte( CP_UTF8, 0, spStr, -1, spDst, sSize, NULL, NULL );
+
+	return spDst;
 }
 
 
@@ -163,6 +211,7 @@ LRESULT __stdcall Win32_WindowProc_Main( HWND hwnd, UINT uMsg, WPARAM wParam, LP
 
 	return DefWindowProc( hwnd, uMsg, wParam, lParam );
 }
+
 
 LRESULT __stdcall Win32_WindowProc_ImGui( HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam )
 {
@@ -304,6 +353,14 @@ LRESULT __stdcall Win32_WindowProc_Border( HWND hwnd, UINT uMsg, WPARAM wParam, 
 
 LRESULT __stdcall Win32_WindowProc_MPV( HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam )
 {
+	switch ( uMsg )
+	{
+		case WM_LBUTTONDOWN:
+		{
+			mpv_cmd_toggle_playback();
+		}
+	}
+
 	return DefWindowProc( hwnd, uMsg, wParam, lParam );
 }
 
@@ -414,6 +471,15 @@ static bool create_gl_context( HWND window, gl_window_data_t& gl_data )
 
 bool win32_create_windows( int width, int height, int imgui_window_count )
 {
+	if ( OleInitialize( NULL ) != S_OK )
+	{
+		printf( "Plat_Init(): Failed to Initialize Ole\n" );
+		return false;
+	}
+
+	// test
+	wprintf( L"D:\\usr\\Downloads\\[ twitter ] Sigida_plushies—2024 .08.09—1821928888315814020—hHiapz5PrN8XJ76v.mp4\n" );
+
 	ATOM wc_main  = create_window_class( L"replay_maker", Win32_WindowProc_Main, true, false, NULL_BRUSH );
 	ATOM wc_imgui = create_window_class( L"replay_maker_imgui", Win32_WindowProc_ImGui, false, false, NULL_BRUSH );
 	ATOM wc_mpv   = create_window_class( L"replay_maker_mpv", Win32_WindowProc_MPV, false, true, BLACK_BRUSH );
@@ -435,7 +501,8 @@ bool win32_create_windows( int width, int height, int imgui_window_count )
 	{
 		const LPTSTR _ClassName( MAKEINTATOM( wc_main ) );
 
-		DWORD        dwStyle    = WS_CLIPCHILDREN | WS_VISIBLE | WS_OVERLAPPEDWINDOW | WS_EX_CONTROLPARENT | WS_EX_LAYERED;
+		//DWORD        dwStyle    = WS_CLIPCHILDREN | WS_OVERLAPPEDWINDOW | WS_EX_CONTROLPARENT | WS_EX_LAYERED;
+		DWORD        dwStyle    = WS_CLIPCHILDREN | WS_OVERLAPPEDWINDOW | WS_EX_CONTROLPARENT;
 		DWORD        dwExStyle = 0;
 
 		int          new_width  = width;
@@ -460,6 +527,8 @@ bool win32_create_windows( int width, int height, int imgui_window_count )
 			printf( "Failed to create window\n" );
 			return false;
 		}
+
+		win32_register_drag_drop( main_window );
 	}
 
 	// create mpv window
@@ -468,7 +537,7 @@ bool win32_create_windows( int width, int height, int imgui_window_count )
 
 		// DWORD        dwStyle   = WS_CHILD | WS_VISIBLE | WS_OVERLAPPEDWINDOW | WS_EX_CONTROLPARENT | WS_EX_NOACTIVATE;
 		// DWORD        dwStyle   = WS_CHILD | WS_VISIBLE | WS_THICKFRAME | WS_EX_CONTROLPARENT;
-		DWORD        dwStyle   = WS_CHILD | WS_VISIBLE | WS_EX_CONTROLPARENT | WS_EX_NOACTIVATE;
+		DWORD        dwStyle   = WS_CHILD | WS_VISIBLE | WS_EX_CONTROLPARENT;
 		DWORD        dwExStyle = 0;
 
 		int width   = 800;
@@ -498,6 +567,8 @@ bool win32_create_windows( int width, int height, int imgui_window_count )
 
 		// SetParent( mpv_window, main_window );
 		ShowWindow( mpv_window, SW_SHOWNORMAL );
+
+		win32_register_drag_drop( mpv_window );
 	}
 
 	g_main_window = main_window;
@@ -567,6 +638,7 @@ bool win32_create_windows( int width, int height, int imgui_window_count )
 		}
 
 		g_imgui_window[ i ] = window;
+		win32_register_drag_drop( window );
 	}
 
 	// make the borders between the windows
@@ -605,6 +677,7 @@ bool win32_create_windows( int width, int height, int imgui_window_count )
 		}
 
 		g_imgui_window_borders[ i ] = window;
+		win32_register_drag_drop( window );
 	}
 
 	return true;
@@ -719,11 +792,13 @@ void win32_render_all()
 
 void win32_run()
 {
-	ImVec4 clear_color = ImVec4( 0.45f, 0.55f, 0.60f, 1.00f );
+	// do one render to get everything set up
+	win32_render_all();
+
+	// now we can show the main window
+	ShowWindow( (HWND)g_main_window, SW_SHOWNORMAL );
+
 	bool done = false;
-
-
-	// SetWindowPos( (HWND)g_mpv_window, HWND_TOP, 40, 40, 500, 400, SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE );
 
 	while ( !done )
 	{
@@ -758,37 +833,14 @@ void win32_run()
 			win32_render_border( i );
 		}
 
-		// update mpv window size
-
 		// run main logic
+		run_logic();
 
 		// run imgui windows
 		for ( u32 i = 0; i < g_imgui_window_count; i++ )
 		{
-			// imgui window drawing
-
 			win32_render_imgui_window( i );
 		}
-
-		// SetWindowPos( (HWND)g_mpv_window, HWND_TOP, 40, 40, 500, 400, SWP_DRAWFRAME | SWP_NOZORDER | SWP_NOACTIVATE );
-
-		// Start the Dear ImGui frame
-	// 	ImGui_ImplOpenGL3_NewFrame();
-	// 	ImGui_ImplWin32_NewFrame();
-	// 	ImGui::NewFrame();
-	// 	
-	// 	ImGui::ShowDemoWindow();
-	// 	
-	// 	// Rendering
-	// 	ImGui::Render();
-	// 	glViewport( 0, 0, 512, 512 );
-	// 	glClearColor( clear_color.x, clear_color.y, clear_color.z, clear_color.w );
-	// 	//glClear( GL_COLOR_BUFFER_BIT );
-	// 	
-	// 	ImGui_ImplOpenGL3_RenderDrawData( ImGui::GetDrawData() );
-	// 	
-	// 	// Present
-	// 	::SwapBuffers( g_main_window_gl.hDC );
 	}
 }
 
