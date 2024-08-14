@@ -25,7 +25,6 @@ struct gl_window_data_t
 	int   size[ 2 ];
 };
 
-
 void*             g_main_window             = nullptr;
 void*             g_mpv_window              = nullptr;
 
@@ -44,6 +43,7 @@ gl_window_data_t* g_imgui_window_gl         = nullptr;
 
 void              win32_render_imgui_window( u32 index );
 void              win32_render_border( u32 index );
+void              win32_on_resize();
 void              win32_render_all();
 bool              win32_register_drag_drop( HWND window );
 
@@ -149,6 +149,12 @@ char* sys_to_utf8( const wchar_t* spStr, int sSize )
 }
 
 
+void win32_update_mpv_window_size()
+{
+	SetWindowPos( (HWND)g_mpv_window, HWND_TOP, 0, 0, g_mpv_size[ 0 ], g_mpv_size[ 1 ], SWP_NOZORDER | SWP_NOACTIVATE );
+}
+
+
 void win32_move_border( u32 index )
 {
 	// check if we released the key, we could release it outside the window mid drag, as it lags behind
@@ -172,27 +178,34 @@ void win32_move_border( u32 index )
 	{
 		// vertical border
 		cursor_main.y -= g_grab_cursor_offset[ 1 ];
-		g_mpv_height = CLAMP( cursor_main.y, 0L, main_window_client_rect.bottom - main_window_client_rect.top );
+		g_mpv_size[ 1 ] = CLAMP( cursor_main.y, 0L, main_window_client_rect.bottom - main_window_client_rect.top );
 	}
 	else if ( index == 1 )
 	{
 		// horizontal border
 		cursor_main.x -= g_grab_cursor_offset[ 0 ];
-		g_mpv_width = CLAMP( cursor_main.x, 0L, main_window_client_rect.right - main_window_client_rect.left );
+		g_mpv_size[ 0 ] = CLAMP( cursor_main.x, 0L, main_window_client_rect.right - main_window_client_rect.left );
 	}
 
 	// update mpv window size
-	SetWindowPos( (HWND)g_mpv_window, HWND_TOP, 0, 0, g_mpv_width, g_mpv_height, SWP_NOZORDER | SWP_NOACTIVATE );
+	win32_update_mpv_window_size();
 
 	win32_render_all();
 }
 
 
-LRESULT __stdcall Win32_WindowProc_Main( HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam )
+LRESULT __stdcall win32_window_proc_main( HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam )
 {
 	// resize events
 	switch ( uMsg )
 	{
+		case WM_GETMINMAXINFO:
+		{
+			LPMINMAXINFO lpMMI      = (LPMINMAXINFO)lParam;
+			lpMMI->ptMinTrackSize.x = 640;
+			lpMMI->ptMinTrackSize.y = 480;
+		}
+
 		case WM_KILLFOCUS:
 		{
 			// clear what is grabbed
@@ -202,9 +215,20 @@ LRESULT __stdcall Win32_WindowProc_Main( HWND hwnd, UINT uMsg, WPARAM wParam, LP
 
 		case WM_DPICHANGED:
 		case WM_SIZE:
+		{
+			win32_on_resize();
+			// DO NOT BREAK HERE
+		}
 		case WM_PAINT:
 		{
 			win32_render_all();
+			break;
+		}
+
+		case WM_CLOSE:
+		case WM_QUIT:
+		{
+			g_running = false;
 			break;
 		}
 	}
@@ -213,7 +237,7 @@ LRESULT __stdcall Win32_WindowProc_Main( HWND hwnd, UINT uMsg, WPARAM wParam, LP
 }
 
 
-LRESULT __stdcall Win32_WindowProc_ImGui( HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam )
+LRESULT __stdcall win32_window_proc_imgui( HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam )
 {
 	if ( !g_imgui_contexts )
 	{
@@ -279,7 +303,7 @@ LRESULT __stdcall Win32_WindowProc_ImGui( HWND hwnd, UINT uMsg, WPARAM wParam, L
 }
 
 
-LRESULT __stdcall Win32_WindowProc_Border( HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam )
+LRESULT __stdcall win32_window_proc_border( HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam )
 {
 	u32 i = 0;
 	for ( ; i < g_imgui_window_count; i++ )
@@ -351,7 +375,7 @@ LRESULT __stdcall Win32_WindowProc_Border( HWND hwnd, UINT uMsg, WPARAM wParam, 
 }
 
 
-LRESULT __stdcall Win32_WindowProc_MPV( HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam )
+LRESULT __stdcall win32_window_proc_mpv( HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam )
 {
 	switch ( uMsg )
 	{
@@ -477,16 +501,13 @@ bool win32_create_windows( int width, int height, int imgui_window_count )
 		return false;
 	}
 
-	// test
-	wprintf( L"D:\\usr\\Downloads\\[ twitter ] Sigida_plushies—2024 .08.09—1821928888315814020—hHiapz5PrN8XJ76v.mp4\n" );
-
-	ATOM wc_main  = create_window_class( L"replay_maker", Win32_WindowProc_Main, true, false, NULL_BRUSH );
-	ATOM wc_imgui = create_window_class( L"replay_maker_imgui", Win32_WindowProc_ImGui, false, false, NULL_BRUSH );
-	ATOM wc_mpv   = create_window_class( L"replay_maker_mpv", Win32_WindowProc_MPV, false, true, BLACK_BRUSH );
+	ATOM wc_main  = create_window_class( L"replay_maker", win32_window_proc_main, true, false, NULL_BRUSH );
+	ATOM wc_imgui = create_window_class( L"replay_maker_imgui", win32_window_proc_imgui, false, false, NULL_BRUSH );
+	ATOM wc_mpv   = create_window_class( L"replay_maker_mpv", win32_window_proc_mpv, false, true, BLACK_BRUSH );
 
 	ATOM wc_border[ 2 ];
-	wc_border[ 0 ] = create_window_class( L"replay_maker_element_border_v", Win32_WindowProc_Border, false, true, LTGRAY_BRUSH, IDC_SIZENS );
-	wc_border[ 1 ] = create_window_class( L"replay_maker_element_border_h", Win32_WindowProc_Border, false, true, LTGRAY_BRUSH, IDC_SIZEWE );
+	wc_border[ 0 ] = create_window_class( L"replay_maker_element_border_v", win32_window_proc_border, false, true, LTGRAY_BRUSH, IDC_SIZENS );
+	wc_border[ 1 ] = create_window_class( L"replay_maker_element_border_h", win32_window_proc_border, false, true, LTGRAY_BRUSH, IDC_SIZEWE );
 
 	if ( wc_main == 0 || wc_imgui == 0 || wc_mpv == 0 || wc_border[ 0 ] == 0 || wc_border[ 1 ] == 0 )
 	{
@@ -696,16 +717,13 @@ void win32_render_border( u32 index )
 	if ( index == 0 )
 	{
 		// video controls border
-		SetWindowPos( (HWND)g_imgui_window_borders[ index ], HWND_TOP, 0, g_mpv_height, main_width, BORDER_SIZE, SWP_NOCOPYBITS | SWP_NOSENDCHANGING | SWP_NOZORDER | SWP_NOACTIVATE );
+		SetWindowPos( (HWND)g_imgui_window_borders[ index ], HWND_TOP, 0, g_mpv_size[ 1 ], main_width, BORDER_SIZE, SWP_NOCOPYBITS | SWP_NOSENDCHANGING | SWP_NOZORDER | SWP_NOACTIVATE );
 	}
 	// horizontal border
 	else if ( index == 1 )
 	{
-		int new_width  = main_width - g_mpv_width;
-		int new_height = main_height - g_mpv_height;
-
 		// replay info border
-		SetWindowPos( (HWND)g_imgui_window_borders[ index ], HWND_TOP, g_mpv_width, 0, BORDER_SIZE, g_mpv_height, SWP_NOCOPYBITS | SWP_NOSENDCHANGING | SWP_NOZORDER | SWP_NOACTIVATE );
+		SetWindowPos( (HWND)g_imgui_window_borders[ index ], HWND_TOP, g_mpv_size[ 0 ], 0, BORDER_SIZE, g_mpv_size[ 1 ], SWP_NOCOPYBITS | SWP_NOSENDCHANGING | SWP_NOZORDER | SWP_NOACTIVATE );
 	}
 }
 
@@ -732,26 +750,25 @@ void win32_render_imgui_window( u32 index )
 
 	wglMakeCurrent( g_imgui_window_gl[ index ].graphics_handle, g_imgui_window_gl[ index ].gl_context );
 
-	int video_height = g_mpv_height + BORDER_SIZE;
-	int video_width  = g_mpv_width + BORDER_SIZE;
+	// mpv size with border
+	ivec2 mpv_size = { g_mpv_size[ 0 ] + BORDER_SIZE, g_mpv_size[ 1 ] + BORDER_SIZE };
 
 	if ( index == 0 )
 	{
 		element_size[ 0 ] = main_width;
-		element_size[ 1 ] = main_height - video_height;
+		element_size[ 1 ] = main_height - mpv_size[ 1 ];
 
 		// video controls
 		SetWindowPos( (HWND)g_imgui_window[ index ], HWND_BOTTOM, 0, main_height - element_size[ 1 ], element_size[ 0 ], element_size[ 1 ], SWP_DRAWFRAME | SWP_NOZORDER | SWP_NOACTIVATE );
 	}
 	else if ( index == 1 )
 	{
-		element_size[ 0 ] = main_width - video_width;
-		element_size[ 1 ] = video_height - BORDER_SIZE;
+		element_size[ 0 ] = main_width - mpv_size[ 0 ];
+		element_size[ 1 ] = mpv_size[ 1 ] - BORDER_SIZE;
 
 		// replay info
-		SetWindowPos( (HWND)g_imgui_window[ index ], HWND_BOTTOM, video_width, 0, element_size[ 0 ], element_size[ 1 ], SWP_DRAWFRAME | SWP_NOZORDER | SWP_NOACTIVATE );
+		SetWindowPos( (HWND)g_imgui_window[ index ], HWND_BOTTOM, mpv_size[ 0 ], 0, element_size[ 0 ], element_size[ 1 ], SWP_DRAWFRAME | SWP_NOZORDER | SWP_NOACTIVATE );
 	}
-
 
 	// ImGui::GetIO().DisplaySize = ImVec2( (float)width, (float)height );
 
@@ -774,8 +791,37 @@ void win32_render_imgui_window( u32 index )
 }
 
 
+void win32_on_resize()
+{
+	// calc new window size
+	ivec2 old_window_size = { g_window_size[ 0 ], g_window_size[ 1 ] };
+	ivec2 new_window_size = { 0, 0 };
+
+	RECT main_window_rect;
+	GetClientRect( (HWND)g_main_window, &main_window_rect );
+
+	new_window_size[ 0 ] = main_window_rect.right - main_window_rect.left;
+	new_window_size[ 1 ] = main_window_rect.bottom - main_window_rect.top;
+
+	ivec2 size_diff{};
+	size_diff[ 0 ]  = new_window_size[ 0 ] - old_window_size[ 0 ];
+	size_diff[ 1 ]  = new_window_size[ 1 ] - old_window_size[ 1 ];
+
+	// calc new mpv window size
+	g_mpv_size[ 0 ] += size_diff[ 0 ];
+	g_mpv_size[ 1 ] += size_diff[ 1 ];
+
+	g_window_size[ 0 ] = new_window_size[ 0 ];
+	g_window_size[ 1 ] = new_window_size[ 1 ];
+
+	// win32_update_mpv_window_size();
+}
+
+
 void win32_render_all()
 {
+	// win32_on_resize();
+
 	// update window borders
 	for ( u32 i = 0; i < g_imgui_window_count; i++ )
 	{
@@ -787,6 +833,8 @@ void win32_render_all()
 	{
 		win32_render_imgui_window( i );
 	}
+
+	win32_update_mpv_window_size();
 }
 
 
@@ -798,9 +846,7 @@ void win32_run()
 	// now we can show the main window
 	ShowWindow( (HWND)g_main_window, SW_SHOWNORMAL );
 
-	bool done = false;
-
-	while ( !done )
+	while ( g_running )
 	{
 		// Poll and handle messages (inputs, window resize, etc.)
 		// See the WndProc() function below for our to dispatch events to the Win32 backend.
@@ -810,10 +856,10 @@ void win32_run()
 			::TranslateMessage( &msg );
 			::DispatchMessage( &msg );
 			if ( msg.message == WM_QUIT )
-				done = true;
+				g_running = false;
 		}
 
-		if ( done )
+		if ( !g_running )
 			break;
 
 		if ( ::IsIconic( (HWND)g_main_window ) )

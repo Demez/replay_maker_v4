@@ -38,7 +38,7 @@ struct window_drop_target : public IDropTarget
 	bool add_drop_file( const wchar_t* file )
 	{
 		{
-			wchar_t** new_memory = (wchar_t**)realloc( drop_files, (drop_file_count + 1) * sizeof( wchar_t* ) );
+			wchar_t** new_memory = ch_realloc( drop_files, drop_file_count + 1 );
 
 			if ( new_memory == nullptr )
 			{
@@ -50,7 +50,7 @@ struct window_drop_target : public IDropTarget
 		}
 
 		{
-			u32* new_memory = (u32*)realloc( drop_files_len, (drop_file_count + 1) * sizeof( u32 ) );
+			u32* new_memory = ch_realloc( drop_files_len, drop_file_count + 1 );
 
 			if ( new_memory == nullptr )
 			{
@@ -63,7 +63,7 @@ struct window_drop_target : public IDropTarget
 
 		// allocate memory for the string
 		drop_files_len[ drop_file_count ] = wcslen( file );
-		drop_files[ drop_file_count ]     = (wchar_t*)malloc( ( drop_files_len[ drop_file_count ] + 1 ) * sizeof( wchar_t ) );
+		drop_files[ drop_file_count ]     = ch_malloc< wchar_t >( drop_files_len[ drop_file_count ] + 1 );
 
 		wcscpy( drop_files[ drop_file_count ], file );
 
@@ -261,7 +261,7 @@ u32                  g_drop_target_count = 0;
 bool win32_register_drag_drop( HWND hwnd )
 {
 	// allocate a new drop target
-	auto new_memory = (window_drop_target**)realloc( g_drop_target, (g_drop_target_count + 1) * sizeof( window_drop_target* ) );
+	auto new_memory = ch_realloc( g_drop_target, g_drop_target_count + 1 );
 
 	if ( new_memory == nullptr )
 	{

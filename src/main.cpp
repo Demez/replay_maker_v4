@@ -13,14 +13,14 @@
 #include <vector>
 
 
-constexpr int IMGUI_WINDOW_COUNT = 2;
 
-bool           g_running          = true;
+bool           g_running                = true;
 
-ImGuiContext** g_imgui_contexts   = nullptr;
+ImGuiContext** g_imgui_contexts         = nullptr;
 
-int            g_mpv_width        = 800;
-int            g_mpv_height       = 600;
+ivec2          g_mpv_size               = { 0, 0 };
+// ivec2          g_imgui_window_size[ 2 ] = { 0, 0 };
+ivec2          g_window_size            = { 0, 0 };
 
 
 //#define TEST_VIDEO L"H:\\videos\\av1_testing\\Replay 2024-07-21 23-10-44.mkv"
@@ -28,6 +28,41 @@ int            g_mpv_height       = 600;
 
 #define TEST_VIDEO L"D:\\usr\\Downloads\\[twitter] Sigida_plushies—2024.08.09—1821928888315814020—hHiapz5PrN8XJ76v.mp4"
 #define TEST_VIDEO_ANSI "D:\\usr\\Downloads\\[twitter] Sigida_plushies—2024.08.09—1821928888315814020—hHiapz5PrN8XJ76v.mp4"
+
+
+void calc_imgui_window_size( int index, ivec2& size )
+{
+	switch ( index )
+	{
+		case 0:
+		{
+			return calc_playback_window_size( size );
+		}
+		case 1:
+		{
+			return calc_replay_window_size( size );
+		}
+		default:
+		{
+			size[ 0 ] = 0;
+			size[ 1 ] = 0;
+		}
+	}
+}
+
+
+void calc_playback_window_size( ivec2& size )
+{
+	size[ 0 ] = MIN( 0, g_window_size[ 0 ] - ( g_mpv_size[ 0 ] + BORDER_SIZE ) );
+	size[ 1 ] = g_window_size[ 1 ];
+}
+
+
+void calc_replay_window_size( ivec2& size )
+{
+	size[ 0 ] = MIN( 0, g_window_size[ 0 ] - BORDER_SIZE );
+	size[ 1 ] = MIN( 0, g_window_size[ 1 ] - ( g_mpv_size[ 1 ] + BORDER_SIZE ) );
+}
 
 
 void run_logic()
@@ -194,7 +229,7 @@ void draw_imgui_window( int index, int size[ 2 ] )
 }
 
 
-int main( int argc, char* argv[] )
+auto main( int argc, char* argv[] ) -> int
 {
 	setlocale( LC_ALL, "en_US.UTF-8" );
 
@@ -209,8 +244,17 @@ int main( int argc, char* argv[] )
 
 	// ------------------------------------------
 
+	SET_INT2( g_window_size, 1600, 900 );
+
+	// calculate the size of the mpv window
+	SET_INT2( g_mpv_size, g_window_size[ 0 ] - ( 400 + BORDER_SIZE ), g_window_size[ 1 ] - ( 100 + BORDER_SIZE ) );
+
+	// calculate the size of the imgui windows
+	// SET_INT2( g_imgui_window_size[ 0 ], 100, default_size[ 1 ] );  // playback controls
+	// SET_INT2( g_imgui_window_size[ 1 ], 200, default_size[ 1 ] - (100 + BORDER_SIZE) );  // replay info
+
 	// 2 imgui windows
-	if ( !win32_create_windows( 1600, 900, IMGUI_WINDOW_COUNT ) )
+	if ( !win32_create_windows( g_window_size[ 0 ], g_window_size[ 1 ], IMGUI_WINDOW_COUNT ) )
 	{
 		printf( "win32_create_windows failed!\n" );
 		return 1;

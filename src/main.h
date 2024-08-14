@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstdio>
+#include <cstring>
 #include <stdlib.h>
 
 #include "mpv/client.h"
@@ -29,15 +30,74 @@ using window_id = void*;
 
 struct ImGuiContext;
 
+// ----------------------------------------------------
+
+
+// struct ivec2
+// {
+// 	int x, y;
+// };
+
+
+using ivec2 = int[ 2 ];
+using vec2 = float[ 2 ];
+
+
+// struct vec2
+// {
+// 	float x, y;
+// };
+
+
+// ----------------------------------------------------
+
 #define ARR_SIZE( arr ) ( sizeof( arr ) / sizeof( arr[ 0 ] ) )
 #define MIN( a, b )     ( ( ( a ) < ( b ) ) ? ( a ) : ( b ) )
 #define MAX( a, b )     ( ( ( a ) > ( b ) ) ? ( a ) : ( b ) )
+
+#define SET_INT2( var, x, y ) \
+	( var )[ 0 ] = x; \
+	( var )[ 1 ] = y;
+
 
 template< typename T >
 T CLAMP( T value, T low, T high )
 {
 	return ( value < low ) ? low : ( ( value > high ) ? high : value );
 }
+
+
+template< typename T >
+T* ch_malloc( size_t count )
+{
+	T* data = (T*)malloc( count * sizeof( T ) );
+	
+	if ( data == nullptr )
+	{
+		printf( "malloc failed\n" );
+		return nullptr;
+	}
+
+	memset( data, 0, count * sizeof( T ) );
+	return data;
+
+	// return (T*)malloc( count * sizeof( T ) );
+}
+
+
+template< typename T >
+T* ch_calloc( size_t count )
+{
+	return (T*)calloc( count, sizeof( T ) );
+}
+
+
+template< typename T >
+T* ch_realloc( T* data, size_t count )
+{
+	return (T*)realloc( data, count * sizeof( T ) );
+}
+
 
 // ----------------------------------------------------
 
@@ -60,6 +120,10 @@ void                               win32_run();
 void                               run_logic();
 void                               draw_imgui_window( int index, int size[ 2 ] );
 
+constexpr int                      IMGUI_WINDOW_COUNT = 2;
+
+extern bool                        g_running;
+
 extern void*                       g_main_window;
 extern void*                       g_mpv_window;
 extern void**                      g_imgui_window;
@@ -68,7 +132,11 @@ extern void**                      g_imgui_window_borders;
 extern int                         g_imgui_window_count;
 extern ImGuiContext**              g_imgui_contexts;
 
-extern int                         g_mpv_width, g_mpv_height;
+extern ivec2                       g_mpv_size;
+// extern int                         g_mpv_width, g_mpv_height;
+// extern ivec2                       g_imgui_window_size[ IMGUI_WINDOW_COUNT ];
+// extern int                         g_imgui_window_size[ 2 ][ 2 ];
+extern ivec2                       g_window_size;
 
 constexpr int                      BORDER_SIZE = 6;
 
@@ -82,6 +150,10 @@ void*                              get_proc_address_mpv( void* fn_ctx, const cha
 
 bool                               start_mpv();
 void                               stop_mpv();
+
+void                               calc_imgui_window_size( int index, ivec2& size );
+void                               calc_playback_window_size( ivec2& size );
+void                               calc_replay_window_size( ivec2& size );
 
 void                               mpv_cmd_loadfile( const wchar_t* file );
 void                               mpv_cmd_loadfile( const char* file );
