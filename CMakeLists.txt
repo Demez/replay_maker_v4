@@ -148,10 +148,17 @@ set(
     SRC_FILES
     src/main.cpp
     src/main.h
+    src/util.cpp
+    src/util.h
     src/mpv_interface.cpp
 	
     src/drag_drop.cpp
     src/plat_win32.cpp
+	
+    src/clip/clip.cpp
+    src/clip/clip.h
+    src/clip/json5.cpp
+    src/clip/json5.h
 
     src/imgui/imgui.cpp
     src/imgui/imgui_demo.cpp
@@ -169,6 +176,12 @@ include_directories(
 )
 
 add_executable( replay_maker ${SRC_FILES} )
+
+source_group(
+	TREE ${CMAKE_CURRENT_LIST_DIR}/src
+	PREFIX "Source Files"
+	FILES ${SRC_FILES}
+)
 
 set_target_properties(
 	replay_maker PROPERTIES

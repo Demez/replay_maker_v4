@@ -1,7 +1,5 @@
 #include "main.h"
 
-#if 1
-  #include <vector>
 
 // #include <WinUser.h>
 // #include <Windows.h>
@@ -35,7 +33,7 @@ struct window_drop_target : public IDropTarget
 	u32*                    drop_files_len  = nullptr;
 	u32                     drop_file_count = 0;
 
-	bool add_drop_file( const wchar_t* file )
+	bool STDMETHODCALLTYPE add_drop_file( const wchar_t* file )
 	{
 		{
 			wchar_t** new_memory = ch_realloc( drop_files, drop_file_count + 1 );
@@ -72,7 +70,7 @@ struct window_drop_target : public IDropTarget
 		return true;
 	}
 
-	void clear_drop_files()
+	void STDMETHODCALLTYPE clear_drop_files()
 	{
 		for ( u32 i = 0; i < drop_file_count; i++ )
 		{
@@ -89,7 +87,7 @@ struct window_drop_target : public IDropTarget
 		drop_file_count = 0;
 	}
 
-	bool                    IsValidClipboardType( IDataObject* pDataObj, FORMATETC& fmtetc )
+	bool STDMETHODCALLTYPE IsValidClipboardType( IDataObject* pDataObj, FORMATETC& fmtetc )
 	{
 		ULONG lFmt;
 		for ( lFmt = 0; lFmt < gDropFormatCount; lFmt++ )
@@ -102,7 +100,7 @@ struct window_drop_target : public IDropTarget
 		return false;
 	}
 
-	bool GetFilesFromDataObject( FORMATETC& fmtetc, IDataObject* pDataObj )
+	bool STDMETHODCALLTYPE GetFilesFromDataObject( FORMATETC& fmtetc, IDataObject* pDataObj )
 	{
 		STGMEDIUM pmedium;
 		HRESULT   ret = pDataObj->GetData( &fmtetc, &pmedium );
@@ -136,7 +134,7 @@ struct window_drop_target : public IDropTarget
 		return true;
 	}
 
-	HRESULT DragEnter( IDataObject* pDataObj, DWORD grfKeyState, POINTL pt, DWORD* pdwEffect ) override
+	HRESULT STDMETHODCALLTYPE DragEnter( IDataObject* pDataObj, DWORD grfKeyState, POINTL pt, DWORD* pdwEffect ) override
 	{
 		clear_drop_files();
 
@@ -167,7 +165,7 @@ struct window_drop_target : public IDropTarget
 		}
 	}
 
-	HRESULT DragOver( DWORD grfKeyState, POINTL pt, DWORD* pdwEffect ) override
+	HRESULT STDMETHODCALLTYPE DragOver( DWORD grfKeyState, POINTL pt, DWORD* pdwEffect ) override
 	{
 		if ( aDropSupported )
 		{
@@ -181,12 +179,12 @@ struct window_drop_target : public IDropTarget
 		return S_OK;
 	}
 
-	HRESULT DragLeave() override
+	HRESULT STDMETHODCALLTYPE DragLeave() override
 	{
 		return S_OK;
 	}
 
-	HRESULT Drop( IDataObject* pDataObj, DWORD grfKeyState, POINTL pt, DWORD* pdwEffect ) override
+	HRESULT STDMETHODCALLTYPE Drop( IDataObject* pDataObj, DWORD grfKeyState, POINTL pt, DWORD* pdwEffect ) override
 	{
 		FORMATETC fmtetc = { CF_TEXT, 0, DVASPECT_CONTENT, -1, TYMED_HGLOBAL };
 		bool      valid  = IsValidClipboardType( pDataObj, fmtetc );
@@ -204,7 +202,11 @@ struct window_drop_target : public IDropTarget
 
 		wchar_t* file = drop_files[ 0 ];
 
-		mpv_cmd_loadfile( file );
+		char* file_utf8 = sys_to_utf8( file );
+
+		mpv_cmd_loadfile( file_utf8 );
+
+		free( file_utf8 );
 
 		// SetFocus( aHWND );
 
@@ -214,7 +216,7 @@ struct window_drop_target : public IDropTarget
 	// from IUnknown
 
 	// this is not being called, huh
-	HRESULT QueryInterface( REFIID riid, void** ppvObject ) override
+	HRESULT STDMETHODCALLTYPE QueryInterface( REFIID riid, void** ppvObject ) override
 	{
 		printf( "QueryInterface\n" );
 
@@ -231,14 +233,14 @@ struct window_drop_target : public IDropTarget
 		};
 	}
 
-	ULONG AddRef() override
+	ULONG STDMETHODCALLTYPE AddRef() override
 	{
 		return ++nRef;
 		// printf( "AddRef\n" );
 		// return 0;
 	}
 
-	ULONG Release() override
+	ULONG STDMETHODCALLTYPE Release() override
 	{
 		ULONG uRet = --nRef;
 		if ( uRet == 0 )
@@ -289,4 +291,9 @@ bool win32_register_drag_drop( HWND hwnd )
 	return true;
 }
 
-#endif
+
+void win32_remove_drag_drop( HWND hwnd )
+{
+	RevokeDragDrop( hwnd );
+}
+
