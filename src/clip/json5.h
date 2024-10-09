@@ -26,67 +26,72 @@ enum EJsonError
 };
 
 
-enum EJsonType : char
+enum e_json_type : char
 {
-	EJsonType_Invalid,
-	EJsonType_Object,
-	EJsonType_String,
-	EJsonType_Int,
-	EJsonType_Double,
-	EJsonType_False,
-	EJsonType_True,
-	EJsonType_Null,
-	EJsonType_Array,
+	e_json_type_invalid,
+	e_json_type_object,
+	e_json_type_array,
+	e_json_type_string,
+	e_json_type_int,
+	e_json_type_double,
+	e_json_type_false,
+	e_json_type_true,
+	e_json_type_null,
 };
 
 
-struct JsonObject_t;
+struct json_object_t;
 
 
-struct JsonArray_t
+struct json_array_t
 {
-	JsonObject_t* apData;
-	size_t        aCount;
+	json_object_t* data;
+	size_t         count;
 };
 
 
 struct json_str_t
 {
 	char*  data;
-	u64    size;
+	size_t size;
 };
 
 
-struct JsonObject_t
+struct json_object_t
 {
 	json_str_t aName;
-	EJsonType aType = EJsonType_Invalid;
+	e_json_type aType = e_json_type_invalid;
 
 	union
 	{
-		JsonArray_t       aObjects;
-		s64               aInt;
-		double            aDouble;
-		json_str_t        aString;
+		json_array_t aObjects;
+		s64          aInt;
+		double       aDouble;
+		json_str_t   aString;
 	};
 
-	JsonObject_t()
+	json_object_t()
 	{
 	}
 
-	JsonObject_t( const JsonObject_t& other )
+	json_object_t( const json_object_t& other )
 	{
-		memcpy( this, &other, sizeof( JsonObject_t ) );
+		memcpy( this, &other, sizeof( json_object_t ) );
 	}
 
-	~JsonObject_t()
+	~json_object_t()
 	{
 	}
 };
 
 
-EJsonError  Json_Parse( JsonObject_t* spRoot, const char* spSource );
-void        Json_Free( JsonObject_t* spRoot );
-const char* Json_ErrorToStr( EJsonError sErr );
-const char* Json_TypeToStr( EJsonType sType );
+EJsonError  json_parse( json_object_t* root, const char* source );
+void        json_free( json_object_t* root );
+const char* json_error_to_str( EJsonError err );
+const char* json_type_to_str( e_json_type type );
+json_str_t  json_to_str( json_object_t* root );
+
+
+// json5 building
+
 
