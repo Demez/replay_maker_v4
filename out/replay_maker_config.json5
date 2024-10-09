@@ -1,0 +1,60 @@
+{
+    "encode_presets":
+    [
+        {
+            "name": "raw",
+            "ext": "mkv",
+            "out_folder_append": "raw",
+            "out_prefix": "raw_",
+            "ffmpeg_cmd": "-map 0 -c:a libopus -b:a 160k -c:v libx264 -crf 24 -preset veryfast -pix_fmt yuv444p -colorspace bt709 -color_primaries bt709 -color_trc bt709 -threads 16",
+
+            "target_size": 0,
+            "audio_bitrate": 0,
+        },
+        {
+            "name": "discord",
+            "ext": "webm",
+            "ffmpeg_cmd": "-threads 20 -pix_fmt yuv420p -row-mt 1 -frame-parallel 1 -tile-columns 6 -r 60",
+
+            "target_size": 9800,
+            "audio_bitrate": 128,
+        },
+        {
+            // maybe add some inherit parser thing here?
+            "name": "discord_left",
+            "ext": "webm",
+            "ffmpeg_cmd": "-vf \"crop=1920:1080:0:0\" -threads 20 -pix_fmt yuv420p -row-mt 1 -frame-parallel 1 -tile-columns 6 -r 60",
+
+            "target_size": 9800,
+            "audio_bitrate": 128,
+        },
+        {
+            "name": "discord_right_1080",
+            "ext": "webm",
+            "ffmpeg_cmd": "-vf \"crop=1920:1080:1920:0\" -threads 20 -pix_fmt yuv420p -row-mt 1 -frame-parallel 1 -tile-columns 6 -r 60",
+
+            "target_size": 9800,
+            "audio_bitrate": 128,
+        },
+        {
+            "name": "discord_right_1440",
+            "ext": "webm",
+            "ffmpeg_cmd": "-vf \"crop=2560:1440:1920:0\" -threads 20 -pix_fmt yuv420p -row-mt 1 -frame-parallel 1 -tile-columns 6 -r 60",
+
+            "target_size": 9800,
+            "audio_bitrate": 128,
+        },
+    ],
+
+    "prefixes":
+    [
+        {"General": "general_d_"},  // always the first one 
+        {"VRChat": "vrc_d_"},   
+        {"Left 4 Dead 2": "l4d2_d_"},   
+        {"Team Fortress 2": "tf2_d_"},   
+        {"Deep Rock Galactic": "drg_d_"},   
+        {"Terraria": "terraria_d_"},   
+        {"Garry's Mod": "gmod_d_"},   
+        {"Minecraft": "mc_d_"},   
+    ],
+}

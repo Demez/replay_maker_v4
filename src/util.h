@@ -8,21 +8,33 @@
 // --------------------------------------------------------------------------------------------------------
 
 
-using u8        = unsigned char;
-using u16       = unsigned short;
-using u32       = unsigned int;
-using u64       = unsigned long long;
-
 using s8        = char;
 using s16       = short;
 using s32       = int;
 using s64       = long long;
+
+using u8        = unsigned char;
+using u16       = unsigned short;
+using u32       = unsigned int;
+using u64       = unsigned long long;
 
 using f32       = float;
 using f64       = double;
 
 using module    = void*;
 using window_id = void*;
+
+
+// --------------------------------------------------------------------------------------------------------
+
+
+#ifdef _WIN32
+  #define PATH_SEP_STR "\\"
+  #define PATH_SEP     '\\'
+#else
+  #define PATH_SEP_STR "/"
+  #define PATH_SEP     '/'
+#endif
 
 
 // --------------------------------------------------------------------------------------------------------
@@ -97,6 +109,26 @@ T* ch_realloc( T* data, size_t count )
 // --------------------------------------------------------------------------------------------------------
 
 
+// removes the element and shifts everything back, and memsets the last item with 0
+template< typename T, typename COUNT_TYPE >
+void util_array_remove_element( T* data, COUNT_TYPE& count, COUNT_TYPE index )
+{
+	if ( index >= count )
+		return;
+
+	memcpy( &data[ index ], &data[ index + 1 ], sizeof( T ) * ( count - index ) );
+	count--;
+
+	if ( count == 0 )
+		return;
+
+	memset( &data[ count ], 0, sizeof( T ) );
+}
+
+
+// --------------------------------------------------------------------------------------------------------
+
+
 char* util_strdup( const char* string );
 char* util_strndup( const char* string, size_t len );
 
@@ -104,11 +136,17 @@ char* util_strndup( const char* string, size_t len );
 char* util_strdup_r( char* data, const char* string );
 char* util_strndup_r( char* data, const char* string, size_t len );
 
+bool  util_strncmp( const char* left, const char* right, size_t len );
+bool  util_strncmp( const char* left, size_t left_len, const char* right, size_t right_len );
+
 char* fs_get_filename( const char* path );
 char* fs_get_filename_no_ext( const char* path );
 
 char* fs_get_filename( const char* path, size_t pathLen );
 char* fs_get_filename_no_ext( const char* path, size_t pathLen );
+
+// returns the file length in the len argument, optional
+char* fs_readfile( const char* path, size_t* len = nullptr );
 
 // bool  fs_scandir();
 

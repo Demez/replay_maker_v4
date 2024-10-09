@@ -53,6 +53,31 @@ char* util_strndup_r( char* data, const char* string, size_t len )
 }
 
 
+bool util_strncmp_base( const char* left, const char* right, size_t len )
+{
+	const char*       cur1 = left;
+	const char*       cur2 = right;
+	const char* const end  = len + left;
+
+	for ( ; cur1 < end; ++cur1, ++cur2 )
+	{
+		if ( *cur1 != *cur2 )
+			return false;
+	}
+
+	return true;
+}
+
+
+bool util_strncmp( const char* left, size_t left_len, const char* right, size_t right_len )
+{
+	if ( left_len != right_len )
+		return false;
+
+	return util_strncmp_base( left, right, left_len );
+}
+
+
 char* fs_get_filename( const char* path, size_t path_len )
 {
 	if ( !path || path_len == 0 )
@@ -114,5 +139,38 @@ char* fs_get_filename_no_ext( const char* path )
 		return nullptr;
 
 	return fs_get_filename_no_ext( path, strlen( path ) );
+}
+
+
+// returns the file length in the len argument
+char* fs_readfile( const char* path, size_t* len )
+{
+	FILE* fp = fopen( path, "r" );
+
+	if ( !fp )
+	{
+		return nullptr;
+	}
+
+	fseek( fp, 0, SEEK_END );
+	long size = ftell( fp );
+	fseek( fp, 0, SEEK_SET );
+
+	char* output = (char*)malloc( ( size + 1 ) * sizeof( char ) );
+
+	if ( !output )
+	{
+		return nullptr;
+	}
+
+	fread( output, size, 1, fp );
+	fclose( fp );
+
+	output[ size ] = 0;
+
+	if ( len )
+		*len = size;
+
+	return output;
 }
 

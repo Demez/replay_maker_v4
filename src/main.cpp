@@ -3,6 +3,7 @@
 #include <locale.h>
 
 #include "imgui.h"
+#include "imgui_internal.h"
 #include "imgui_impl_win32.h"
 #include "imgui_impl_opengl3_loader.h"
 #include "imgui_impl_opengl3.h"
@@ -11,6 +12,9 @@
 #include "mpv/render_gl.h"
 
 #include "clip/clip.h"
+
+// native file dialog
+#include "nfd.h"
 
 #include <vector>
 
@@ -105,6 +109,17 @@ void draw_playback_controls( int size[ 2 ] )
 	// what if we had a custom seek bar that was snapshots of the video, kind of like the vscode text preview on the scrollbar
 	// or have a thumbnail of the frame as a popup when you hover over the seek bar
 
+	ImGuiStyle&  style           = ImGui::GetStyle();
+
+	const ImVec2 seek_text_size  = ImGui::CalcTextSize( "Seek", NULL, true );
+	const ImVec2 vol_text_size   = ImGui::CalcTextSize( "Volume", NULL, true );
+
+	float        avaliable_width = size[ 0 ] - ( style.ItemSpacing.x * 2 );
+	float        vol_bar_width   = vol_text_size.x * 3;
+	float        seek_bar_width  = ( avaliable_width - seek_text_size.x ) - ( vol_bar_width + vol_text_size.x + ( style.ItemSpacing.x * 2 ) );
+
+	ImGui::SetNextItemWidth( seek_bar_width );
+
 	float time_pos_f = (float)time_pos;
 	if ( ImGui::SliderFloat( "Seek", &time_pos_f, 0.f, (float)duration ) )
 	{
@@ -119,7 +134,8 @@ void draw_playback_controls( int size[ 2 ] )
 	double volume = 0;
 	p_mpv_get_property( g_mpv, "volume", MPV_FORMAT_DOUBLE, &volume );
 
-	// ImGui::SameLine();
+	ImGui::SameLine();
+	ImGui::SetNextItemWidth( vol_bar_width );
 
 	float volume_f = volume;
 	if ( ImGui::SliderFloat( "Volume", &volume_f, 0.f, 130.f ) )
@@ -132,9 +148,12 @@ void draw_playback_controls( int size[ 2 ] )
 		int         cmd_ret = p_mpv_command_async( g_mpv, 0, cmd );
 	}
 
+	const ImVec2     label_size    = ImGui::CalcTextSize( "Pause", NULL, true );
+	ImVec2           play_btn_size = ImGui::CalcItemSize( { 0, 0 }, label_size.x + style.FramePadding.x * 2.0f, label_size.y + style.FramePadding.y * 2.0f );
+
 	if ( paused )
 	{
-		if ( ImGui::Button( "Play" ) )
+		if ( ImGui::Button( "Play", play_btn_size ) )
 		{
 			const char* cmd[]   = { "set", "pause", "no", NULL };
 			int         cmd_ret = p_mpv_command_async( g_mpv, 0, cmd );
@@ -142,24 +161,70 @@ void draw_playback_controls( int size[ 2 ] )
 	}
 	else
 	{
-		if ( ImGui::Button( "Pause" ) )
+		if ( ImGui::Button( "Pause", play_btn_size ) )
 		{
 			const char* cmd[]   = { "set", "pause", "yes", NULL };
 			int         cmd_ret = p_mpv_command_async( g_mpv, 0, cmd );
 		}
 	}
+
+	ImGui::SameLine();
+	ImGui::Spacing();
+
+	ImGui::SameLine();
+	if ( ImGui::Button( "<|" ) )
+	{
+		const char* cmd[]   = { "seek", "0", "absolute", NULL };
+		int         cmd_ret = p_mpv_command_async( g_mpv, 0, cmd );
+	}
+
+	ImGui::SameLine();
+	if ( ImGui::Button( "|>" ) )
+	{
+		char duration_str[ 16 ];
+		gcvt( duration, 4, duration_str );
+
+		// const char* cmd[]   = { "seek", duration_str, "absolute", NULL };
+		const char* cmd[]   = { "seek", "100", "absolute-percent+exact", NULL };
+		int         cmd_ret = p_mpv_command_async( g_mpv, 0, cmd );
+	}
+
+	ImGui::SameLine();
+	ImGui::Spacing();
+
+	ImGui::SameLine();
+	if ( ImGui::Button( "<" ) )
+	{
+		const char* cmd[]   = { "frame-back-step", NULL };
+		int         cmd_ret = p_mpv_command_async( g_mpv, 0, cmd );
+	}
+
+	ImGui::SameLine();
+	if ( ImGui::Button( ">" ) )
+	{
+		const char* cmd[]   = { "frame-step", NULL };
+		int         cmd_ret = p_mpv_command_async( g_mpv, 0, cmd );
+	}
 }
 
 
-clip_data_t*         g_clip_data           = nullptr;
-clip_output_video_t* g_clip_current_output = nullptr;
-u32                  g_clip_current_input  = 0;
-char                 g_output_name_buf[ 512 ] = { 0 };
+clip_data_t*                   g_clip_data              = nullptr;
+clip_output_video_t*           g_clip_current_output    = nullptr;
+u32                            g_clip_current_input     = 0;
+u32                            g_clip_delete_input      = UINT32_MAX;
+char                           g_output_name_buf[ 512 ] = { 0 };
 
-const char*          g_video_input_dir     = "";
 
-static bool          g_view_search_paths   = false;
-static float         g_time_range_start    = 0.f;
+static clip_encode_override_t* g_encode_override        = nullptr;
+static clip_time_range_t*      g_edit_time_range        = nullptr;
+
+// constexpr ImVec4               g_selected_btn_color( 1.f, 1.f, 1.f, 1.f );
+constexpr ImVec4               g_selected_btn_color( 0.21f, 0.45f, 0.73f, 1.f );
+static u32                     g_default_prefix   = 0;
+
+const char*                    g_video_input_dir  = "";
+
+static float                   g_time_range_start = 0.f;
 
 
 void draw_replay_info_menu_bar()
@@ -175,13 +240,35 @@ void draw_replay_info_menu_bar()
 
 		if ( ImGui::MenuItem( "Open Timestamps File" ) )
 		{
+			sys_pause_window_events( true );
+
+			nfdu8char_t*          out_path = nullptr;
+			nfdu8filteritem_t     filter   = { "timestamps file", "json,json5,rmk" };
+			nfdopendialogu8args_t args     = { 0 };
+			args.filterList                = &filter;
+			args.filterCount               = 1;
+			args.defaultPath               = sys_get_cwd();
+
+			nfdresult_t result             = NFD_OpenDialogU8_With( &out_path, &args );
+
+			sys_pause_window_events( false );
+
+			if ( result == NFD_OKAY )
+			{
+				clip_parse_videos( g_clip_data, out_path );
+			}
+			else if ( result == NFD_ERROR )
+			{
+				printf( "NativeFileDialog Error: %s\n", NFD_GetError() );
+			}
+
 			printf( "Open\n" );
 		}
 
-		if ( ImGui::MenuItem( "Open Directory" ) )
-		{
-			printf( "Open Dir\n" );
-		}
+		// if ( ImGui::MenuItem( "Open Directory" ) )
+		// {
+		// 	printf( "Open Dir\n" );
+		// }
 
 		if ( ImGui::MenuItem( "Save" ) )
 		{
@@ -198,8 +285,6 @@ void draw_replay_info_menu_bar()
 
 	if ( ImGui::BeginMenu( "View" ) )
 	{
-		ImGui::MenuItem( "Search Paths", nullptr, &g_view_search_paths );
-
 		ImGui::EndMenu();
 	}
 
@@ -210,7 +295,10 @@ void draw_replay_info_menu_bar()
 void replay_editor_reset()
 {
 	g_clip_current_output = nullptr;
+	g_encode_override     = nullptr;
+	g_edit_time_range     = nullptr;
 	g_clip_current_input  = 0;
+	g_clip_delete_input   = UINT32_MAX;
 	g_time_range_start    = 0.f;
 	memset( g_output_name_buf, 0, 512 * sizeof( char ) );
 }
@@ -227,20 +315,25 @@ bool replay_editor_set_video( clip_output_video_t* output, u32 input_i )
 		return false;
 	}
 
+	replay_editor_reset();
+
 	g_clip_current_output     = output;
 	g_clip_current_input      = input_i;
-	g_time_range_start        = 0.f;
 
 	memcpy( g_output_name_buf, output->name, strlen( output->name ) * sizeof( char ) );
 }
 
 
-void replay_editor_load( clip_output_video_t* output, u32 input_i )
+void replay_editor_load_input( clip_output_video_t* output, u32 input_i )
 {
 	if ( !replay_editor_set_video( output, input_i ) )
 		return;
 
 	clip_input_video_t& input = output->input[ input_i ];
+
+	if ( strcmp( mpv_get_current_video(), input.path ) == 0 )
+		return;
+
 	mpv_cmd_loadfile( input.path );
 }
 
@@ -251,22 +344,12 @@ void draw_replay_list( int size[ 2 ] )
 	if ( !g_clip_data )
 		return;
 
-	// display search paths
-	if ( g_view_search_paths )
-	{
-		ImGui::TextUnformatted( "Search Paths" );
-		for ( u32 i = 0; i < g_clip_data->search_path_count; i++ )
-		{
-			ImGui::Text( "    %s", g_clip_data->search_path[ i ] );
-		}
-	}
-
 	// display output videos
 	u32 imgui_id = 1;
 
 	for ( u32 i = 0; i < g_clip_data->output_count; i++ )
 	{
-		//ImGui::Indent( 16.f );
+		ImGui::Indent( 16.f );
 
 		clip_output_video_t* output = &g_clip_data->output[ i ];
 
@@ -291,7 +374,7 @@ void draw_replay_list( int size[ 2 ] )
 			ImGui::PushID( imgui_id );
 			if ( ImGui::Button( "Load" ) )
 			{
-				replay_editor_load( output, j );
+				replay_editor_load_input( output, j );
 			}
 			ImGui::PopID();
 
@@ -306,13 +389,13 @@ void draw_replay_list( int size[ 2 ] )
 			// display input video times
 			for ( u32 time_range_i = 0; time_range_i < input->time_range_count; time_range_i++ )
 			{
-				ImGui::Text( "%d - Time \"%.4f\" - \"%.4f\"", time_range_i, input->time_range[ time_range_i ].start, input->time_range[ time_range_i ].end );
+				ImGui::Text( "%d - %.4f - %.4f", time_range_i, input->time_range[ time_range_i ].start, input->time_range[ time_range_i ].end );
 			}
 
-			ImGui::Unindent();
+			ImGui::Unindent( 16.f );
 		}
 
-		//ImGui::Unindent();
+		ImGui::Unindent( 16.f );
 
 		ImGui::Separator();
 		ImGui::Separator();
@@ -320,12 +403,239 @@ void draw_replay_list( int size[ 2 ] )
 }
 
 
-void draw_replay_info( int size[ 2 ] )
+void draw_preset_override( clip_encode_override_t& override )
+{
+	if ( ImGui::BeginCombo( "Include/Exclude Presets", "" ) )
+	{
+		for ( u32 i = 0; i < g_clip_data->preset_count; i++ )
+		{
+			// lmao what the fuck
+			bool skip = false;
+			for ( u32 used_preset_i = 0; used_preset_i < override.presets_count; used_preset_i++ )
+			{
+				if ( i == override.presets[ used_preset_i ] )
+				{
+					skip = true;
+					continue;
+				}
+			}
+
+			if ( skip )
+				continue;
+
+			if ( ImGui::Selectable( g_clip_data->preset[ i ].name ) )
+			{
+				clip_add_preset_to_encode_override( g_clip_data, override, i );
+			}
+		}
+
+		ImGui::EndCombo();
+	}
+
+	// display any overrides
+	if ( ImGui::Button( override.preset_exclude ? "Mode: Exclude" : "Mode: Include" ) )
+	{
+		override.preset_exclude = !override.preset_exclude;
+	}
+
+	// index in the array to remove
+	u32 preset_remove = UINT32_MAX;
+
+	for ( u32 i = 0; i < override.presets_count; i++ )
+	{
+		ImGui::SameLine();
+
+		char                  button_name[ MAX_LEN_PRESET_NAME + 4 ] = { "(X) " };
+
+		clip_encode_preset_t& encode                                 = g_clip_data->preset[ override.presets[ i ] ];
+
+		memcpy( &button_name[ 4 ], encode.name, MAX_LEN_PRESET_NAME );
+
+		if ( ImGui::Button( button_name ) )
+		{
+			preset_remove = i;
+		}
+	}
+
+	if ( preset_remove != UINT32_MAX )
+	{
+		util_array_remove_element( override.presets, override.presets_count, preset_remove );
+	}
+
+//	ImGui::Separator();
+//
+//	if ( ImGui::Button( "Enter Custom ffmpeg cmd" ) )
+//	{
+//	}
+}
+
+
+template< typename T >
+void draw_edit_override_button( T*& selected, T* item, const char* name )
+{
+	if ( selected == item )
+		ImGui::PushStyleColor( ImGuiCol_Button, g_selected_btn_color );
+
+	if ( ImGui::Button( name ) )
+	{
+		if ( selected == item )
+		{
+			ImGui::PopStyleColor();
+			selected = nullptr;
+		}
+		else
+		{
+			selected = item;
+		}
+	}
+	else
+	{
+		if ( selected == item )
+			ImGui::PopStyleColor();
+	}
+}
+
+
+void draw_preset_override_button( clip_encode_override_t* override, const char* name )
+{
+	draw_edit_override_button( g_encode_override, override, name );
+}
+
+
+void draw_input_video_edit( u32 input_i, clip_input_video_t* input )
+{
+	ImGui::Text( "Input %d:\n%s", input_i, input->path );
+
+	if ( ImGui::Button( "Set Current" ) )
+	{
+		replay_editor_load_input( g_clip_current_output, input_i );
+	}
+
+	ImGui::SameLine();
+	if ( ImGui::Button( "Duplicate" ) )
+	{
+		u32 i = clip_duplicate_input( g_clip_current_output, input_i );
+
+		if ( i != UINT32_MAX )
+			replay_editor_load_input( g_clip_current_output, i );
+	}
+
+	ImGui::SameLine();
+	if ( ImGui::Button( "Delete" ) )
+	{
+		g_clip_delete_input = input_i;
+	}
+
+	//ImGui::SameLine();
+	//draw_preset_override_button( &input->encode_overrides, "Edit Input Presets" );
+
+	ImGui::Separator();
+
+	draw_preset_override( input->encode_overrides );
+
+	// display input video times
+	if ( input->time_range_count == 0 )
+		return;
+
+	ImGui::Separator();
+
+	u32  delete_time_range = UINT32_MAX;
+	u32  move_time_range   = UINT32_MAX;
+	bool move_up           = false;
+
+	ImGui::Indent( 16.f );
+
+	for ( u32 time_range_i = 0; time_range_i < input->time_range_count; time_range_i++ )
+	{
+		// push id
+		if ( ImGui::Button( "X" ) )
+		{
+			delete_time_range = time_range_i;
+		}
+
+		ImGui::SameLine();
+
+		static char edit_btn[ 8 ] = { 0 };
+		snprintf( edit_btn, 8, "Edit %d", time_range_i );
+
+		ImGui::BeginDisabled( input_i != g_clip_current_input );
+
+		draw_edit_override_button( g_edit_time_range, &input->time_range[ time_range_i ], edit_btn );
+
+		ImGui::EndDisabled();
+
+		ImGui::SameLine();
+
+		if ( ImGui::Button( "/\\" ) )
+		{
+			move_time_range = time_range_i;
+			move_up         = true;
+		}
+
+		ImGui::SameLine();
+
+		if ( ImGui::Button( "\\/" ) )
+		{
+			move_time_range = time_range_i;
+			move_up         = false;
+		}
+
+		ImGui::SameLine();
+		ImGui::Text( "%.4f - %.4f", input->time_range[ time_range_i ].start, input->time_range[ time_range_i ].end );
+	}
+
+	ImGui::Unindent( 16.f );
+
+	// does the user want to move a time range?
+	if ( move_time_range != UINT32_MAX )
+	{
+		// move up
+		if ( move_up && move_time_range == 0 )
+		{
+			return;
+		}
+
+		// move down
+		if ( !move_up && move_time_range == input->time_range_count )
+		{
+			return;
+		}
+
+		move_time_range = UINT32_MAX;
+	}
+
+	// does the user want to delete a time range
+	else if ( delete_time_range != UINT32_MAX )
+	{
+		clip_remove_time_range( g_clip_current_output, input_i, delete_time_range );
+		delete_time_range = UINT32_MAX;
+	}
+}
+
+
+void draw_replay_edit( int size[ 2 ] )
 {
 	if ( !g_clip_data )
 	{
 		ImGui::TextUnformatted( "No Clip Data Loaded or Created, use File/New or File/Open" );
 		return;
+	}
+
+	// select default prefix
+	if ( g_default_prefix >= g_clip_data->prefix_count )
+		g_default_prefix = 0;
+
+	if ( ImGui::BeginCombo( "Default Prefix", g_clip_data->prefix[ g_default_prefix ].name ) )
+	{
+		for ( u32 i = 0; i < g_clip_data->prefix_count; i++ )
+		{
+			if ( ImGui::Selectable( g_clip_data->prefix[ i ].name, i == g_default_prefix ) )
+			{
+				g_default_prefix = i;
+			}
+		}
+
+		ImGui::EndCombo();
 	}
 
 	if ( ImGui::Button( "New Output Video" ) )
@@ -345,6 +655,8 @@ void draw_replay_info( int size[ 2 ] )
 				clip_add_input( output, current_video );
 
 				replay_editor_set_video( output, 0 );
+
+				output->prefix = g_default_prefix;
 			}
 		}
 	}
@@ -356,7 +668,18 @@ void draw_replay_info( int size[ 2 ] )
 
 	if ( ImGui::Button( "Add Input Video" ) )
 	{
+		u32 i = clip_add_input( g_clip_current_output, mpv_get_current_video() );
 
+		replay_editor_load_input( g_clip_current_output, i );
+	}
+
+	ImGui::SameLine();
+
+	if ( ImGui::Button( "Delete Output Video" ) )
+	{
+		clip_remove_output( g_clip_data, g_clip_current_output );
+		replay_editor_reset();
+		return;
 	}
 
 	ImGui::Separator();
@@ -379,134 +702,164 @@ void draw_replay_info( int size[ 2 ] )
 		}
 	}
 
-	ImGui::Separator();
+	// combo box to select prefix
+	char* current_prefix = nullptr;
 
-	if ( ImGui::BeginCombo( "Include/Exclude Presets", "" ) )
+	if ( g_clip_current_output->prefix >= g_clip_data->prefix_count )
 	{
-		for ( u32 i = 0; i < g_clip_data->preset_count; i++ )
+		// reset to general profile
+		g_clip_current_output->prefix = 0;
+	}
+
+	current_prefix = g_clip_data->prefix[ g_clip_current_output->prefix ].name;
+
+	if ( ImGui::BeginCombo( "Prefix", current_prefix ) )
+	{
+		for ( u32 i = 0; i < g_clip_data->prefix_count; i++ )
 		{
-			// lmao what the fuck
-			bool skip = false;
-			for ( u32 used_preset_i = 0; used_preset_i < g_clip_current_output->encode_overrides.presets_count; used_preset_i++ )
-			{
-				if ( i == used_preset_i )
-				{
-					skip = true;
-					continue;
-				}
-			}
+			// if ( i == g_clip_current_output->prefix )
+			// 	continue;
 
-			if ( skip )
-				continue;
-
-			if ( ImGui::Selectable( g_clip_data->preset[ i ].name ) )
+			if ( ImGui::Selectable( g_clip_data->prefix[ i ].name, i == g_clip_current_output->prefix ) )
 			{
-				clip_add_preset_to_encode_override( g_clip_data, g_clip_current_output->encode_overrides, i );
+				g_clip_current_output->prefix = i;
 			}
 		}
 
 		ImGui::EndCombo();
 	}
 
-	// display any overrides
-	if ( ImGui::Button( g_clip_current_output->encode_overrides.preset_exclude ? "Mode: Exclude" : "Mode: Include" ) )
+	// draw_preset_override_button( &g_clip_current_output->encode_overrides, "Edit Presets" );
+
+	ImGui::Separator();
+
+	draw_preset_override( g_clip_current_output->encode_overrides );
+
+	ImGui::Separator();
+
+	// push_edit_button_color( &g_clip_current_output->encode_overrides );
+	// 
+	// if ( ImGui::Button( "Edit Presets" ) )
+	// {
+	// 	if ( g_encode_override == &g_clip_current_output->encode_overrides )
+	// 		g_encode_override = nullptr;
+	// 	else
+	// 		g_encode_override = &g_clip_current_output->encode_overrides;
+	// }
+
+	//ImGui::Separator();
+
+	ImGui::BeginDisabled( g_clip_current_input == UINT32_MAX );
+	ImGui::Separator();
+
+	if ( ImGui::Button( "Set Start Time" ) )
 	{
-		g_clip_current_output->encode_overrides.preset_exclude = !g_clip_current_output->encode_overrides.preset_exclude;
-	}
+		// get position from mkv
+		double time_pos = 0;
+		p_mpv_get_property( g_mpv, "time-pos", MPV_FORMAT_DOUBLE, &time_pos );
 
-	for ( u32 i = 0; i < g_clip_current_output->encode_overrides.presets_count; i++ )
-	{
-		ImGui::SameLine();
-
-		char button_name[ MAX_LEN_PRESET_NAME + 4 ] = { "(X) " };
-
-		clip_encode_preset_t& encode = g_clip_data->preset[ i ];
-
-		memcpy( &button_name[ 4 ], encode.name, MAX_LEN_PRESET_NAME );
-
-		if ( ImGui::Button( button_name ) )
+		if ( g_edit_time_range )
 		{
+			g_time_range_start = time_pos;
+		}
+		else
+		{
+			g_time_range_start = time_pos;
 		}
 	}
-	
-	ImGui::Separator();
 
-	if ( ImGui::Button( "Enter Custom ffmpeg cmd" ) )
+	ImGui::SameLine();
+
+	if ( ImGui::Button( "Set End Time" ) )
 	{
+		double time_pos = 0;
+		p_mpv_get_property( g_mpv, "time-pos", MPV_FORMAT_DOUBLE, &time_pos );
+
+		if ( g_edit_time_range )
+		{
+			// set end time
+			// TODO: add undo system and have this be an action you can undo
+
+			if ( time_pos < g_edit_time_range->start )
+			{
+				printf( "end time is earlier than start time! - %.4f > %.4f\n", g_edit_time_range->start, time_pos );
+			}
+			else
+			{
+				g_edit_time_range->end = time_pos;
+			}
+		}
+		else
+		{
+			if ( time_pos < g_time_range_start )
+			{
+				printf( "end time is earlier than start time! - %.4f > %.4f\n", g_time_range_start, time_pos );
+			}
+			else
+			{
+				clip_add_time_range( g_clip_current_output, g_clip_current_input, g_time_range_start, time_pos );
+				g_time_range_start = time_pos;
+			}
+		}
 	}
 
+	ImGui::SameLine();
+
+	if ( ImGui::Button( "Reset Start Time" ) )
+	{
+		g_time_range_start = 0;
+	}
+
+	// show current start time?
 	ImGui::Separator();
+	ImGui::Text( "Current Start Time: %.4f", g_time_range_start );
+	ImGui::Separator();
+
+	ImGui::EndDisabled();
 
 	// display input videos
 	for ( u32 j = 0; j < g_clip_current_output->input_count; j++ )
 	{
 		clip_input_video_t* input = &g_clip_current_output->input[ j ];
 
-		ImGui::Text( "Input %d:\n%s", j, input->path );
+		// in case this is changed in the function
+		u32                 current  = g_clip_current_input;
 
-		ImGui::Separator();
+		ImVec4              frame_bg = ImGui::GetStyleColorVec4( ImGuiCol_ChildBg );
+		ImGuiChildFlags     flags    = ImGuiChildFlags_Border | ImGuiChildFlags_AutoResizeY;
 
-		ImGui::Indent( 16.f );
-
-		// display input video times
-		if ( input->time_range_count )
+		if ( current == j )
 		{
-			u32  delete_time_range = UINT32_MAX;
-			u32  move_time_range   = UINT32_MAX;
-			bool move_up           = false;
+			// flags |= ImGuiChildFlags_FrameStyle;
+			// frame_bg.x = 0.5;
+			// frame_bg.y = 0.5;
+			// frame_bg.z = 0.5;
 
-			for ( u32 time_range_i = 0; time_range_i < input->time_range_count; time_range_i++ )
-			{
-				if ( ImGui::Button( "X" ) )
-				{
-					delete_time_range = time_range_i;
-				}
-
-				ImGui::SameLine();
-
-				if ( ImGui::Button( "/\\" ) )
-				{
-					move_time_range = time_range_i;
-					move_up         = true;
-				}
-
-				ImGui::SameLine();
-
-				if ( ImGui::Button( "\\/" ) )
-				{
-					move_time_range = time_range_i;
-					move_up         = false;
-				}
-
-				ImGui::SameLine();
-				ImGui::Text( "%d - Time \"%.4f\" - \"%.4f\"", time_range_i, input->time_range[ time_range_i ].start, input->time_range[ time_range_i ].end );
-			}
-
-			// does the user want to move a time range?
-			if ( move_time_range != UINT32_MAX )
-			{
-				if ( move_up && move_time_range == 0 )
-				{
-					continue;
-				}
-
-				if ( !move_up && move_time_range == input->time_range_count )
-				{
-					continue;
-				}
-
-				move_time_range = UINT32_MAX;
-			}
-
-			// does the user want to delete a time range
-			else if ( delete_time_range != UINT32_MAX )
-			{
-				clip_remove_time_range( g_clip_current_output, g_clip_current_input, delete_time_range );
-				delete_time_range = UINT32_MAX;
-			}
+			frame_bg.x = 0.15;
+			frame_bg.y = 0.15;
+			frame_bg.z = 0.15;
+			frame_bg.w = 1;
+		}
+		else
+		{
+			// frame_bg.x *= 0.4;
+			// frame_bg.y *= 0.4;
+			// frame_bg.z *= 0.4;
 		}
 
-		ImGui::Unindent();
+		ImGui::PushStyleColor( ImGuiCol_ChildBg, frame_bg );
+
+		if ( ImGui::BeginChild( (size_t)input, ImVec2( 0.f, 0.f ), flags ) )
+		{
+			draw_input_video_edit( j, input );
+		}
+
+		ImGui::EndChild();
+
+		//if ( current == j )
+		{
+			ImGui::PopStyleColor();
+		}
 	}
 
 	// ideas for other stuff to put here:
@@ -519,15 +872,26 @@ void draw_replay_info( int size[ 2 ] )
 	// for now just show the current video name idfk
 	// ImGui::TextUnformatted( TEST_VIDEO );
 
+#if 0
+	if ( g_clip_current_input == UINT32_MAX )
+		return;
+
 	ImGui::Separator();
 
 	if ( ImGui::Button( "Set Start Time" ) )
 	{
 		// get position from mkv
-		double time_pos     = 0;
+		double time_pos = 0;
 		p_mpv_get_property( g_mpv, "time-pos", MPV_FORMAT_DOUBLE, &time_pos );
 
-		g_time_range_start = time_pos;
+		if ( g_edit_time_range )
+		{
+			g_time_range_start = time_pos;
+		}
+		else
+		{
+			g_time_range_start = time_pos;
+		}
 	}
 
 	ImGui::SameLine();
@@ -537,8 +901,32 @@ void draw_replay_info( int size[ 2 ] )
 		double time_pos = 0;
 		p_mpv_get_property( g_mpv, "time-pos", MPV_FORMAT_DOUBLE, &time_pos );
 
-		clip_add_time_range( g_clip_current_output, g_clip_current_input, g_time_range_start, time_pos );
-		g_time_range_start = time_pos;
+		if ( g_edit_time_range )
+		{
+			// set end time
+			// TODO: add undo system and have this be an action you can undo
+
+			if ( time_pos < g_edit_time_range->start )
+			{
+				printf( "end time is earlier than start time! - %.4f > %.4f\n", g_edit_time_range->start, time_pos );
+			}
+			else
+			{
+				g_edit_time_range->end = time_pos;
+			}
+		}
+		else
+		{
+			if ( time_pos < g_time_range_start )
+			{
+				printf( "end time is earlier than start time! - %.4f > %.4f\n", g_time_range_start, time_pos );
+			}
+			else
+			{
+				clip_add_time_range( g_clip_current_output, g_clip_current_input, g_time_range_start, time_pos );
+				g_time_range_start = time_pos;
+			}
+		}
 	}
 
 	ImGui::SameLine();
@@ -546,6 +934,25 @@ void draw_replay_info( int size[ 2 ] )
 	if ( ImGui::Button( "Reset Start Time" ) )
 	{
 		g_time_range_start = 0;
+	}
+
+	// show current start time?
+	ImGui::Separator();
+	ImGui::Text( "Current Start Time: %.4f", g_time_range_start );
+#endif
+
+	if ( g_encode_override )
+	{
+		ImGui::Separator();
+		draw_preset_override( *g_encode_override );
+	}
+
+	if ( g_clip_delete_input != UINT32_MAX )
+	{
+		clip_remove_input( g_clip_current_output, g_clip_delete_input );
+		g_clip_delete_input = UINT32_MAX;
+
+		g_clip_current_input = g_clip_current_output->input_count > 0 ? 0 : UINT32_MAX;
 	}
 
 	// ImGui::Spacing();
@@ -682,7 +1089,6 @@ void draw_prefix_editor( int size[ 2 ] )
 void draw_imgui_window( int window_size[ 2 ] )
 {
 	//ImGui::ShowDemoWindow();
-	//
 	//return;
 
 	// draw sidebar
@@ -694,9 +1100,11 @@ void draw_imgui_window( int window_size[ 2 ] )
 		ImGui::SetNextWindowSize( { (float)element_size[ 0 ], (float)element_size[ 1 ] } );
 		ImGui::SetNextWindowPos( { (float)g_mpv_size[ 0 ], 0.f } );
 
-		// ImGui::ShowDemoWindow();
+		//ImGui::ShowDemoWindow();
 
-		if ( !ImGui::Begin( "##Replay Info", 0, ImGuiWindowFlags_NoNav | ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_MenuBar ) )
+		
+		// if ( !ImGui::Begin( "##Replay Info", 0, ImGuiWindowFlags_NoNav | ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_MenuBar ) )
+		if ( !ImGui::Begin( "##Replay Info", 0, ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_MenuBar ) )
 		{
 			ImGui::End();
 			return;
@@ -708,7 +1116,7 @@ void draw_imgui_window( int window_size[ 2 ] )
 		{
 			if ( ImGui::BeginTabItem( "Replay Editor" ) )
 			{
-				draw_replay_info( element_size );
+				draw_replay_edit( element_size );
 				ImGui::EndTabItem();
 			}
 			
@@ -767,7 +1175,16 @@ void draw_imgui_window( int window_size[ 2 ] )
 
 auto main( int argc, char* argv[] ) -> int
 {
-	setlocale( LC_ALL, "en_US.UTF-8" );
+	// https://learn.microsoft.com/en-us/cpp/c-runtime-library/reference/setlocale-wsetlocale?view=msvc-170#utf-8-support
+	// allows c ansi functions to use utf-8
+	// only works on Windows 10 version 1803 (10.0.17134.0) and above
+	setlocale( LC_ALL, ".UTF-8" );
+
+	if ( NFD_Init() != NFD_OKAY )
+	{
+		printf( "Failed to Init NativeFileDialog\n" );
+		return 1;
+	}
 
 	// ------------------------------------------
 	// Load MPV First before anything else
@@ -796,12 +1213,9 @@ auto main( int argc, char* argv[] ) -> int
 
 	SET_INT2( g_window_size, 1600, 900 );
 
-	// calculate the size of the mpv window
-	SET_INT2( g_mpv_size, g_window_size[ 0 ] - ( 600 + DIVIDER_SIZE ), g_window_size[ 1 ] - ( 100 + DIVIDER_SIZE ) );
-
-	// calculate the size of the imgui windows
-	// SET_INT2( g_imgui_window_size[ 0 ], 100, default_size[ 1 ] );  // playback controls
-	// SET_INT2( g_imgui_window_size[ 1 ], 200, default_size[ 1 ] - (100 + DIVIDER_SIZE) );  // replay info
+	// calculate the size of the mpv window (what about DPI Scale here later?)
+	g_mpv_size[ 0 ] = g_window_size[ 0 ] - 600;  // replay editor/sidebar
+	g_mpv_size[ 1 ] = g_window_size[ 1 ] - 82;   // playback controls
 
 	// 2 imgui windows
 	if ( !win32_create_windows( g_window_size[ 0 ], g_window_size[ 1 ] ) )
@@ -840,9 +1254,27 @@ auto main( int argc, char* argv[] ) -> int
 
 	g_clip_data = clip_create();
 
-	// add search paths
-	clip_add_search_path( g_clip_data, "D:\\usr\\Downloads" );
-	clip_add_search_path( g_clip_data, "D:\\videos" );
+	{
+		size_t exe_dir_len           = 0;
+		char*  exe_dir               = sys_get_exe_folder( &exe_dir_len );
+		char   settings_path[ 4096 ] = { 0 };
+
+		memcpy( settings_path, exe_dir, exe_dir_len * sizeof( char ) );
+		strcat( settings_path, PATH_SEP_STR "replay_maker_config.json5" );
+
+		clip_parse_settings( g_clip_data, settings_path );
+	}
+
+	{
+		size_t exe_dir_len           = 0;
+		char*  exe_dir               = sys_get_exe_folder( &exe_dir_len );
+		char   settings_path[ 4096 ] = { 0 };
+
+		memcpy( settings_path, exe_dir, exe_dir_len * sizeof( char ) );
+		strcat( settings_path, PATH_SEP_STR "test_video.json5" );
+
+		clip_parse_videos( g_clip_data, settings_path );
+	}
 
 	// Play this file.
 	mpv_cmd_loadfile( TEST_VIDEO_ANSI );

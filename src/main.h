@@ -25,7 +25,16 @@ wchar_t*                           sys_to_wchar( const char* spStr );
 char*                              sys_to_utf8( const wchar_t* spStr, int sSize );
 char*                              sys_to_utf8( const wchar_t* spStr );
 
-void                               sys_set_imgui_text_focus( ImGuiContext* context );
+// get folder exe is stored in
+char*                              sys_get_exe_folder( size_t* len = nullptr );
+
+// get the full path of the exe
+char*                              sys_get_exe_path( size_t* len = nullptr );
+
+// get current working directory
+char*                              sys_get_cwd();
+
+void                               sys_pause_window_events( bool paused );
 
 bool                               win32_create_windows( int width, int height );
 void                               win32_exit();

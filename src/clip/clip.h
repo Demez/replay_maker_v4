@@ -21,7 +21,7 @@ enum e_encode_preset
 // controls how to use parts of videos in a encode preset
 struct clip_encode_override_t
 {
-	char* ffmpeg_cmd;  // overrides the encode preset's ffmpeg cmd if not nullptr
+//	char* ffmpeg_cmd;  // overrides the encode preset's ffmpeg cmd if not nullptr
 
 	u32*  presets;
 	u32   presets_count;
@@ -33,10 +33,8 @@ struct clip_encode_override_t
 
 struct clip_time_range_t
 {
-	float                  start;
-	float                  end;
-
-	clip_encode_override_t encode_overrides;
+	float start;
+	float end;
 };
 
 
@@ -59,6 +57,8 @@ struct clip_output_video_t
 	u32                    input_count;
 
 	clip_encode_override_t encode_overrides;
+
+	u32                    prefix;
 };
 
 
@@ -96,9 +96,6 @@ struct clip_prefix_t
 
 struct clip_data_t
 {
-	char**                search_path;
-	u32                   search_path_count;
-
 	clip_output_video_t*  output;
 	u32                   output_count;
 
@@ -115,16 +112,33 @@ struct clip_data_t
 
 clip_data_t*          clip_create();
 void                  clip_free( clip_data_t* data );
+
+void                  clip_parse_settings( clip_data_t* data, const char* path );
+void                  clip_parse_videos( clip_data_t* data, const char* path );
+
+void                  clip_save_videos( clip_data_t* data, const char* path );
+
 // clip_data_t* clip_load_from_json5( const char* path );
 
 // void clip_save_to_json5( const char* path, clip_data_t* data );
 
+clip_prefix_t*        clip_create_prefix( clip_data_t* data );
+clip_encode_preset_t* clip_create_encode_preset( clip_data_t* data );
+
 u32                   clip_add_prefix( clip_data_t* data, const char* name, const char* prefix );
 clip_encode_preset_t* clip_add_encode_preset( clip_data_t* data, const char* name, const char* ext );
-void                  clip_add_search_path( clip_data_t* data, const char* path );
+
+clip_output_video_t*  clip_create_output( clip_data_t* data );
+clip_input_video_t*   clip_create_input( clip_output_video_t* output );
 
 clip_output_video_t*  clip_add_output( clip_data_t* data, const char* name );
-clip_input_video_t*   clip_add_input( clip_output_video_t* output, const char* path );
+u32                   clip_add_input( clip_output_video_t* output, const char* path );
+
+u32                   clip_duplicate_input( clip_output_video_t* output, u32 input_i );
+
+void                  clip_remove_output( clip_data_t* data, clip_output_video_t* );
+void                  clip_remove_output( clip_data_t* data, u32 output_i );
+void                  clip_remove_input( clip_output_video_t* output, u32 input_i );
 
 void                  clip_add_time_range( clip_output_video_t* output, u32 input_i, float start_time, float end_time );
 void                  clip_remove_time_range( clip_output_video_t* output, u32 input_i, u32 time_range );

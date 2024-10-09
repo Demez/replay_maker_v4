@@ -1,0 +1,59 @@
+[
+    {
+        "name": "test_ball_flip_video",
+        "prefix": "General",
+
+        "encode_overrides":
+        {
+            "presets": ["raw"],
+            "exclude_mode": true,
+        },
+
+        "inputs":
+        [
+            {
+                "path": "M:\\videos\\replays_raw\\Replay 2020-06-25 21-01-58 ball flip.mkv"
+
+                "encode_overrides":
+                {
+                    "presets": ["raw"],
+                    "exclude_mode": true,
+                },
+
+                "time_ranges":
+                [
+                    [0.0, 20.0],
+                ],
+            },
+        ],
+    },
+    
+    {
+        "name": "test_ball_flip_video2",
+        "prefix": "General",
+
+        "encode_overrides":
+        {
+            "presets": ["raw"],
+            "exclude_mode": false,
+        },
+
+        "inputs":
+        [
+            {
+                "path": "M:\\videos\\replays_raw\\Replay 2020-06-25 21-01-58 ball flip.mkv"
+
+                "encode_overrides":
+                {
+                    "presets": ["raw"],
+                    "exclude_mode": false,
+                },
+
+                "time_ranges":
+                [
+                    [0.0, 20.0],
+                ],
+            },
+        ],
+    },
+],

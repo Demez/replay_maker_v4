@@ -8,6 +8,7 @@
 #include <ole2.h>
 #include <windowsx.h> // GET_X_LPARAM(), GET_Y_LPARAM()
 #include <GL/GL.h>
+#include <direct.h>
 
 #include "imgui.h"
 #include "imgui_impl_win32.h"
@@ -158,15 +159,56 @@ char* sys_to_utf8( const wchar_t* spStr, int sSize )
 }
 
 
-// ----------------------------------------------------
-
-
-static ImGuiContext* g_keyboard_imgui_context = nullptr;
-
-
-void sys_set_imgui_text_focus( ImGuiContext* context )
+char* sys_get_exe_path( size_t* len )
 {
-	g_keyboard_imgui_context = context;
+	wchar_t output_w[ 4096 ];
+	GetModuleFileName( NULL, output_w, 4096 );
+
+	size_t len_w = wcslen( output_w );
+
+	char* output = sys_to_utf8( output_w, len_w );
+
+	if ( len )
+		*len = len_w;
+
+	return output;
+}
+
+
+char* sys_get_exe_folder( size_t* len )
+{
+	wchar_t output_w[ 4096 ];
+	GetModuleFileName( NULL, output_w, 4096 );
+
+	size_t len_w = wcslen( output_w );
+
+	// find index of last path separator
+	wchar_t* sep    = wcsrchr( output_w, '\\' );
+	size_t   path_i = sep - output_w;
+
+	char*    output = sys_to_utf8( output_w, path_i );
+
+	if ( len )
+		*len = path_i;
+
+	return output;
+}
+
+
+char* sys_get_cwd()
+{
+	return _getcwd( 0, 0 );
+}
+
+
+static bool g_pause_window_events = false;
+
+
+void        sys_pause_window_events( bool paused )
+{
+	DWORD dw_style        = (DWORD)GetWindowLong( (HWND)g_main_window, GWL_STYLE );
+
+	g_pause_window_events = paused;
 }
 
 
@@ -301,6 +343,15 @@ void win32_update_mpv_window_size()
 
 LRESULT __stdcall win32_window_proc_main( HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam )
 {
+	if ( g_pause_window_events )
+	{
+		if ( uMsg == WM_GETMINMAXINFO || uMsg == WM_SIZE )
+			return S_FALSE;
+
+		return DefWindowProc( hwnd, uMsg, wParam, lParam );
+		//return S_OK;  // DefWindowProc( hwnd, uMsg, wParam, lParam );
+	}
+
 	//if ( uMsg == WM_SETCURSOR )
 	//{
 	//	ImGui::SetMouseCursor( g_desired_cursor );
@@ -392,6 +443,15 @@ LRESULT __stdcall win32_window_proc_main( HWND hwnd, UINT uMsg, WPARAM wParam, L
 
 LRESULT __stdcall win32_window_proc_mpv( HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam )
 {
+	if ( g_pause_window_events )
+	{
+		if ( uMsg == WM_GETMINMAXINFO )
+			return S_OK;
+
+		return DefWindowProc( hwnd, uMsg, wParam, lParam );
+		//return S_OK;  // DefWindowProc( hwnd, uMsg, wParam, lParam );
+	}
+
 	switch ( uMsg )
 	{
 		case WM_MOUSEMOVE:
@@ -762,9 +822,6 @@ void win32_render_imgui()
 
 	BOOL ret = wglMakeCurrent( g_graphics_handle, g_gl_context );
 
-	// mpv size with divider
-	ivec2 mpv_size = { g_mpv_size[ 0 ] + DIVIDER_SIZE, g_mpv_size[ 1 ] + DIVIDER_SIZE };
-
 	ImGui_ImplOpenGL3_NewFrame();
 	ImGui_ImplWin32_NewFrame();
 	ImGui::NewFrame();
@@ -776,12 +833,6 @@ void win32_render_imgui()
 	glViewport( 0, 0, main_width, main_height );
 	glClearColor( clear_color.x, clear_color.y, clear_color.z, clear_color.w );
 	glClear( GL_COLOR_BUFFER_BIT );
-
-	// TEMP - DRAW DIVIDER
-
-	ivec2 bbox_0;
-	bbox_0[ 0 ] = g_mpv_size[ 0 ] + DIVIDER_SIZE;
-	bbox_0[ 1 ] = g_mpv_size[ 1 ];
 
 	ImGui_ImplOpenGL3_RenderDrawData( ImGui::GetDrawData() );
 	
