@@ -173,7 +173,16 @@ include_directories(
 	"src"
 	"src/imgui"
 	"mpv/include"
+	"nativefiledialog/src/include"
 )
+
+link_directories(
+	"nativefiledialog/build/src"
+)
+
+
+# native file dialog
+link_libraries( nfd )
 
 add_executable( replay_maker ${SRC_FILES} )
 
