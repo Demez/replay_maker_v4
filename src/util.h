@@ -21,9 +21,6 @@ using u64       = unsigned long long;
 using f32       = float;
 using f64       = double;
 
-using module    = void*;
-using window_id = void*;
-
 
 // --------------------------------------------------------------------------------------------------------
 
