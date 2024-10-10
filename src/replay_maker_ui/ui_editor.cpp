@@ -75,6 +75,7 @@ void draw_replay_info_menu_bar()
 			{
 				g_videos_file_path = util_strdup_r( g_videos_file_path, out_path );
 				clip_parse_videos( g_clip_data, out_path );
+				NFD_FreePathU8( out_path );
 			}
 			else if ( result == NFD_ERROR )
 			{
@@ -82,7 +83,6 @@ void draw_replay_info_menu_bar()
 			}
 
 			free( cwd );
-			NFD_FreePathU8( out_path );
 
 			printf( "Open\n" );
 		}
@@ -124,6 +124,7 @@ void draw_replay_info_menu_bar()
 			{
 				g_videos_file_path = util_strdup_r( g_videos_file_path, out_path );
 				save_videos();
+				NFD_FreePathU8( out_path );
 			}
 			else if ( result == NFD_ERROR )
 			{
@@ -133,7 +134,6 @@ void draw_replay_info_menu_bar()
 			on_file_dialog_exit();
 
 			free( cwd );
-			NFD_FreePathU8( out_path );
 		}
 
 		free( videos_filename );
