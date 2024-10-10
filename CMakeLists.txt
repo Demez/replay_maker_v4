@@ -146,14 +146,14 @@ endif()
 
 set(
     SRC_FILES
-    src/main.cpp
-    src/main.h
+    src/replay_maker_ui/main.cpp
+    src/replay_maker_ui/main.h
+    src/replay_maker_ui/mpv_interface.cpp
+    src/replay_maker_ui/drag_drop.cpp
+    src/replay_maker_ui/plat_win32.cpp
+
     src/util.cpp
     src/util.h
-    src/mpv_interface.cpp
-	
-    src/drag_drop.cpp
-    src/plat_win32.cpp
 	
     src/clip/clip.cpp
     src/clip/clip.h
@@ -171,6 +171,7 @@ set(
 
 include_directories(
 	"src"
+	"src/replay_maker_ui"
 	"src/imgui"
 	"mpv/include"
 	"nativefiledialog/src/include"
