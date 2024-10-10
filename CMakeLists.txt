@@ -151,6 +151,7 @@ set(
     src/replay_maker_ui/mpv_interface.cpp
     src/replay_maker_ui/drag_drop.cpp
     src/replay_maker_ui/plat_win32.cpp
+    src/replay_maker_ui/ui_editor.cpp
 
     src/util.cpp
     src/util.h

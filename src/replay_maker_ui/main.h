@@ -68,6 +68,7 @@ void                               calc_playback_window_size( ivec2& size );
 void                               calc_replay_window_size( ivec2& size );
 
 void                               draw_imgui_window( int window_size[ 2 ] );
+void                               draw_replay_editor_window( int window_size[ 2 ] );
 
 extern bool                        g_running;
 
