@@ -26,6 +26,8 @@ ivec2               g_window_size = { 0, 0 };
 
 extern clip_data_t* g_clip_data;
 
+char*               g_videos_file_path;
+
 //#define TEST_VIDEO L"H:\\videos\\av1_testing\\Replay 2024-07-21 23-10-44.mkv"
 //#define TEST_VIDEO L"D:\\projects\\replay_maker_v4\\out\\test.mp4"
 
@@ -232,6 +234,27 @@ void draw_imgui_window( int window_size[ 2 ] )
 }
 
 
+void save_settings()
+{
+	size_t exe_dir_len = 0;
+	char*  exe_dir     = sys_get_exe_folder( &exe_dir_len );
+	char settings_path[ 4096 ] = { 0 };
+
+	memcpy( settings_path, exe_dir, exe_dir_len * sizeof( char ) );
+	strcat( settings_path, PATH_SEP_STR "replay_maker_config.json5" );
+
+	clip_save_settings( g_clip_data, settings_path );
+
+	free( exe_dir );
+}
+
+
+void save_videos()
+{
+	clip_save_videos( g_clip_data, g_videos_file_path );
+}
+
+
 auto main( int argc, char* argv[] ) -> int
 {
 	// https://learn.microsoft.com/en-us/cpp/c-runtime-library/reference/setlocale-wsetlocale?view=msvc-170#utf-8-support
@@ -311,11 +334,12 @@ auto main( int argc, char* argv[] ) -> int
 
 	printf( "loaded\n" );
 
-	g_clip_data = clip_create();
+	g_clip_data        = clip_create();
+
+	size_t exe_dir_len = 0;
+	char*  exe_dir     = sys_get_exe_folder( &exe_dir_len );
 
 	{
-		size_t exe_dir_len           = 0;
-		char*  exe_dir               = sys_get_exe_folder( &exe_dir_len );
 		char   settings_path[ 4096 ] = { 0 };
 
 		memcpy( settings_path, exe_dir, exe_dir_len * sizeof( char ) );
@@ -325,15 +349,17 @@ auto main( int argc, char* argv[] ) -> int
 	}
 
 	{
-		size_t exe_dir_len           = 0;
-		char*  exe_dir               = sys_get_exe_folder( &exe_dir_len );
-		char   settings_path[ 4096 ] = { 0 };
+		char   videos_path[ 4096 ] = { 0 };
 
-		memcpy( settings_path, exe_dir, exe_dir_len * sizeof( char ) );
-		strcat( settings_path, PATH_SEP_STR "test_video.json5" );
+		memcpy( videos_path, exe_dir, exe_dir_len * sizeof( char ) );
+		strcat( videos_path, PATH_SEP_STR "test_video.json5" );
 
-		clip_parse_videos( g_clip_data, settings_path );
+		clip_parse_videos( g_clip_data, videos_path );
+
+		g_videos_file_path = strdup( videos_path );
 	}
+
+	free( exe_dir );
 
 	// Play this file.
 	mpv_cmd_loadfile( TEST_VIDEO_ANSI );

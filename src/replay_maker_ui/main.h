@@ -70,6 +70,12 @@ void                               calc_replay_window_size( ivec2& size );
 void                               draw_imgui_window( int window_size[ 2 ] );
 void                               draw_replay_editor_window( int window_size[ 2 ] );
 
+// save encode presets and video prefixes
+void                               save_settings();
+
+// save videos to currently opened file
+void                               save_videos();
+
 extern bool                        g_running;
 
 extern void*                       g_main_window;
@@ -77,6 +83,8 @@ extern void*                       g_mpv_window;
 
 extern ivec2                       g_mpv_size;
 extern ivec2                       g_window_size;
+
+extern char*                       g_videos_file_path;
 
 constexpr int                      DIVIDER_SIZE = 5;  // multiplied by 2
 

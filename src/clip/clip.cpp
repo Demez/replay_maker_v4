@@ -471,6 +471,14 @@ void clip_parse_videos( clip_data_t* data, const char* path )
 }
 
 
+void clip_save_settings( clip_data_t* data, const char* path )
+{
+	// build json5
+
+	// write to file
+}
+
+
 void clip_save_videos( clip_data_t* data, const char* path )
 {
 	// build json5

@@ -4,6 +4,7 @@
 #include "imgui.h"
 
 // native file dialog
+// https://github.com/btzy/nativefiledialog-extended
 #include "nfd.h"
 
 
@@ -21,12 +22,28 @@ static clip_time_range_t*      g_edit_time_range        = nullptr;
 constexpr ImVec4               g_selected_btn_color( 0.21f, 0.45f, 0.73f, 1.f );
 static u32                     g_default_prefix   = 0;
 
-const char*                    g_video_input_dir  = "";
+char*                          g_video_input_dir;
 
 static float                   g_time_range_start = 0.f;
 
 
-void                           draw_replay_info_menu_bar()
+void on_file_dialog_open()
+{
+	// pause mpv
+	int pause   = 1;
+	int cmd_ret = p_mpv_set_property( g_mpv, "pause", MPV_FORMAT_FLAG, &pause );
+
+	sys_pause_window_events( true );
+}
+
+
+void on_file_dialog_exit()
+{
+	sys_pause_window_events( false );
+}
+
+
+void draw_replay_info_menu_bar()
 {
 	ImGui::BeginMenuBar();
 
@@ -37,29 +54,35 @@ void                           draw_replay_info_menu_bar()
 			printf( "New\n" );
 		}
 
-		if ( ImGui::MenuItem( "Open Timestamps File" ) )
+		if ( ImGui::MenuItem( "Open Videos" ) )
 		{
-			sys_pause_window_events( true );
+			on_file_dialog_open();
 
+			char*                 cwd      = sys_get_cwd();
 			nfdu8char_t*          out_path = nullptr;
-			nfdu8filteritem_t     filter   = { "timestamps file", "json,json5,rmk" };
+			nfdu8filteritem_t     filter   = { "replay maker videos", "json,json5,rmv" };
 			nfdopendialogu8args_t args     = { 0 };
+
 			args.filterList                = &filter;
 			args.filterCount               = 1;
-			args.defaultPath               = sys_get_cwd();
+			args.defaultPath               = cwd;
 
 			nfdresult_t result             = NFD_OpenDialogU8_With( &out_path, &args );
 
-			sys_pause_window_events( false );
+			on_file_dialog_exit();
 
 			if ( result == NFD_OKAY )
 			{
+				g_videos_file_path = util_strdup_r( g_videos_file_path, out_path );
 				clip_parse_videos( g_clip_data, out_path );
 			}
 			else if ( result == NFD_ERROR )
 			{
 				printf( "NativeFileDialog Error: %s\n", NFD_GetError() );
 			}
+
+			free( cwd );
+			NFD_FreePathU8( out_path );
 
 			printf( "Open\n" );
 		}
@@ -69,14 +92,57 @@ void                           draw_replay_info_menu_bar()
 		// 	printf( "Open Dir\n" );
 		// }
 
-		if ( ImGui::MenuItem( "Save" ) )
+		ImGui::Separator();
+		char* videos_filename = fs_get_filename( g_videos_file_path );
+
+		char save_btn[ 256 ] = { "Save " };
+		strcat( save_btn, videos_filename );
+
+		if ( ImGui::MenuItem( save_btn ) )
 		{
-			printf( "Save\n" );
+			save_videos();
 		}
 
 		if ( ImGui::MenuItem( "Save As" ) )
 		{
-			printf( "Save As\n" );
+			on_file_dialog_open();
+
+			char*                 cwd          = sys_get_cwd();
+			nfdu8char_t*          out_path     = nullptr;
+			// nfdu8filteritem_t     filter   = { "video timestamps", "json,json5,rmv" };
+			nfdu8filteritem_t     filters[ 2 ] = { { "replay maker videos", "rmv" }, { "replay maker videos json5", "json5" } };
+			nfdsavedialogu8args_t args{};
+
+			args.defaultPath      = cwd;
+			args.defaultName      = videos_filename;
+			args.filterList       = filters;
+			args.filterCount      = 2;
+
+			nfdresult_t  result   = NFD_SaveDialogU8_With( &out_path, &args );
+
+			if ( result == NFD_OKAY )
+			{
+				g_videos_file_path = util_strdup_r( g_videos_file_path, out_path );
+				save_videos();
+			}
+			else if ( result == NFD_ERROR )
+			{
+				printf( "NativeFileDialog Error: %s\n", NFD_GetError() );
+			}
+
+			on_file_dialog_exit();
+
+			free( cwd );
+			NFD_FreePathU8( out_path );
+		}
+
+		free( videos_filename );
+
+		ImGui::Separator();
+
+		if ( ImGui::MenuItem( "Save Config" ) )
+		{
+			save_settings();
 		}
 
 		ImGui::EndMenu();
