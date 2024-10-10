@@ -1142,9 +1142,6 @@ void win32_run()
 			win32_update_mpv_window_size();
 		}
 
-		// run main logic (should this be done before or after imgui window processing?)
-		run_logic();
-
 		// run imgui windows
 		if ( !g_fullscreen )
 		{
