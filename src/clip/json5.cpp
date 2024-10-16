@@ -308,11 +308,8 @@ static json_object_t* Json_IncrementObjectList( json_array_t& data )
 // Public Functions
 
 
-EJsonError json_parse( json_object_t* spRoot, const char* spStr )
+EJsonError json_parse( json_object_t& root, const char* spStr )
 {
-	if ( spRoot == nullptr )
-		return EJsonError_RootIsNullptr;
-
 	if ( spStr == nullptr )
 		return EJsonError_DataIsNullptr;
 
@@ -321,17 +318,17 @@ EJsonError json_parse( json_object_t* spRoot, const char* spStr )
 	// int typeIndex = 0;
 
 	// std::vector< json_object_t* > objStack;
-	// objStack.push_back( spRoot );
+	// objStack.push_back( root );
 
 	std::forward_list< json_object_t* > objStack;
-	objStack.push_front( spRoot );
+	objStack.push_front( &root );
 
-	memset( spRoot, 0, sizeof( json_object_t ) );
+	memset( &root, 0, sizeof( json_object_t ) );
 
 	// int stackCount = 1;
 	// json_object_t* objStack = (json_object_t*)malloc( sizeof( json_object_t ) );
-	// objStack[0] = *spRoot;
-	// json_object_t* objStack = spRoot;
+	// objStack[0] = *root;
+	// json_object_t* objStack = root;
 	// json_object_t* cur = nullptr;
 
 	char c;
@@ -344,21 +341,21 @@ EJsonError json_parse( json_object_t* spRoot, const char* spStr )
 
 		// ------------------------------------------------------
 		// Find Root if needed
-		if ( spRoot->aType == e_json_type_invalid )
+		if ( root.aType == e_json_type_invalid )
 		{
 			switch ( c )
 			{
 				case '{':
 				{
 					spStr++;
-					spRoot->aType = e_json_type_object;
+					root.aType = e_json_type_object;
 
 					break;
 				}
 				case '[':
 				{
 					spStr++;
-					spRoot->aType = e_json_type_array;
+					root.aType = e_json_type_array;
 
 					break;
 				}
@@ -577,10 +574,10 @@ EJsonError json_parse( json_object_t* spRoot, const char* spStr )
 }
 
 
-void json_free( json_object_t* spRoot )
+void json_free( json_object_t& root )
 {
 	std::vector< json_object_t* > objList;
-	objList.push_back( spRoot );
+	objList.push_back( &root );
 
 	// First, get all objects into one huge list
 	for ( size_t objIndex = 0; objIndex < objList.size(); objIndex++ )
@@ -608,33 +605,22 @@ void json_free( json_object_t* spRoot )
 		if ( objList[objList.size() - 1]->aType == e_json_type_string )
 		{
 			free( objList[objList.size() - 1]->aString.data );
-			objList[ objList.size() - 1 ]->aString.data = nullptr;
-			objList[ objList.size() - 1 ]->aString.size = 0;
 		}
 		else if ( objList[objList.size() - 1]->aType == e_json_type_object || objList[objList.size() - 1]->aType == e_json_type_array )
 		{
 			// Free the object list
 			free( objList[objList.size() - 1]->aObjects.data );
-			objList[ objList.size() - 1 ]->aObjects.data = nullptr;
-			objList[ objList.size() - 1 ]->aObjects.count = 0;
 		}
 
 		// Free the name if it exists
 		if ( objList[objList.size() - 1]->aName.data )
 		{
 			free( objList[ objList.size() - 1 ]->aName.data );
-			objList[ objList.size() - 1 ]->aName.data = nullptr;
-			objList[ objList.size() - 1 ]->aName.size = 0;
 		}
 
 		// pop the object off the stack
 		objList.pop_back();
 	}
-}
-
-
-void Json_ToString( json_object_t* spRoot )
-{
 }
 
 
@@ -645,9 +631,6 @@ const char* json_error_to_str( EJsonError sErr )
 		default:
 		case EJsonError_None:
 			return "None";
-
-		case EJsonError_RootIsNullptr:
-			return "Root is nullptr";
 
 		case EJsonError_DataIsNullptr:
 			return "Data is nullptr";
@@ -731,18 +714,7 @@ const char* json_type_to_str( e_json_type sType )
 }
 
 
-constexpr size_t STR_BUF_SIZE = 512;
-
-
-struct json_str_buf_t
-{
-	char*  data;
-	size_t capacity;
-	size_t size;
-};
-
-
-static void json_append_str_f( json_str_buf_t& buffer, const char* format, ... )
+void json_append_str_f( str_buf_t& buffer, const char* format, ... )
 {
 	va_list args, args_copy;
 
@@ -760,7 +732,7 @@ static void json_append_str_f( json_str_buf_t& buffer, const char* format, ... )
 
 	if ( ( len + buffer.size ) > buffer.capacity )
 	{
-		size_t increase = MAX( len, STR_BUF_SIZE );
+		size_t increase = MAX( len, JSON_STR_BUF_SIZE );
 		char*  new_data = ch_realloc( buffer.data, buffer.capacity + increase );
 
 		if ( !new_data )
@@ -781,44 +753,22 @@ static void json_append_str_f( json_str_buf_t& buffer, const char* format, ... )
 }
 
 
-static void json_append_str( json_str_buf_t& buffer, const char* str, size_t len )
-{
-	if ( ( len + buffer.size ) > buffer.capacity )
-	{
-		size_t increase = MAX( len, STR_BUF_SIZE );
-		char*  new_data = ch_realloc( buffer.data, buffer.capacity + increase );
-
-		if ( !new_data )
-		{
-			printf( "json_to_str: failed to increase string buffer size!\n" );
-			return;
-		}
-
-		buffer.capacity += increase;
-		buffer.data = new_data;
-	}
-
-	memcpy( &buffer.data[ buffer.size ], str, len * sizeof( char ) );
-	buffer.size += len;
-}
-
-
-static void json_append_str_escape_quotes( json_str_buf_t& buffer, const char* str, size_t len )
+void json_append_str_escaped( str_buf_t& buffer, const char* str, size_t len )
 {
 	// wow this feels dumb lol
-	size_t quote_count = 0;
+	size_t escape_count = 0;
 
 	for ( size_t i = 0; i < len; i++ )
 	{
-		if ( str[ i ] == '"' )
-			quote_count++;
+		if ( str[ i ] == '"' ||  str[ i ] == '\\' )
+			escape_count++;
 	}
 
-	size_t new_len = len + quote_count;
+	size_t new_len = len + escape_count;
 
 	if ( ( new_len + buffer.size ) > buffer.capacity )
 	{
-		size_t increase = MAX( new_len, STR_BUF_SIZE );
+		size_t increase = MAX( new_len, JSON_STR_BUF_SIZE );
 		char*  new_data = ch_realloc( buffer.data, buffer.capacity + increase );
 
 		if ( !new_data )
@@ -837,6 +787,9 @@ static void json_append_str_escape_quotes( json_str_buf_t& buffer, const char* s
 		if ( str[ i ] == '"' )
 			buffer.data[ buf_i++ ] = '\\';
 
+		if ( str[ i ] == '\\' )
+			buffer.data[ buf_i++ ] = '\\';
+
 		buffer.data[ buf_i++ ] = str[ i ];
 	}
 
@@ -844,12 +797,13 @@ static void json_append_str_escape_quotes( json_str_buf_t& buffer, const char* s
 }
 
 
-static void json_append_str( json_str_buf_t& buffer, const char* str )
+static void json_append_str( str_buf_t& buffer, const char* str )
 {
-	json_append_str( buffer, str, strlen( str ) );
+	util_append_str( buffer, str, strlen( str ) );
 }
 
-static void json_append_tabs( json_str_buf_t& buffer, size_t depth )
+
+static void json_append_tabs( str_buf_t& buffer, size_t depth )
 {
 	if ( depth > 32 )
 	{
@@ -863,19 +817,19 @@ static void json_append_tabs( json_str_buf_t& buffer, size_t depth )
 	char tabs[ 32 ] = { 0 };
 	memset( tabs, '\t', depth * sizeof( char ) );
 
-	json_append_str( buffer, tabs, depth );
+	util_append_str( buffer, tabs, depth );
 }
 
 
-static void json_to_str_recurse( json_str_buf_t& buffer, json_object_t& object, u32 depth )
+static void json_to_str_recurse( str_buf_t& buffer, json_object_t& object, u32 depth )
 {
 	json_append_tabs( buffer, depth );
 
 	if ( object.aName.data )
 	{
-		json_append_str( buffer, "\"", 1 );
-		json_append_str_escape_quotes( buffer, object.aName.data, object.aName.size );
-		json_append_str( buffer, "\": ", 3 );
+		util_append_str( buffer, "\"", 1 );
+		json_append_str_escaped( buffer, object.aName.data, object.aName.size );
+		util_append_str( buffer, "\": ", 3 );
 	}
 
 	switch ( object.aType )
@@ -886,7 +840,7 @@ static void json_to_str_recurse( json_str_buf_t& buffer, json_object_t& object, 
 			//	json_append_str( buffer, "\n", 1 );
 			//
 			//json_append_tabs( buffer, depth );
-			json_append_str( buffer, "{\n", 2 );
+			util_append_str( buffer, "{\n", 2 );
 
 			for ( size_t i = 0; i < object.aObjects.count; i++ )
 			{
@@ -895,16 +849,16 @@ static void json_to_str_recurse( json_str_buf_t& buffer, json_object_t& object, 
 
 			//json_append_str( buffer, "\n", 1 );
 			json_append_tabs( buffer, depth );
-			json_append_str( buffer, "},\n", 3 );
+			util_append_str( buffer, "},\n", 3 );
 			break;
 		}
 		case e_json_type_array:
 		{
 			if ( depth > 0 )
-				json_append_str( buffer, "\n", 1 );
+				util_append_str( buffer, "\n", 1 );
 
 			json_append_tabs( buffer, depth );
-			json_append_str( buffer, "[\n", 2 );
+			util_append_str( buffer, "[\n", 2 );
 			//json_append_tabs( buffer, depth + 1 );
 
 			for ( size_t i = 0; i < object.aObjects.count; i++ )
@@ -914,14 +868,14 @@ static void json_to_str_recurse( json_str_buf_t& buffer, json_object_t& object, 
 
 			//json_append_str( buffer, "\n", 1 );
 			json_append_tabs( buffer, depth );
-			json_append_str( buffer, "],\n", 3 );
+			util_append_str( buffer, "],\n", 3 );
 			break;
 		}
 		case e_json_type_string:
 		{
-			json_append_str( buffer, "\"", 1 );
-			json_append_str_escape_quotes( buffer, object.aString.data, object.aString.size );
-			json_append_str( buffer, "\",\n", 3 );
+			util_append_str( buffer, "\"", 1 );
+			json_append_str_escaped( buffer, object.aString.data, object.aString.size );
+			util_append_str( buffer, "\",\n", 3 );
 			break;
 		}
 		case e_json_type_int:
@@ -936,47 +890,78 @@ static void json_to_str_recurse( json_str_buf_t& buffer, json_object_t& object, 
 		}
 		case e_json_type_false:
 		{
-			json_append_str( buffer, "false,\n", 6 );
+			util_append_str( buffer, "false,\n", 7 );
 			break;
 		}
 		case e_json_type_true:
 		{
-			json_append_str( buffer, "true,\n", 6 );
+			util_append_str( buffer, "true,\n", 6 );
 			break;
 		}
 		case e_json_type_null:
 		{
+			util_append_str( buffer, "null,\n", 6 );
 			break;
 		}
 	}
 }
 
 
-json_str_t json_to_str( json_object_t* root )
+json_str_t json_to_str( json_object_t& root )
 {
-	if ( !root )
-		return {};
-
-	json_str_buf_t buffer{};
+	str_buf_t buffer{};
 	buffer.data     = ch_calloc< char >( STR_BUF_SIZE );
 	buffer.capacity = STR_BUF_SIZE;
 	buffer.size     = 0;
 
-	//json_append_str( buffer, "{\n\t", 3 );
-
-	json_to_str_recurse( buffer, *root, 0 );
-
-	//json_append_str( buffer, "}\0", 2 );
-	json_append_str( buffer, "\0", 1 );
+	json_to_str_recurse( buffer, root, 0 );
+	util_append_str( buffer, "\0", 1 );
 
 	json_str_t output{};
 	output.data = buffer.data;
-	output.size = output.size;
+	output.size = buffer.size;
 	return output;
+}
+
+
+json_str_t json_strn( const char* str, size_t len )
+{
+	if ( !str )
+		return {};
+
+	return json_str_t( strdup( str ), len );
+}
+
+
+json_str_t json_str( const char* str )
+{
+	if ( !str )
+		return {};
+
+	return json_str_t( strdup( str ), strlen( str ) );
 }
 
 
 // --------------------------------------------------------------------------------------
 // Builder Functions
 
+
+bool json_add_objects( json_object_t& object, size_t count )
+{
+	object.aType          = e_json_type_object;
+	object.aObjects.count = count;
+	object.aObjects.data  = ch_malloc< json_object_t >( count );
+
+	return object.aObjects.data;
+}
+
+
+bool json_add_array( json_object_t& object, size_t count )
+{
+	object.aType          = e_json_type_array;
+	object.aObjects.count = count;
+	object.aObjects.data  = ch_malloc< json_object_t >( count );
+
+	return object.aObjects.data;
+}
 

@@ -1,5 +1,4 @@
 #include "main.h"
-#include "sys_win32.h"
 
 #ifndef WIN32_LEAN_AND_MEAN
 #define WIN32_LEAN_AND_MEAN

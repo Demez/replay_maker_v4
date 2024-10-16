@@ -4,24 +4,6 @@
 // --------------------------------------------------------------------------------------------------------
 
 
-template< typename T >
-static bool array_append( T*& data, u32 count )
-{
-	T* new_data = ch_realloc< T >( data, count + 1 );
-
-	if ( !new_data )
-		return true;
-
-	data = new_data;
-	memset( &data[ count ], 0, sizeof( T ) );
-
-	return false;
-}
-
-
-// --------------------------------------------------------------------------------------------------------
-
-
 clip_data_t* clip_create()
 {
 	clip_data_t* data = ch_calloc< clip_data_t >( 1 );
@@ -202,7 +184,7 @@ void clip_parse_settings( clip_data_t* data, const char* path )
 	if ( !data )
 		return;
 
-	char* file = fs_readfile( path );
+	char* file = fs_read_file( path );
 
 	if ( !file )
 	{
@@ -211,7 +193,7 @@ void clip_parse_settings( clip_data_t* data, const char* path )
 	}
 
 	json_object_t root{};
-	EJsonError    err = json_parse( &root, file );
+	EJsonError    err = json_parse( root, file );
 
 	if ( err != EJsonError_None )
 	{
@@ -239,7 +221,7 @@ void clip_parse_settings( clip_data_t* data, const char* path )
 		}
 	}
 
-	json_free( &root );
+	json_free( root );
 	free( file );
 
 	printf( "parsed settings\n" );
@@ -424,7 +406,7 @@ void clip_parse_videos( clip_data_t* data, const char* path )
 	if ( !data )
 		return;
 
-	char* file = fs_readfile( path );
+	char* file = fs_read_file( path );
 
 	if ( !file )
 	{
@@ -433,7 +415,7 @@ void clip_parse_videos( clip_data_t* data, const char* path )
 	}
 
 	json_object_t root{};
-	EJsonError    err = json_parse( &root, file );
+	EJsonError    err = json_parse( root, file );
 
 	if ( err != EJsonError_None )
 	{
@@ -464,11 +446,14 @@ void clip_parse_videos( clip_data_t* data, const char* path )
 		clip_parse_video( data, object, root_i );
 	}
 
-	json_free( &root );
+	json_free( root );
 	free( file );
 
 	printf( "parsed settings\n" );
 }
+
+
+// ============================================================================================================================
 
 
 void clip_save_settings( clip_data_t* data, const char* path )
@@ -479,11 +464,179 @@ void clip_save_settings( clip_data_t* data, const char* path )
 }
 
 
+// ============================================================================================================================
+
+
+static bool clip_save_encode_override( clip_data_t* data, clip_encode_override_t& encode_override, json_object_t& root )
+{
+	root.aName          = json_strn( "encode_overrides", 16 );
+	root.aType          = e_json_type_object;
+	root.aObjects.count = 2;
+	root.aObjects.data  = ch_malloc< json_object_t >( 2 );
+
+	if ( !root.aObjects.data )
+		return false;
+
+	root.aObjects.data[ 0 ].aName          = json_strn( "presets", 7 );
+	root.aObjects.data[ 0 ].aType          = e_json_type_array;
+	root.aObjects.data[ 0 ].aObjects.count = encode_override.presets_count;
+	root.aObjects.data[ 0 ].aObjects.data  = ch_malloc< json_object_t >( encode_override.presets_count );
+
+	if ( !root.aObjects.data[ 0 ].aObjects.data )
+		return false;
+
+	for ( u32 i = 0; i < encode_override.presets_count; i++ )
+	{
+		json_object_t& entry = root.aObjects.data[ 0 ].aObjects.data[ i ];
+		entry.aType          = e_json_type_string;
+		entry.aString        = json_str( data->preset[ encode_override.presets[ i ] ].name );
+	}
+
+	root.aObjects.data[ 1 ].aName = json_strn( "exclude_mode", 12 );
+	root.aObjects.data[ 1 ].aType = encode_override.preset_exclude ? e_json_type_true : e_json_type_false;
+
+	return true;
+}
+
+
 void clip_save_videos( clip_data_t* data, const char* path )
 {
+	if ( !data )
+		return;
+
+	if ( !data->output_count )
+		return;
+
 	// build json5
+	json_object_t root{};
+	root.aType          = e_json_type_array;
+	root.aObjects.count = data->output_count;
+	root.aObjects.data  = ch_malloc< json_object_t >( data->output_count );
+
+	if ( !root.aObjects.data )
+	{
+		free( root.aObjects.data );
+		return;
+	}
+
+	for ( size_t root_i = 0; root_i < root.aObjects.count; root_i++ )
+	{
+		json_object_t&       output_json = root.aObjects.data[ root_i ];
+		clip_output_video_t& output      = data->output[ root_i ];
+		output_json.aType                = e_json_type_object;
+
+		// output video has 4 objects
+		output_json.aObjects.count       = 4;
+		output_json.aObjects.data        = ch_malloc< json_object_t >( 4 );
+
+		if ( !output_json.aObjects.data )
+		{
+			json_free( root );
+			return;
+		}
+
+		// name
+		output_json.aObjects.data[ 0 ].aName   = json_strn( "name", 4 );
+		output_json.aObjects.data[ 0 ].aType   = e_json_type_string;
+		output_json.aObjects.data[ 0 ].aString = json_str( output.name );
+
+		// prefix
+		output_json.aObjects.data[ 1 ].aName   = json_strn( "prefix", 6 );
+		output_json.aObjects.data[ 1 ].aType   = e_json_type_string;
+		output_json.aObjects.data[ 1 ].aString = json_str( data->prefix[ output.prefix ].name );
+
+		// encode_overrides
+		if ( !clip_save_encode_override( data, output.encode_overrides, output_json.aObjects.data[ 2 ] ) )
+		{
+			json_free( root );
+			return;
+		}
+
+		// inputs
+		output_json.aObjects.data[ 3 ].aName          = json_strn( "inputs", 6 );
+		output_json.aObjects.data[ 3 ].aType          = e_json_type_array;
+		output_json.aObjects.data[ 3 ].aObjects.count = output.input_count;
+		output_json.aObjects.data[ 3 ].aObjects.data  = ch_malloc< json_object_t >( output.input_count );
+
+		if ( output.input_count )
+		{
+			if ( !output_json.aObjects.data[ 3 ].aObjects.data )
+			{
+				json_free( root );
+				return;
+			}
+
+			for ( u32 input_i = 0; input_i < output.input_count; input_i++ )
+			{
+				json_object_t&      input_json = output_json.aObjects.data[ 3 ].aObjects.data[ input_i ];
+				clip_input_video_t& input      = output.input[ input_i ];
+
+				if ( !json_add_objects( input_json, 3 ) )
+				{
+					json_free( root );
+					return;
+				}
+
+				// path
+				input_json.aObjects.data[ 0 ].aName   = json_strn( "path", 4 );
+				input_json.aObjects.data[ 0 ].aType   = e_json_type_string;
+				input_json.aObjects.data[ 0 ].aString = json_str( input.path );
+
+				// encode_overrides
+				if ( !clip_save_encode_override( data, input.encode_overrides, input_json.aObjects.data[ 1 ] ) )
+				{
+					json_free( root );
+					return;
+				}
+
+				// time_ranges
+				input_json.aObjects.data[ 2 ].aName = json_strn( "time_ranges", 11 );
+
+				if ( !json_add_array( input_json.aObjects.data[ 2 ], input.time_range_count ) )
+				{
+					json_free( root );
+					return;
+				}
+
+				for ( u32 time_i = 0; time_i < input.time_range_count; time_i++ )
+				{
+					json_object_t& json_time = input_json.aObjects.data[ 2 ].aObjects.data[ time_i ];
+
+					if ( !json_add_array( json_time, 2 ) )
+					{
+						json_free( root );
+						return;
+					}
+
+					json_time.aObjects.data[ 0 ].aType   = e_json_type_double;
+					json_time.aObjects.data[ 0 ].aDouble = input.time_range[ time_i ].start;
+
+					json_time.aObjects.data[ 1 ].aType   = e_json_type_double;
+					json_time.aObjects.data[ 1 ].aDouble = input.time_range[ time_i ].end;
+				}
+			}
+		}
+	}
 
 	// write to file
+	json_str_t out_str = json_to_str( root );
+
+	json_free( root );
+
+	if ( !out_str.data )
+	{
+		printf( "failed to convert json to string to write to file!\n" );
+		return;
+	}
+
+	bool write_ret = fs_save_file( path, out_str.data, out_str.size - 1 );
+
+	free( out_str.data );
+
+	if ( !write_ret )
+		printf( "failed to save videos to \"%s\"\n", path );
+
+	//return write_ret;
 }
 
 
@@ -560,28 +713,6 @@ clip_encode_preset_t* clip_create_encode_preset( clip_data_t* data )
 // ========================================================================================================
 
 
-clip_output_video_t* clip_create_output( clip_data_t* data )
-{
-	if ( !data )
-		return nullptr;
-
-	if ( array_append( data->output, data->output_count ) )
-		return nullptr;
-}
-
-
-clip_input_video_t*  clip_create_input( clip_output_video_t* output )
-{
-	if ( !output )
-		return nullptr;
-
-	return nullptr;
-}
-
-
-// ========================================================================================================
-
-
 char* clip_replay_name_trim( const char* name, u32 prefix_len )
 {
 	char* custom_name = util_strdup( name + prefix_len );
@@ -624,6 +755,7 @@ clip_output_video_t* clip_add_output( clip_data_t* data, const char* name )
 
 	clip_output_video_t* output = &data->output[ data->output_count ];
 	output->name                = fs_get_filename_no_ext( name );
+	output->enabled             = true;
 
 	// convenience, if it starts with "Replay ", or "Replay_" (2019 clips), remove it
 	// then also check if it has a title appended to it

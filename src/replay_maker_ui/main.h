@@ -1,7 +1,6 @@
 #pragma once
 
 #include "util.h"
-#include "sys_win32.h"
 
 #include "mpv/client.h"
 #include "mpv/render.h"
@@ -48,6 +47,7 @@ void                               calc_replay_window_size( ivec2& size );
 
 void                               draw_imgui_window( int window_size[ 2 ] );
 void                               draw_replay_editor_window( int window_size[ 2 ] );
+void                               draw_playback_controls( int window_size[ 2 ], bool draw_volume );
 
 // save encode presets and video prefixes
 void                               save_settings();

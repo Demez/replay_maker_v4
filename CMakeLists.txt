@@ -145,21 +145,27 @@ endif()
 # ========================================================================================================
 
 set(
-    SRC_FILES
-    src/replay_maker_ui/main.cpp
-    src/replay_maker_ui/main.h
-    src/replay_maker_ui/mpv_interface.cpp
-    src/replay_maker_ui/drag_drop.cpp
-    src/replay_maker_ui/plat_win32.cpp
-    src/replay_maker_ui/ui_editor.cpp
-
+    SRC_FILES_SHARED
     src/util.cpp
     src/util.h
+    src/sys_win32.cpp
+    src/args.cpp
+    src/args.h
 	
     src/clip/clip.cpp
     src/clip/clip.h
     src/clip/json5.cpp
     src/clip/json5.h
+)
+
+set(
+    SRC_FILES_UI
+    src/replay_maker_ui/main.cpp
+    src/replay_maker_ui/main.h
+    src/replay_maker_ui/mpv_interface.cpp
+    src/replay_maker_ui/sys_win32_drag_drop.cpp
+    src/replay_maker_ui/sys_win32_replay.cpp
+    src/replay_maker_ui/ui_editor.cpp
 
     src/imgui/imgui.cpp
     src/imgui/imgui_demo.cpp
@@ -170,28 +176,41 @@ set(
     src/imgui/imgui_widgets.cpp
 )
 
-include_directories(
+set(
+    SRC_FILES_ENCODER
+    src/encoder/encoder.cpp
+    src/encoder/encoder.h
+    src/encoder/main.cpp
+    src/encoder/main.h
+
+    src/imgui/imgui.cpp
+    src/imgui/imgui_demo.cpp
+    src/imgui/imgui_draw.cpp
+    src/imgui/imgui_impl_opengl3.cpp
+    src/imgui/imgui_impl_win32.cpp
+    src/imgui/imgui_tables.cpp
+    src/imgui/imgui_widgets.cpp
+)
+
+add_executable( replay_maker ${SRC_FILES_UI} ${SRC_FILES_SHARED} )
+
+source_group(
+	TREE ${CMAKE_CURRENT_LIST_DIR}/src
+	PREFIX "Source Files"
+	FILES ${SRC_FILES_UI} ${SRC_FILES_SHARED}
+)
+
+# native file dialog
+target_link_libraries( replay_maker PRIVATE nfd )
+target_link_directories( replay_maker PRIVATE "nativefiledialog/build/src" )
+
+target_include_directories(
+	replay_maker PRIVATE
 	"src"
 	"src/replay_maker_ui"
 	"src/imgui"
 	"mpv/include"
 	"nativefiledialog/src/include"
-)
-
-link_directories(
-	"nativefiledialog/build/src"
-)
-
-
-# native file dialog
-link_libraries( nfd )
-
-add_executable( replay_maker ${SRC_FILES} )
-
-source_group(
-	TREE ${CMAKE_CURRENT_LIST_DIR}/src
-	PREFIX "Source Files"
-	FILES ${SRC_FILES}
 )
 
 set_target_properties(
@@ -202,12 +221,17 @@ set_target_properties(
 	VS_DEBUGGER_WORKING_DIRECTORY ${PROJ_OBJ}
 )
 
-# set output directories for all builds (Debug, Release, etc.)
-# foreach( OUTPUTCONFIG ${CMAKE_CONFIGURATION_TYPES} )
-#     string( TOUPPER ${OUTPUTCONFIG} OUTPUTCONFIG )
-#     set_target_properties(
-#     	replay_maker PROPERTIES
-#     	RUNTIME_OUTPUT_DIRECTORY_${OUTPUTCONFIG} ${PROJ_OUT}
-#     )
-# endforeach( OUTPUTCONFIG CMAKE_CONFIGURATION_TYPES )
+add_executable( replay_encoder ${SRC_FILES_ENCODER} ${SRC_FILES_SHARED} )
+
+source_group(
+	TREE ${CMAKE_CURRENT_LIST_DIR}/src
+	PREFIX "Source Files"
+	FILES ${SRC_FILES_ENCODER} ${SRC_FILES_SHARED}
+)
+
+target_include_directories(
+	replay_encoder PRIVATE
+	"src"
+	"src/encoder"
+)
 

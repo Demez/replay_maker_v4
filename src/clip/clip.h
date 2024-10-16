@@ -59,6 +59,7 @@ struct clip_output_video_t
 	clip_encode_override_t encode_overrides;
 
 	u32                    prefix;
+	bool                   enabled;  // if false, don't encode this video
 };
 
 
@@ -128,9 +129,6 @@ clip_encode_preset_t* clip_create_encode_preset( clip_data_t* data );
 
 u32                   clip_add_prefix( clip_data_t* data, const char* name, const char* prefix );
 clip_encode_preset_t* clip_add_encode_preset( clip_data_t* data, const char* name, const char* ext );
-
-clip_output_video_t*  clip_create_output( clip_data_t* data );
-clip_input_video_t*   clip_create_input( clip_output_video_t* output );
 
 clip_output_video_t*  clip_add_output( clip_data_t* data, const char* name );
 u32                   clip_add_input( clip_output_video_t* output, const char* path );

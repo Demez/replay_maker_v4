@@ -228,7 +228,10 @@ void draw_replay_list( int size[ 2 ] )
 
 		clip_output_video_t* output = &g_clip_data->output[ i ];
 
-		ImGui::Text( "Output %d:\n%s", i, output->name );
+		// add prefix
+		clip_prefix_t&       prefix = g_clip_data->prefix[ output->prefix ];
+
+		ImGui::Text( "Output %d:\n%s%s", i, prefix.prefix, output->name );
 
 		//ImGui::SameLine();
 		//
@@ -264,7 +267,13 @@ void draw_replay_list( int size[ 2 ] )
 			// display input video times
 			for ( u32 time_range_i = 0; time_range_i < input->time_range_count; time_range_i++ )
 			{
-				ImGui::Text( "%d - %.4f - %.4f", time_range_i, input->time_range[ time_range_i ].start, input->time_range[ time_range_i ].end );
+				char start_str[ TIME_BUFFER ] = { 0 };
+				char end_str[ TIME_BUFFER ]   = { 0 };
+
+				util_format_time( start_str, input->time_range[ time_range_i ].start );
+				util_format_time( end_str, input->time_range[ time_range_i ].end );
+
+				ImGui::Text( "%d - %s - %s", time_range_i, start_str, end_str );
 			}
 
 			ImGui::Unindent( 16.f );
@@ -379,7 +388,10 @@ void draw_preset_override_button( clip_encode_override_t* override, const char* 
 
 void draw_input_video_edit( u32 input_i, clip_input_video_t* input )
 {
-	ImGui::Text( "Input %d:\n%s", input_i, input->path );
+	ImGuiStyle& style = ImGui::GetStyle();
+
+	// ImGui::Text( "Input %d:\n%s", input_i, input->path );
+	ImGui::TextUnformatted( input->path );
 
 	if ( ImGui::Button( "Set Current" ) )
 	{
@@ -396,6 +408,19 @@ void draw_input_video_edit( u32 input_i, clip_input_video_t* input )
 	}
 
 	ImGui::SameLine();
+
+	ImVec2 line_remain = ImGui::GetContentRegionAvail();
+
+	float  spacing_width = line_remain.x;
+	spacing_width -= ImGui::CalcTextSize( "Delete" ).x;
+	spacing_width -= style.FramePadding.x * 2;
+	spacing_width -= style.ItemSpacing.x;
+
+	spacing_width = MAX( -style.ItemSpacing.x, spacing_width );
+
+	ImGui::Dummy( { spacing_width, 0.f } );
+	ImGui::SameLine();
+
 	if ( ImGui::Button( "Delete" ) )
 	{
 		g_clip_delete_input = input_i;
@@ -418,9 +443,7 @@ void draw_input_video_edit( u32 input_i, clip_input_video_t* input )
 	u32  move_time_range   = UINT32_MAX;
 	bool move_up           = false;
 
-	ImGui::Indent( 16.f );
-
-	ImGuiStyle& style    = ImGui::GetStyle();
+//	ImGui::Indent( 16.f );
 
 	size_t      imgui_id = 10000;
 
@@ -465,8 +488,8 @@ void draw_input_video_edit( u32 input_i, clip_input_video_t* input )
 		ImGui::EndDisabled();
 
 		ImGui::SameLine();
-		ImGui::Spacing();
-		ImGui::SameLine();
+	//	ImGui::Spacing();
+	//	ImGui::SameLine();
 
 		ImVec2 region       = ImGui::GetWindowContentRegionMax();
 
@@ -480,20 +503,24 @@ void draw_input_video_edit( u32 input_i, clip_input_video_t* input )
 		float  button_space = region.x;
 
 		button_space -= style.WindowPadding.x * 1;
-		button_space -= 16.f;                                                  // indent
+	//	button_space -= 16.f;                                                  // indent
 		button_space -= ( size_x.x + size_edit.x + size_up.x + size_down.x );  // text size
 		button_space -= ( style.FramePadding.x * 8 );                          // padding applies to both sides of the frame, so 4 buttons * 2 times per button
-		button_space -= ( style.ItemSpacing.x * 4 );                           // 4 buttons + 1 spacers
+	//	button_space -= ( style.ItemSpacing.x * 4 );                           // 4 buttons + 1 spacers
+		button_space -= ( style.ItemSpacing.x * 3 );                           // 4 buttons + 1 spacers
 
 		float single_button_area = ( button_space / 2.f ) - style.ItemSpacing.x;
 
 		ImGui::BeginDisabled( input_i != g_clip_current_input );
 
-		char start_str[ 32 ] = { 0 };
-		char end_str[ 32 ]   = { 0 };
+		char start_str[ TIME_BUFFER ] = { 0 };
+		char end_str[ TIME_BUFFER ]   = { 0 };
 
-		snprintf( start_str, 32, "%.4f", input->time_range[ time_range_i ].start );
-		snprintf( end_str, 32, "%.4f", input->time_range[ time_range_i ].end );
+		util_format_time( start_str, input->time_range[ time_range_i ].start );
+		util_format_time( end_str, input->time_range[ time_range_i ].end );
+
+		// snprintf( start_str, 32, "%.4f", input->time_range[ time_range_i ].start );
+		// snprintf( end_str, 32, "%.4f", input->time_range[ time_range_i ].end );
 
 		ImGui::PushID( imgui_id++ );
 		ImGui::PushItemWidth( single_button_area );
@@ -521,7 +548,7 @@ void draw_input_video_edit( u32 input_i, clip_input_video_t* input )
 		// ImGui::Text( "%.4f - %.4f", input->time_range[ time_range_i ].start, input->time_range[ time_range_i ].end );
 	}
 
-	ImGui::Unindent( 16.f );
+//	ImGui::Unindent( 16.f );
 
 	// does the user want to move a time range?
 	if ( move_time_range != UINT32_MAX )
@@ -575,6 +602,8 @@ void draw_replay_edit( int size[ 2 ] )
 		ImGui::EndCombo();
 	}
 
+	ImGui::TextUnformatted( "TODO: Default Encode Presets Here" );
+
 	if ( ImGui::Button( "New Output Video" ) )
 	{
 		// create a new output video based on the filename of the playing video
@@ -612,7 +641,21 @@ void draw_replay_edit( int size[ 2 ] )
 
 	ImGui::SameLine();
 
-	if ( ImGui::Button( "Delete Output Video" ) )
+	ImGuiStyle& style         = ImGui::GetStyle();
+
+	ImVec2 line_remain   = ImGui::GetContentRegionAvail();
+
+	float  spacing_width = line_remain.x;
+	spacing_width -= ImGui::CalcTextSize( "Delete" ).x;
+	spacing_width -= style.FramePadding.x * 2;
+	spacing_width -= style.ItemSpacing.x;
+
+	spacing_width = MAX( -style.ItemSpacing.x, spacing_width );
+
+	ImGui::Dummy( { spacing_width, 0.f } );
+	ImGui::SameLine();
+
+	if ( ImGui::Button( "Delete" ) )
 	{
 		clip_remove_output( g_clip_data, g_clip_current_output );
 		replay_editor_reset();
@@ -666,11 +709,15 @@ void draw_replay_edit( int size[ 2 ] )
 
 	// draw_preset_override_button( &g_clip_current_output->encode_overrides, "Edit Presets" );
 
+	//ImGui::Spacing();
+	//ImGui::Spacing();
+	//ImGui::Spacing();
+	//ImGui::Spacing();
 	ImGui::Separator();
 
-	draw_preset_override( g_clip_current_output->encode_overrides );
-
-	ImGui::Separator();
+	// probably not needed, we can just use the presets stored on output videos to determine what encode presets to run this video on
+	//draw_preset_override( g_clip_current_output->encode_overrides );
+	//ImGui::Separator();
 
 	// push_edit_button_color( &g_clip_current_output->encode_overrides );
 	//
@@ -683,6 +730,10 @@ void draw_replay_edit( int size[ 2 ] )
 	// }
 
 	//ImGui::Separator();
+
+	// lmao
+	draw_playback_controls( size, false );
+	ImGui::Separator(); 
 
 	ImGui::BeginDisabled( g_clip_current_input == UINT32_MAX );
 
@@ -746,6 +797,15 @@ void draw_replay_edit( int size[ 2 ] )
 	if ( ImGui::Button( "Reset Start Time" ) )
 	{
 		g_time_range_start = 0;
+	}
+	
+	ImGui::SameLine();
+
+	if ( ImGui::Button( "Add Full Video Time" ) )
+	{
+		double duration = 0;
+		p_mpv_get_property( g_mpv, "duration", MPV_FORMAT_DOUBLE, &duration );
+		clip_add_time_range( g_clip_current_output, g_clip_current_input, 0, duration );
 	}
 
 	// show current start time?
@@ -854,7 +914,11 @@ void draw_preset_editor( int size[ 2 ] )
 
 		ImGui::Text( "Name:       %s", preset.name );
 		ImGui::Text( "Extension:  %s", preset.ext );
-		ImGui::Text( "ffmpeg cmd: %s", preset.ffmpeg_cmd );
+		ImGui::TextUnformatted( "ffmpeg cmd:\n" );
+
+		ImGui::PushTextWrapPos( 0.f );
+		ImGui::TextUnformatted( preset.ffmpeg_cmd );
+		ImGui::PopTextWrapPos();
 
 		ImGui::Spacing();
 

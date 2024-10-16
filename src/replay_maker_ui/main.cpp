@@ -16,7 +16,7 @@
 // native file dialog
 #include "nfd.h"
 
-#include <vector>
+#include <time.h>
 
 
 bool                g_running     = true;
@@ -36,6 +36,10 @@ char*               g_videos_file_path;
 
 #define TEST_VIDEO L"H:\\videos\\av1_testing\\Replay 2024-06-25 21-11-40.mkv"
 #define TEST_VIDEO_ANSI "H:\\videos\\av1_testing\\Replay 2024-06-25 21-11-40.mkv"
+
+//#define TEST_VIDEO L"D:\\projects\\replay_maker_v4_window_test\\build\\output4\\raw\\test_max_path\\testingtestingtestingtestingtestingtesting\\raw_gmod_d_test_ball_flip_video__raw_gmod_d_test_ball_flip_video__raw_gmod_d_test_ball_flip_video__raw_gmod_d_test_ball_flip_video____raw_gmod_d_test_ball_flip_video____ra.mkv"
+//#define TEST_VIDEO_ANSI "D:\\projects\\replay_maker_v4_window_test\\build\\output4\\raw\\test_max_path\\testingtestingtestingtestingtestingtesting\\raw_gmod_d_test_ball_flip_video__raw_gmod_d_test_ball_flip_video__raw_gmod_d_test_ball_flip_video__raw_gmod_d_test_ball_flip_video____raw_gmod_d_test_ball_flip_video____ra.mkv"
+
 
 
 // --------------------------------------------------------------------------------------------------
@@ -76,7 +80,7 @@ void calc_replay_window_size( ivec2& size )
 }
 
 
-void draw_playback_controls( int size[ 2 ] )
+void draw_playback_controls( int size[ 2 ], bool draw_volume )
 {
 	// is there a video playing?
 
@@ -93,7 +97,15 @@ void draw_playback_controls( int size[ 2 ] )
 
 	// seek bar
 
-	ImGui::Text( "%.4f / %.4f", time_pos, duration );
+	// https://stackoverflow.com/questions/3673226/how-to-print-time-in-format-2009-08-10-181754-811
+
+	char str_time_pos[ TIME_BUFFER ]{ 0 };
+	char str_duration[ TIME_BUFFER ]{ 0 };
+
+	util_format_time( str_time_pos, time_pos );
+	util_format_time( str_duration, duration );
+
+	ImGui::Text( "%s / %s", str_time_pos, str_duration );
 	// ImGui::ProgressBar( time_pos / duration );
 
 	// can offset the seek bar to the right depending on the current playback time
@@ -109,7 +121,10 @@ void draw_playback_controls( int size[ 2 ] )
 
 	float        avaliable_width = size[ 0 ] - ( style.ItemSpacing.x * 2 );
 	float        vol_bar_width   = vol_text_size.x * 3;
-	float        seek_bar_width  = ( avaliable_width - seek_text_size.x ) - ( vol_bar_width + vol_text_size.x + ( style.ItemSpacing.x * 2 ) );
+	float        seek_bar_width  = ( avaliable_width - seek_text_size.x );
+
+	if ( draw_volume )
+		seek_bar_width -= ( vol_bar_width + vol_text_size.x + ( style.ItemSpacing.x * 2 ) );
 
 	ImGui::SetNextItemWidth( seek_bar_width );
 
@@ -124,21 +139,24 @@ void draw_playback_controls( int size[ 2 ] )
 		int         cmd_ret = p_mpv_command_async( g_mpv, 0, cmd );
 	}
 
-	double volume = 0;
-	p_mpv_get_property( g_mpv, "volume", MPV_FORMAT_DOUBLE, &volume );
-
-	ImGui::SameLine();
-	ImGui::SetNextItemWidth( vol_bar_width );
-
-	float volume_f = volume;
-	if ( ImGui::SliderFloat( "Volume", &volume_f, 0.f, 130.f ) )
+	if ( draw_volume )
 	{
-		// convert float to string in c
-		char volume_str[ 16 ];
-		gcvt( volume_f, 4, volume_str );
+		double volume = 0;
+		p_mpv_get_property( g_mpv, "volume", MPV_FORMAT_DOUBLE, &volume );
 
-		const char* cmd[]   = { "set", "volume", volume_str, NULL };
-		int         cmd_ret = p_mpv_command_async( g_mpv, 0, cmd );
+		ImGui::SameLine();
+		ImGui::SetNextItemWidth( vol_bar_width );
+
+		float volume_f = volume;
+		if ( ImGui::SliderFloat( "Volume", &volume_f, 0.f, 130.f ) )
+		{
+			// convert float to string in c
+			char volume_str[ 16 ];
+			gcvt( volume_f, 4, volume_str );
+
+			const char* cmd[]   = { "set", "volume", volume_str, NULL };
+			int         cmd_ret = p_mpv_command_async( g_mpv, 0, cmd );
+		}
 	}
 
 	const ImVec2     label_size    = ImGui::CalcTextSize( "Pause", NULL, true );
@@ -198,6 +216,15 @@ void draw_playback_controls( int size[ 2 ] )
 		const char* cmd[]   = { "frame-step", NULL };
 		int         cmd_ret = p_mpv_command_async( g_mpv, 0, cmd );
 	}
+
+	ImGui::SameLine();
+	ImGui::Spacing();
+	ImGui::SameLine();
+
+	if ( ImGui::Button( "Open Folder" ) )
+	{
+		sys_browse_to_file( mpv_get_current_video() );
+	}
 }
 
 
@@ -227,7 +254,7 @@ void draw_imgui_window( int window_size[ 2 ] )
 			return;
 		}
 
-		draw_playback_controls( element_size );
+		draw_playback_controls( element_size, true );
 
 		ImGui::End();
 	}
@@ -252,6 +279,74 @@ void save_settings()
 void save_videos()
 {
 	clip_save_videos( g_clip_data, g_videos_file_path );
+}
+
+
+void imgui_set_theme_steam_green()
+{
+	// Classic VGUI2 Style Color Scheme
+	ImVec4* colors                           = ImGui::GetStyle().Colors;
+
+	colors[ ImGuiCol_Text ]                  = ImVec4( 1.00f, 1.00f, 1.00f, 1.00f );
+	colors[ ImGuiCol_TextDisabled ]          = ImVec4( 0.50f, 0.50f, 0.50f, 1.00f );
+	colors[ ImGuiCol_WindowBg ]              = ImVec4( 0.29f, 0.34f, 0.26f, 1.00f );
+	colors[ ImGuiCol_ChildBg ]               = ImVec4( 0.29f, 0.34f, 0.26f, 1.00f );
+	colors[ ImGuiCol_PopupBg ]               = ImVec4( 0.24f, 0.27f, 0.20f, 1.00f );
+	colors[ ImGuiCol_Border ]                = ImVec4( 0.54f, 0.57f, 0.51f, 0.50f );
+	colors[ ImGuiCol_BorderShadow ]          = ImVec4( 0.14f, 0.16f, 0.11f, 0.52f );
+	colors[ ImGuiCol_FrameBg ]               = ImVec4( 0.24f, 0.27f, 0.20f, 1.00f );
+	colors[ ImGuiCol_FrameBgHovered ]        = ImVec4( 0.27f, 0.30f, 0.23f, 1.00f );
+	colors[ ImGuiCol_FrameBgActive ]         = ImVec4( 0.30f, 0.34f, 0.26f, 1.00f );
+	colors[ ImGuiCol_TitleBg ]               = ImVec4( 0.24f, 0.27f, 0.20f, 1.00f );
+	colors[ ImGuiCol_TitleBgActive ]         = ImVec4( 0.29f, 0.34f, 0.26f, 1.00f );
+	colors[ ImGuiCol_TitleBgCollapsed ]      = ImVec4( 0.00f, 0.00f, 0.00f, 0.51f );
+	colors[ ImGuiCol_MenuBarBg ]             = ImVec4( 0.24f, 0.27f, 0.20f, 1.00f );
+	colors[ ImGuiCol_ScrollbarBg ]           = ImVec4( 0.35f, 0.42f, 0.31f, 1.00f );
+	colors[ ImGuiCol_ScrollbarGrab ]         = ImVec4( 0.28f, 0.32f, 0.24f, 1.00f );
+	colors[ ImGuiCol_ScrollbarGrabHovered ]  = ImVec4( 0.25f, 0.30f, 0.22f, 1.00f );
+	colors[ ImGuiCol_ScrollbarGrabActive ]   = ImVec4( 0.23f, 0.27f, 0.21f, 1.00f );
+	colors[ ImGuiCol_CheckMark ]             = ImVec4( 0.59f, 0.54f, 0.18f, 1.00f );
+	colors[ ImGuiCol_SliderGrab ]            = ImVec4( 0.35f, 0.42f, 0.31f, 1.00f );
+	colors[ ImGuiCol_SliderGrabActive ]      = ImVec4( 0.54f, 0.57f, 0.51f, 0.50f );
+	colors[ ImGuiCol_Button ]                = ImVec4( 0.29f, 0.34f, 0.26f, 0.40f );
+	colors[ ImGuiCol_ButtonHovered ]         = ImVec4( 0.35f, 0.42f, 0.31f, 1.00f );
+	colors[ ImGuiCol_ButtonActive ]          = ImVec4( 0.54f, 0.57f, 0.51f, 0.50f );
+	colors[ ImGuiCol_Header ]                = ImVec4( 0.35f, 0.42f, 0.31f, 1.00f );
+	colors[ ImGuiCol_HeaderHovered ]         = ImVec4( 0.35f, 0.42f, 0.31f, 0.6f );
+	colors[ ImGuiCol_HeaderActive ]          = ImVec4( 0.54f, 0.57f, 0.51f, 0.50f );
+	colors[ ImGuiCol_Separator ]             = ImVec4( 0.14f, 0.16f, 0.11f, 1.00f );
+	colors[ ImGuiCol_SeparatorHovered ]      = ImVec4( 0.54f, 0.57f, 0.51f, 1.00f );
+	colors[ ImGuiCol_SeparatorActive ]       = ImVec4( 0.59f, 0.54f, 0.18f, 1.00f );
+	colors[ ImGuiCol_ResizeGrip ]            = ImVec4( 0.19f, 0.23f, 0.18f, 0.00f );  // grip invis
+	colors[ ImGuiCol_ResizeGripHovered ]     = ImVec4( 0.54f, 0.57f, 0.51f, 1.00f );
+	colors[ ImGuiCol_ResizeGripActive ]      = ImVec4( 0.59f, 0.54f, 0.18f, 1.00f );
+	colors[ ImGuiCol_Tab ]                   = ImVec4( 0.35f, 0.42f, 0.31f, 1.00f );
+	colors[ ImGuiCol_TabHovered ]            = ImVec4( 0.54f, 0.57f, 0.51f, 0.78f );
+	colors[ ImGuiCol_TabActive ]             = ImVec4( 0.59f, 0.54f, 0.18f, 1.00f );
+	colors[ ImGuiCol_TabUnfocused ]          = ImVec4( 0.24f, 0.27f, 0.20f, 1.00f );
+	colors[ ImGuiCol_TabUnfocusedActive ]    = ImVec4( 0.35f, 0.42f, 0.31f, 1.00f );
+	//colors[ImGuiCol_DockingPreview]          = ImVec4(0.59f, 0.54f, 0.18f, 1.00f);
+	//colors[ImGuiCol_DockingEmptyBg]          = ImVec4(0.20f, 0.20f, 0.20f, 1.00f);
+	colors[ ImGuiCol_PlotLines ]             = ImVec4( 0.61f, 0.61f, 0.61f, 1.00f );
+	colors[ ImGuiCol_PlotLinesHovered ]      = ImVec4( 0.59f, 0.54f, 0.18f, 1.00f );
+	colors[ ImGuiCol_PlotHistogram ]         = ImVec4( 1.00f, 0.78f, 0.28f, 1.00f );
+	colors[ ImGuiCol_PlotHistogramHovered ]  = ImVec4( 1.00f, 0.60f, 0.00f, 1.00f );
+	colors[ ImGuiCol_TextSelectedBg ]        = ImVec4( 0.59f, 0.54f, 0.18f, 1.00f );
+	colors[ ImGuiCol_DragDropTarget ]        = ImVec4( 0.73f, 0.67f, 0.24f, 1.00f );
+	colors[ ImGuiCol_NavHighlight ]          = ImVec4( 0.59f, 0.54f, 0.18f, 1.00f );
+	colors[ ImGuiCol_NavWindowingHighlight ] = ImVec4( 1.00f, 1.00f, 1.00f, 0.70f );
+	colors[ ImGuiCol_NavWindowingDimBg ]     = ImVec4( 0.80f, 0.80f, 0.80f, 0.20f );
+	colors[ ImGuiCol_ModalWindowDimBg ]      = ImVec4( 0.80f, 0.80f, 0.80f, 0.35f );
+
+	ImGuiStyle& style                        = ImGui::GetStyle();
+	style.FrameBorderSize                    = 1.0f;
+	style.WindowRounding                     = 0.0f;
+	style.ChildRounding                      = 0.0f;
+	style.FrameRounding                      = 0.0f;
+	style.PopupRounding                      = 0.0f;
+	style.ScrollbarRounding                  = 0.0f;
+	style.GrabRounding                       = 0.0f;
+	style.TabRounding                        = 0.0f;
 }
 
 
@@ -320,6 +415,8 @@ auto main( int argc, char* argv[] ) -> int
 	ImGui::GetIO().Fonts->AddFontFromFileTTF( "D:\\projects\\replay_maker_v4\\out\\CascadiaCode.ttf", 15, nullptr );
 
 	ImGui_ImplOpenGL3_CreateFontsTexture();
+
+	imgui_set_theme_steam_green();
 
 	// ------------------------------------------
 	// Startup and Load MPV

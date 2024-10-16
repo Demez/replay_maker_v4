@@ -6,7 +6,6 @@
 enum EJsonError
 {
 	EJsonError_None,
-	EJsonError_RootIsNullptr,
 	EJsonError_DataIsNullptr,
 	EJsonError_InvalidCharacter,
 	EJsonError_OutOfMemory,
@@ -40,6 +39,9 @@ enum e_json_type : char
 };
 
 
+constexpr size_t JSON_STR_BUF_SIZE = 512;
+
+
 struct json_object_t;
 
 
@@ -54,6 +56,24 @@ struct json_str_t
 {
 	char*  data;
 	size_t size;
+
+	constexpr json_str_t( const char* str, size_t len ):
+		data( const_cast< char* >( str ) ),
+		size( len )
+	{
+	}
+
+	constexpr json_str_t( char* str, size_t len ):
+		data( str ),
+		size( len )
+	{
+	}
+
+	constexpr json_str_t() :
+		data( 0 ),
+		size( 0 )
+	{
+	}
 };
 
 
@@ -85,13 +105,17 @@ struct json_object_t
 };
 
 
-EJsonError  json_parse( json_object_t* root, const char* source );
-void        json_free( json_object_t* root );
+EJsonError  json_parse( json_object_t& root, const char* source );
+void        json_free( json_object_t& root );
+
 const char* json_error_to_str( EJsonError err );
 const char* json_type_to_str( e_json_type type );
-json_str_t  json_to_str( json_object_t* root );
+json_str_t  json_to_str( json_object_t& root );
 
+json_str_t  json_strn( const char* str, size_t len );
+json_str_t  json_str( const char* str );
 
 // json5 building
-
+bool        json_add_objects( json_object_t& object, size_t count );
+bool        json_add_array( json_object_t& object, size_t count );
 
