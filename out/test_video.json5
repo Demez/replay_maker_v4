@@ -1,59 +1,100 @@
 [
-    {
-        "name": "test_ball_flip_video",
-        "prefix": "General",
-
-        "encode_overrides":
-        {
-            "presets": ["raw"],
-            "exclude_mode": true,
-        },
-
-        "inputs":
-        [
-            {
-                "path": "M:\\videos\\replays_raw\\Replay 2020-06-25 21-01-58 ball flip.mkv"
-
-                "encode_overrides":
-                {
-                    "presets": ["raw"],
-                    "exclude_mode": true,
-                },
-
-                "time_ranges":
-                [
-                    [0.0, 20.0],
-                ],
-            },
-        ],
-    },
-    
-    {
-        "name": "test_ball_flip_video2",
-        "prefix": "General",
-
-        "encode_overrides":
-        {
-            "presets": ["raw"],
-            "exclude_mode": false,
-        },
-
-        "inputs":
-        [
-            {
-                "path": "M:\\videos\\replays_raw\\Replay 2020-06-25 21-01-58 ball flip.mkv"
-
-                "encode_overrides":
-                {
-                    "presets": ["raw"],
-                    "exclude_mode": false,
-                },
-
-                "time_ranges":
-                [
-                    [0.0, 20.0],
-                ],
-            },
-        ],
-    },
+	{
+		"name": "test_ball_flip_video",
+		"prefix": "Garry's Mod",
+		"encode_overrides": {
+			"presets": 
+			[
+			],
+			"exclude_mode": false,
+		},
+		"inputs": 
+		[
+			{
+				"path": "M:\\videos\\replays_raw\\Replay 2020-06-25 21-01-58 ball flip.mkv",
+				"encode_overrides": {
+					"presets": 
+					[
+						"raw",
+					],
+					"exclude_mode": false,
+				},
+				"time_ranges": 
+				[
+					
+					[
+						0.000000,
+						158.789993,
+					],
+				],
+			},
+			{
+				"path": "M:\\videos\\replays_raw\\Replay 2020-06-25 21-01-58 ball flip.mkv",
+				"encode_overrides": {
+					"presets": 
+					[
+						"discord",
+					],
+					"exclude_mode": false,
+				},
+				"time_ranges": 
+				[
+					
+					[
+						132.690002,
+						158.789993,
+					],
+				],
+			},
+		],
+	},
+	{
+		"name": "2024-10-12_17-02-09__pyro_jumpscare",
+		"prefix": "Team Fortress 2",
+		"encode_overrides": {
+			"presets": 
+			[
+			],
+			"exclude_mode": false,
+		},
+		"inputs": 
+		[
+			{
+				"path": "E:\\videos\\Replay 2024-10-12 17-02-09.mkv",
+				"encode_overrides": {
+					"presets": 
+					[
+						"discord_right_1440",
+					],
+					"exclude_mode": false,
+				},
+				"time_ranges": 
+				[
+					
+					[
+						292.967010,
+						297.183014,
+					],
+				],
+			},
+			{
+				"path": "E:\\videos\\Replay 2024-10-12 17-02-09.mkv",
+				"encode_overrides": {
+					"presets": 
+					[
+						"raw",
+					],
+					"exclude_mode": false,
+				},
+				"time_ranges": 
+				[
+					
+					[
+						0.000000,
+						298.834015,
+					],
+				],
+			},
+		],
+	},
 ],

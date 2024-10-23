@@ -78,7 +78,7 @@ static bool parse_ffprobe_float( bool& failed, char*& line_start, const char* na
 bool get_video_metadata( const char* path, video_metadata_t& metadata )
 {
 	// build command line
-	char cmd[ 4096 ] = { 0 };
+	char cmd[ 512 ] = { 0 };
 	// strcat( cmd, "ffprobe.exe -threads 6 -v error -show_streams -select_streams v:0 -show_format -of default=noprint_wrappers=1 \"" );
 	strcat( cmd, "ffprobe.exe -threads 6 -v error -select_streams v:0 -show_entries stream=width,height,r_frame_rate:format=bit_rate,duration,height,r_frame_rate -of default=noprint_wrappers=1 \"" );
 	strcat( cmd, path );
@@ -152,7 +152,7 @@ bool get_video_metadata( const char* path, video_metadata_t& metadata )
 float get_video_bitrate( const char* path )
 {
 	// build command line
-	char cmd[ 4096 ] = { 0 };
+	char cmd[ 512 ] = { 0 };
 	strcat( cmd, "ffprobe.exe -threads 6 -v error -select_streams v:0 -show_entries format=bit_rate -of default=noprint_wrappers=1:nokey=1 \"" );
 	strcat( cmd, path );
 	strcat( cmd, "\"" );
@@ -163,7 +163,19 @@ float get_video_bitrate( const char* path )
 	if ( !success )
 		return 0.f;
 
-	return 0.f;
+	if ( output.data[ 0 ] == '\0' )
+		return false;
+
+	char* end;
+	float bitrate = strtof( output.data, &end );
+
+	if ( end == output.data )
+	{
+		printf( "failed to parse bitrate - \"%s\"\n", path );
+		return 0.f;
+	}
+
+	return bitrate;
 }
 
 
@@ -413,7 +425,7 @@ bool collect_video_info()
 
 
 // funny
-auto main( int argc, char* argv[] )
+auto main( int argc, char* argv[] ) -> int
 {
 	args_init( argc, argv );
 
@@ -441,37 +453,15 @@ auto main( int argc, char* argv[] )
 		return 0;
 	}
 
-	if ( fs_exists( g_temp_video_dir ) )
+	if ( !fs_make_dir_check( g_temp_video_dir ) )
 	{
-		if ( fs_is_file( g_temp_video_dir ) )
-		{
-			printf( "Error: Temp video directory already exists as a file: \"%s\"\n", g_temp_video_dir );
-			free( exe_dir );
-			args_free();
-			return 1;
-		}
-	}
-	else if ( !fs_make_dir( g_temp_video_dir ) )
-	{
-		printf( "Error: Failed to create temp video directory: \"%s\"\n", g_temp_video_dir );
 		free( exe_dir );
 		args_free();
 		return 1;
 	}
 
-	if ( fs_exists( g_output_dir ) )
+	if ( !fs_make_dir_check( g_output_dir ) )
 	{
-		if ( fs_is_file( g_output_dir ) )
-		{
-			printf( "Error: Output directory already exists as a file: \"%s\"\n", g_output_dir );
-			free( exe_dir );
-			args_free();
-			return 1;
-		}
-	}
-	else if ( !fs_make_dir( g_output_dir ) )
-	{
-		printf( "Error: Failed to create output directory: \"%s\"\n", g_output_dir );
 		free( exe_dir );
 		args_free();
 		return 1;

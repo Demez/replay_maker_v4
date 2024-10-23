@@ -225,8 +225,6 @@ char* sys_get_exe_folder( size_t* len )
 	wchar_t output_w[ 4096 ];
 	GetModuleFileName( NULL, output_w, 4096 );
 
-	size_t len_w = wcslen( output_w );
-
 	// find index of last path separator
 	wchar_t* sep    = wcsrchr( output_w, '\\' );
 	size_t   path_i = sep - output_w;

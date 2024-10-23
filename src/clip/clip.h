@@ -78,6 +78,9 @@ struct clip_encode_preset_t
 
 	// for discord videos
 	u32   target_size;  // if this is not 0, it will keep re-encoding until it gets close to this size
+	u32   target_size_max;
+	u32   target_size_min;
+
 	u32   audio_bitrate;
 
 	// u32   inherit_from;  // id of a preset to inherit from?

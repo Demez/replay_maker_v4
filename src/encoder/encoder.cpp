@@ -42,6 +42,8 @@ char* gen_ffmpeg_cmd( clip_encode_preset_t& preset, clip_input_video_t& input, u
 
 bool run_ffmpeg_check( const char* cmd, const char* path )
 {
+	printf( "\nFFMPEG CMD: %s\n\n", cmd );
+
 	int ret = sys_execute( cmd );
 
 	if ( ret != 0 )
@@ -121,7 +123,7 @@ void add_metadata_cmd( clip_output_video_t& output, char* ffmpeg_cmd, bool add_m
 			size_t offset = strlen( metadata_file );
 			snprintf(
 			  metadata_file + offset, 2048 - offset,
-			  "[CHAPTER]\nTIMEBASE=1/1000\nSTART=%.6f\nEND=%.6f\ntitle='%d__%s'\n\n",
+			  "[CHAPTER]\nTIMEBASE=1/1000\nSTART=%.6f\nEND=%.6f\ntitle='%d__%s'\n\n"
 			  "[CHAPTER]\nTIMEBASE=1/1000\nSTART=%.6f\nEND=%.6f\ntitle='%d__%s'\n\n",
 			  time_range.start * 1000, time_range.start * 1000, marker_i++, input.path,
 			  time_range.end * 1000, time_range.end * 1000, marker_i++, input.path
@@ -167,7 +169,7 @@ void add_metadata_cmd( clip_output_video_t& output, char* ffmpeg_cmd, bool add_m
 }
 
 
-void create_output_video( clip_output_video_t& output, char* full_out_path, char** segment_paths, u32 segment_count, bool add_markers, u32 preset_i )
+void create_output_video( clip_output_video_t& output, char* full_out_path, enc_video_data_t& video_data, bool add_markers, u32 preset_i )
 {
 	// write ffmpeg concat.txt file
 	FILE* fp = fopen( "concat.txt", "wb" );
@@ -178,10 +180,10 @@ void create_output_video( clip_output_video_t& output, char* full_out_path, char
 		return;
 	}
 
-	for ( u32 i = 0; i < segment_count; i++ )
+	for ( u32 i = 0; i < video_data.segment_count; i++ )
 	{
 		fwrite( "file '", 6, 1, fp );
-		fwrite( segment_paths[ i ], strlen( segment_paths[ i ] ), 1, fp );
+		fwrite( video_data.segment[ i ].path, strlen( video_data.segment[ i ].path ), 1, fp );
 		fwrite( "'\n", 2, 1, fp );
 	}
 
@@ -205,14 +207,295 @@ void create_output_video( clip_output_video_t& output, char* full_out_path, char
 }
 
 
-// encoding for a target file size, useful for creating discord videos
-bool run_encode_inputs_target_size( clip_output_video_t& output, char**& segment_paths, u32& segment_i, clip_encode_preset_t& preset, u32 preset_i, enc_output_video_t& enc_output )
+float calc_bitrate_from_bits_per_pixel( float bpp, float width, float height, float fps )
 {
-	return false;
+	return ( width * height * fps * bpp ) / 1000;
+}
+
+
+float calc_bits_per_pixel( float rate, float width, float height, float fps )
+{
+	// data rate / (resolution * frames per second) = BPP
+	return rate / ( width * height * fps );
+}
+
+
+void calc_target_bitrates( enc_video_data_t& video_data, clip_encode_preset_t& preset )
+{
+	float total_duration = 0.f;
+	float total_bitrate  = 0.f;
+
+	for ( u32 seg_i = 0; seg_i < video_data.segment_count; seg_i++ )
+	{
+		video_segment_t&    segment    = video_data.segment[ seg_i ];
+		clip_input_video_t& input      = video_data.output->input[ segment.input ];
+		clip_time_range_t&  time_range = input.time_range[ segment.time ];
+
+		float               duration   = time_range.end - time_range.start;
+
+		// idk why we multiply by 8, was done in the python version, something with "KB to MB to Kbit"?
+		float               bitrate    = ( preset.target_size / duration ) * 8;
+
+		// subtract audio bitrate
+		bitrate -= preset.audio_bitrate;
+
+		segment.bitrate = bitrate;
+
+		total_duration += duration;
+		total_bitrate += bitrate;
+	}
+
+	float average_bitrate = ( ( preset.target_size * 0.001 * 8192 ) / total_duration ) - preset.audio_bitrate;
+	float bitrate_mult    = average_bitrate / total_bitrate;
+
+	for ( u32 seg_i = 0; seg_i < video_data.segment_count; seg_i++ )
+	{
+		video_segment_t& segment = video_data.segment[ seg_i ];
+		segment.bitrate *= bitrate_mult;
+	}
+}
+
+
+struct target_size_pass_t
+{
+	u32                 attempt         = 0;
+
+	float*              prev_bitrates   = nullptr;  // unused
+	float*              max_bitrates    = nullptr;
+	float*              min_bitrates    = nullptr;
+	float*              ffmpeg_bitrates = nullptr;
+
+	float               prev_file_size  = 0;
+
+	e_target_size_state last_state      = e_target_size_state_none;
+};
+
+
+// returns -1 if we failed and should cancel this, 0 if we need to try again, 1 if we suceeded
+int run_encode_inputs_target_size_pass( enc_video_data_t& video_data, clip_encode_preset_t& preset, target_size_pass_t& pass_data )
+{
+	for ( u32 seg_i = 0; seg_i < video_data.segment_count; seg_i++ )
+	{
+		video_segment_t&    segment    = video_data.segment[ seg_i ];
+		clip_input_video_t& input      = video_data.output->input[ segment.input ];
+		clip_time_range_t&  time_range = input.time_range[ segment.time ];
+
+		// for raw encodes only right now, need to setup discord stuff later
+		char*               ffmpeg_cmd = gen_ffmpeg_cmd( preset, input, segment.time );
+		size_t              buf_len    = strlen( ffmpeg_cmd );
+
+		snprintf( ffmpeg_cmd + buf_len, FFMPEG_CMD_SIZE - buf_len, " -b:v %.4fk", segment.bitrate );
+
+		// TEST
+		// snprintf( ffmpeg_cmd + buf_len, FFMPEG_CMD_SIZE - buf_len, " -b:v %.4fk -maxrate %.4fk -bufsize %.4fk -undershoot-pct 100 -overshoot-pct 100", segment.bitrate, segment.bitrate, segment.bitrate / 2.f );
+		buf_len = strlen( ffmpeg_cmd );
+
+		if ( preset.audio_bitrate )
+		{
+			snprintf( ffmpeg_cmd + buf_len, FFMPEG_CMD_SIZE - buf_len, " -b:a %dk", preset.audio_bitrate );
+			buf_len = strlen( ffmpeg_cmd );
+		}
+
+		snprintf( ffmpeg_cmd + buf_len, FFMPEG_CMD_SIZE - buf_len, " \"%s\"\0", segment.path );
+
+		if ( !run_ffmpeg_check( ffmpeg_cmd, segment.path ) )
+			return -1;
+	}
+
+	// check the segments created
+
+	// get the bitrates and total file size from the videos ffmpeg created
+	float total_file_size = 0;
+	for ( u32 seg_i = 0; seg_i < video_data.segment_count; seg_i++ )
+	{
+		video_segment_t& segment           = video_data.segment[ seg_i ];
+		float            bitrate           = get_video_bitrate( segment.path ) * 0.001;  // bytes to kb
+		pass_data.ffmpeg_bitrates[ seg_i ] = bitrate;
+
+		// bytes to kb
+		total_file_size += (fs_file_size( segment.path ) * 0.001);
+	}
+
+	// is this the same file size as before?
+	if ( pass_data.prev_file_size == total_file_size )
+	{
+		printf( "Attempt %d: the video is the exact same file size as the previous attempt, cancelling\n", pass_data.attempt + 1 );
+		return -1;
+	}
+
+	pass_data.prev_file_size = total_file_size;
+
+	// is this within the target size range?
+	if ( total_file_size < preset.target_size_max && total_file_size > preset.target_size_min )
+		return 1;
+
+	// no it isn't, find new bitrates for each segment and try again
+	bool smaller = total_file_size < preset.target_size_min;
+	e_target_size_state new_state = smaller ? e_target_size_state_smaller : e_target_size_state_bigger;
+
+	if ( smaller )
+		printf( "Attempt %d: Output video is smaller than target file size\n", pass_data.attempt + 1 );
+	else
+		printf( "Attempt %d: Output video is larger than target file size\n", pass_data.attempt + 1 );
+
+	bool state_changed = false;
+
+	if ( smaller && pass_data.last_state == e_target_size_state_bigger )
+	{
+		state_changed = true;
+		printf( "  cool we managed to go from being too big to being too small, god ffmpeg why\n" );
+	}
+	else if ( !smaller && pass_data.last_state == e_target_size_state_smaller )
+	{
+		state_changed = true;
+		printf( "  cool we managed to go from being too small to being too big, god ffmpeg why\n" );
+	}
+
+	// reencode videos at an adjusted bitrate based on what ffmpeg felt like encoding it as
+	for ( u32 seg_i = 0; seg_i < video_data.segment_count; seg_i++ )
+	{
+		video_segment_t& segment        = video_data.segment[ seg_i ];
+		float            ffmpeg_bitrate = pass_data.ffmpeg_bitrates[ seg_i ];
+
+		// division
+		float            bitrate_base    = 0.f;  // numerator
+		float            bitrate_div    = 0.f;  // denominator
+
+		if ( smaller )
+		{
+			// if the video is smaller than the min file size, and the bitrate we tried this pass is higher than a previous min bitrate
+			// then set that as the new min bitrate, so we know not to go lower than that
+			// pass_data.min_bitrates[ seg_i ] = MIN()
+			if ( pass_data.min_bitrates[ seg_i ] < segment.bitrate )
+				pass_data.min_bitrates[ seg_i ] = segment.bitrate;
+
+			bitrate_div  = MIN( ffmpeg_bitrate, segment.bitrate );
+			bitrate_base = MAX( ffmpeg_bitrate, segment.bitrate );
+		}
+		else
+		{
+			// if the video is larger than the max file size, and the bitrate we tried this pass is lower than a previous max bitrate
+			// then set that as the new max bitrate, so we know not to go higher than that
+			if ( pass_data.max_bitrates[ seg_i ] > segment.bitrate )
+				pass_data.max_bitrates[ seg_i ] = segment.bitrate;
+
+			bitrate_div  = MAX( ffmpeg_bitrate, segment.bitrate );
+			bitrate_base = MIN( ffmpeg_bitrate, segment.bitrate );
+		}
+
+		if ( state_changed )
+		{
+			segment.bitrate = ( pass_data.max_bitrates[ seg_i ] + pass_data.min_bitrates[ seg_i ] ) / 2.f;
+
+			printf( "  SEGMENT %d: Trying new target bitrate of %.4f\n", seg_i, segment.bitrate );
+			printf( "  SEGMENT %d: Current Min/Max Bitrates: %.4f/%.4f\n", seg_i, pass_data.min_bitrates[ seg_i ], pass_data.max_bitrates[ seg_i ] );
+		}
+		else
+		{
+			// could be something like 0.00017052145616207467, so wtf
+			float bitrate_mult = bitrate_base / bitrate_div;
+
+			if ( bitrate_mult < 0.2 )
+			{
+				printf( "  SEGMENT %d: wait wtf we just calculated a bitrate multiplier below 0.2, clamping to 0.2\n", seg_i );
+				bitrate_mult = 0.2;
+			}
+
+			float old_bitrate = segment.bitrate;
+			segment.bitrate *= bitrate_mult;
+
+			if ( bitrate_mult > 4 )
+			{
+				printf( "  SEGMENT %d: Bitrate Multiplier is greater than 3, fuck this, it's probably fine\n", seg_i );
+				return -1;
+			}
+
+			else if ( segment.bitrate <= 0.01 )
+			{
+				printf( "  SEGMENT %d: wtf we just calculated a bitrate of 0.01 or below, screw this\n", seg_i );
+				return -1;
+			}
+
+			printf(
+			  "  SEGMENT %d: Trying new target bitrate of %.4f\n"
+			  "    %.4f * %.4f  ->  %.4f * (%.4f / %.4f)\n",
+			  seg_i, segment.bitrate,
+			  old_bitrate, bitrate_mult,
+			  old_bitrate, bitrate_base, bitrate_div );
+		}
+	}
+
+	pass_data.last_state = new_state;
+
+	// try again
+	return 0;
+}
+
+
+// encoding for a target file size, useful for creating discord videos
+bool run_encode_inputs_target_size( enc_video_data_t& video_data, clip_encode_preset_t& preset )
+{
+	// calculate target bitrates
+	calc_target_bitrates( video_data, preset );
+
+	target_size_pass_t pass_data{};
+	pass_data.prev_bitrates   = ch_calloc< float >( video_data.segment_count );
+	pass_data.max_bitrates    = ch_calloc< float >( video_data.segment_count );
+	pass_data.min_bitrates    = ch_calloc< float >( video_data.segment_count );
+	pass_data.ffmpeg_bitrates = ch_calloc< float >( video_data.segment_count );
+
+	if ( !pass_data.prev_bitrates || !pass_data.max_bitrates || !pass_data.min_bitrates || !pass_data.ffmpeg_bitrates )
+		return false;
+
+	// set max bitrate really high by default so it lowers in passes
+	// either min or max bitrates should get closer to each other with each pass
+	for ( u32 seg_i = 0; seg_i < video_data.segment_count; seg_i++ )
+		pass_data.max_bitrates[ seg_i ] = FLT_MAX;
+
+	int ret = 0;
+
+	// max of 10 attempts
+	for ( ; pass_data.attempt < 10; pass_data.attempt++ )
+	{
+		ret = run_encode_inputs_target_size_pass( video_data, preset, pass_data );
+
+		if ( ret != 0 )
+			break;
+	}
+
+	free( pass_data.prev_bitrates );
+	free( pass_data.max_bitrates );
+	free( pass_data.min_bitrates );
+	free( pass_data.ffmpeg_bitrates );
+
+	return ret == 1;
 }
 
 
 // standard encode
+#if 1
+bool run_encode_inputs_standard( enc_video_data_t& video_data, clip_encode_preset_t& preset )
+{
+	// create all video segments
+	for ( u32 seg_i = 0; seg_i < video_data.segment_count; seg_i++ )
+	{
+		video_segment_t&    segment    = video_data.segment[ seg_i ];
+		clip_input_video_t& input      = video_data.output->input[ segment.input ];
+		clip_time_range_t&  time_range = input.time_range[ segment.time ];
+
+		// for raw encodes only right now, need to setup discord stuff later
+		char*  ffmpeg_cmd       = gen_ffmpeg_cmd( preset, input, segment.time );
+		size_t buf_len          = strlen( ffmpeg_cmd );
+
+		snprintf( ffmpeg_cmd + buf_len, FFMPEG_CMD_SIZE - buf_len, " \"%s\"\0", segment.path );
+
+		if ( !run_ffmpeg_check( ffmpeg_cmd, segment.path ) )
+			return false;
+	}
+
+	return true;
+}
+#else
 bool run_encode_inputs_standard( clip_output_video_t& output, char**& segment_paths, u32& segment_i, clip_encode_preset_t& preset, u32 preset_i )
 {
 	// create all video segments
@@ -279,6 +562,75 @@ bool run_encode_inputs_standard( clip_output_video_t& output, char**& segment_pa
 
 	return true;
 }
+#endif
+
+
+enc_video_data_t get_video_segments( enc_output_video_t& enc_output, clip_output_video_t& output, u32 preset_i )
+{
+	enc_video_data_t video_data{};
+	video_data.enc_output        = &enc_output;
+	video_data.output            = &output;
+
+	clip_encode_preset_t& preset = g_clip_data->preset[ preset_i ];
+
+	bool                  failed = false;
+
+	for ( u32 in_i = 0; in_i < output.input_count; in_i++ )
+	{
+		clip_input_video_t& input        = output.input[ in_i ];
+
+		// verify the encode preset
+		bool                valid_preset = input.encode_overrides.presets_count == 0;
+
+		for ( u32 i = 0; i < input.encode_overrides.presets_count; i++ )
+		{
+			if ( input.encode_overrides.presets[ i ] == preset_i )
+			{
+				if ( input.encode_overrides.preset_exclude )
+					valid_preset = false;
+				else
+					valid_preset = true;
+
+				break;
+			}
+		}
+
+		// don't use this one
+		if ( !valid_preset )
+			continue;
+
+		char* input_name = fs_get_filename_no_ext( input.path );
+
+		for ( u32 time_i = 0; time_i < input.time_range_count; time_i++ )
+		{
+			// add it to the segment list
+			if ( array_append_err( video_data.segment, video_data.segment_count, "failed to allocate memory to store video segment path\n" ) )
+			{
+				failed = true;
+				break;
+			}
+
+			char temp_name[ 256 ] = { 0 };
+
+			snprintf( temp_name, 256, "%s/%d__%s.%s", g_temp_video_dir, video_data.segment_count, input_name, preset.ext );
+			video_data.segment[ video_data.segment_count ].path  = strdup( temp_name );
+			video_data.segment[ video_data.segment_count ].input = in_i;
+			video_data.segment[ video_data.segment_count ].time  = time_i;
+			video_data.segment_count++;
+		}
+
+		free( input_name );
+
+		if ( failed )
+		{
+			free( video_data.segment );
+			video_data.segment_count = 0;
+			return video_data;
+		}
+	}
+
+	return video_data;
+}
 
 
 void run_encode_preset( char* out_dir, clip_encode_preset_t& preset, u32 preset_i )
@@ -291,6 +643,8 @@ void run_encode_preset( char* out_dir, clip_encode_preset_t& preset, u32 preset_
 		clip_output_video_t& output     = g_clip_data->output[ out_i ];
 		clip_prefix_t&       prefix     = g_clip_data->prefix[ output.prefix ];
 		enc_output_video_t&  enc_output = g_output_videos[ out_i ];
+
+		printf( "\n----------------------------------------------------\n\n" );
 
 		if ( !enc_output.valid )
 		{
@@ -312,8 +666,7 @@ void run_encode_preset( char* out_dir, clip_encode_preset_t& preset, u32 preset_
 		if ( !valid_preset )
 			continue;
 
-		memset( full_out_path, 0, 4096 );
-
+		memset( full_out_path, 0, sizeof( char ) * 4096 );
 		strcat( full_out_path, out_dir );
 
 		if ( preset.out_prefix )
@@ -326,34 +679,45 @@ void run_encode_preset( char* out_dir, clip_encode_preset_t& preset, u32 preset_
 
 		printf( "Output Video \"%s\"\n", full_out_path );
 
-		// each time range is a segment, so this will count the total segments
-		char** segment_paths = nullptr;
-		u32    segment_i     = 0;
-		bool   skip_output   = false;
-
-		// create all video segments
-		// TARGET SIZE NOT SETUP YET
-		// if ( preset.target_size )
-		// {
-		// 	skip_output = !run_encode_inputs_target_size( output, segment_paths, segment_i, preset, preset_i, enc_output );
-		// }
-		// else
+		// check if the video exists
+		if ( fs_is_file( full_out_path ) )
 		{
-			skip_output = !run_encode_inputs_standard( output, segment_paths, segment_i, preset, preset_i );
+			// make sure it's not an empty file
+			if ( fs_file_size( full_out_path ) > 0 )
+			{
+				printf( "Output File exists - skipping\n" );
+				continue;
+			}
 		}
 
+		// ----------------------------------------------------------------------------
+		// get the list of input videos and time ranges we will use for this preset
+		enc_video_data_t video_data = get_video_segments( enc_output, output, preset_i );
+
+		if ( video_data.segment_count == 0 )
+			continue;
+		
+		bool skip_output = false;
+
+		// create all video segments
+		if ( preset.target_size )
+			skip_output = !run_encode_inputs_target_size( video_data, preset );
+
+		else
+			skip_output = !run_encode_inputs_standard( video_data, preset );
+
 		// if we want to skip this or we just have no video segments
-		if ( !skip_output && segment_i > 0 )
+		if ( !skip_output )
 		{
 			// concat them together
-			create_output_video( output, full_out_path, segment_paths, segment_i, !preset.target_size, preset_i );
+			create_output_video( output, full_out_path, video_data, !preset.target_size, preset_i );
 		}
 
 		// free data
-		for ( u32 i = 0; i < segment_i; i++ )
-			free( segment_paths[ i ] );
+		for ( u32 i = 0; i < video_data.segment_count; i++ )
+			free( video_data.segment[ i ].path );
 
-		free( segment_paths );
+		free( video_data.segment );
 	}
 }
 
@@ -369,10 +733,7 @@ void run_encoding()
 	{
 		clip_encode_preset_t& preset = g_clip_data->preset[ preset_i ];
 
-		// temp
-		if ( preset.target_size )
-			continue;
-
+		memset( out_dir, 0, sizeof( char ) * 4096 );
 		strcat( out_dir, g_output_dir );
 
 		if ( preset.out_folder_append )
@@ -380,19 +741,8 @@ void run_encoding()
 			strcat( out_dir, PATH_SEP_STR );
 			strcat( out_dir, preset.out_folder_append );
 
-			if ( fs_exists( out_dir ) )
-			{
-				if ( fs_is_file( out_dir ) )
-				{
-					printf( "Error: Output directory already exists as a file: \"%s\"\n", out_dir );
-					continue;
-				}
-			}
-			else if ( !fs_make_dir( out_dir ) )
-			{
-				printf( "Error: Failed to create output directory: \"%s\"\n", out_dir );
+			if ( !fs_make_dir_check( out_dir ) )
 				continue;
-			}
 		}
 
 		strcat( out_dir, PATH_SEP_STR );

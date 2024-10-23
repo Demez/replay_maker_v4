@@ -292,6 +292,9 @@ bool        fs_make_dir( const char* path );
 bool        fs_is_dir( const char* path );
 bool        fs_is_file( const char* path );
 
+// checks if it exists and if it's a file and not a directory
+bool        fs_make_dir_check( const char* path );
+
 // returns file size in bytes
 u64         fs_file_size( const char* path );
 

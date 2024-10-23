@@ -113,6 +113,14 @@ static void clip_parse_encode_presets( clip_data_t* data, json_object_t& json )
 				{
 					encode->target_size = field.aInt;
 				}
+				else if ( util_strncmp( "target_size_max", 15, field.aName.data, field.aName.size ) )
+				{
+					encode->target_size_max = field.aInt;
+				}
+				else if ( util_strncmp( "target_size_min", 15, field.aName.data, field.aName.size ) )
+				{
+					encode->target_size_min = field.aInt;
+				}
 				else if ( util_strncmp( "audio_bitrate", 13, field.aName.data, field.aName.size ) )
 				{
 					encode->audio_bitrate = field.aInt;

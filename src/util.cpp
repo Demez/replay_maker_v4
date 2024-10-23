@@ -238,6 +238,7 @@ bool fs_make_dir( const char* path )
 	return mkdir( path ) == 0;
 }
 
+
 bool fs_is_dir( const char* path )
 {
 	struct stat s;
@@ -257,6 +258,26 @@ bool fs_is_file( const char* path )
 		return ( s.st_mode & S_IFREG );
 
 	return false;
+}
+
+
+bool fs_make_dir_check( const char* path )
+{
+	if ( fs_exists( path ) )
+	{
+		if ( fs_is_file( path ) )
+		{
+			printf( "Error: Directory already exists as a file: \"%s\"\n", path );
+			return false;
+		}
+	}
+	else if ( !fs_make_dir( path ) )
+	{
+		printf( "Error: Failed to create directory: \"%s\"\n", path );
+		return false;
+	}
+
+	return true;
 }
 
 

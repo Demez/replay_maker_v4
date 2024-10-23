@@ -3,6 +3,14 @@
 #include "clip/clip.h"
 
 
+enum e_target_size_state
+{
+	e_target_size_state_none,
+	e_target_size_state_smaller,
+	e_target_size_state_bigger,
+};
+
+
 struct video_metadata_t
 {
 	int   width    = 0.f;
@@ -35,6 +43,27 @@ struct enc_output_video_t
 };
 
 
+struct video_segment_t
+{
+	char* path;
+	u32   input;
+	u32   time;
+
+	float bitrate = 0.f;
+};
+
+
+// data used for processing a video
+struct enc_video_data_t
+{
+	enc_output_video_t*  enc_output;
+	clip_output_video_t* output;
+
+	video_segment_t*     segment;
+	u32                  segment_count;
+};
+
+
 extern const char*         g_video_files;
 extern const char*         g_output_dir;
 extern const char*         g_temp_video_dir;
@@ -44,4 +73,5 @@ extern enc_output_video_t* g_output_videos;
 
 
 void                       run_encoding();
+float                      get_video_bitrate( const char* path );
 
