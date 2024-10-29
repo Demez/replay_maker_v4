@@ -7,6 +7,9 @@
 // https://github.com/btzy/nativefiledialog-extended
 #include "nfd.h"
 
+char*                          g_recently_opened_path   = nullptr;
+char**                         g_recently_opened        = nullptr;
+u8                             g_recently_opened_count  = 0;
 
 clip_data_t*                   g_clip_data              = nullptr;
 clip_output_video_t*           g_clip_current_output    = nullptr;
@@ -24,8 +27,11 @@ static u32                     g_default_prefix   = 0;
 
 char*                          g_video_input_dir;
 
-static float                   g_time_range_start = 0.f;
+static float                   g_time_range_start   = 0.f;
 
+static bool                    g_focus_replay_maker = false;
+
+static int                     g_draw_built_in_menu = 0;
 
 void on_file_dialog_open()
 {
@@ -75,6 +81,7 @@ void draw_replay_info_menu_bar()
 			{
 				g_videos_file_path = util_strdup_r( g_videos_file_path, out_path );
 				clip_parse_videos( g_clip_data, out_path );
+				update_recently_opened( out_path );
 				NFD_FreePathU8( out_path );
 			}
 			else if ( result == NFD_ERROR )
@@ -92,16 +99,46 @@ void draw_replay_info_menu_bar()
 		// 	printf( "Open Dir\n" );
 		// }
 
+		if ( ImGui::BeginMenu( "Open Recent" ) )
+		{
+			for ( u8 i = 0; i < g_recently_opened_count; i++ )
+			{
+				char* file_name = fs_get_filename_no_ext( g_recently_opened[ i ] );
+
+				ImGui::PushID( i + 1 );
+
+				if ( ImGui::MenuItem( file_name ) )
+				{
+					g_videos_file_path = util_strdup_r( g_videos_file_path, g_recently_opened[ i ] );
+					clip_parse_videos( g_clip_data, g_recently_opened[ i ] );
+					update_recently_opened( g_recently_opened[ i ] );
+				}
+
+				ImGui::PopID();
+
+				free( file_name );
+			}
+
+			ImGui::EndMenu();
+		}
+
 		ImGui::Separator();
+
+		ImGui::BeginDisabled( g_videos_file_path == nullptr );
+
 		char* videos_filename = fs_get_filename( g_videos_file_path );
 
 		char save_btn[ 256 ] = { "Save " };
-		strcat( save_btn, videos_filename );
+
+		if ( videos_filename )
+			strcat( save_btn, videos_filename );
 
 		if ( ImGui::MenuItem( save_btn ) )
 		{
 			save_videos();
 		}
+
+		ImGui::EndDisabled();
 
 		if ( ImGui::MenuItem( "Save As" ) )
 		{
@@ -148,21 +185,39 @@ void draw_replay_info_menu_bar()
 		ImGui::EndMenu();
 	}
 
-	static bool g_draw_style_editor = false;
-
 	if ( ImGui::BeginMenu( "View" ) )
 	{
-		if ( ImGui::MenuItem( "Style Editor", nullptr, g_draw_style_editor ) )
+		if ( ImGui::MenuItem( "Style Editor", nullptr, g_draw_built_in_menu == 1 ) )
 		{
-			g_draw_style_editor = !g_draw_style_editor;
+			if ( g_draw_built_in_menu != 1)
+				g_draw_built_in_menu = 1;
+			else
+				g_draw_built_in_menu = 0;
+		}
+
+		if ( ImGui::MenuItem( "Demo Window", nullptr, g_draw_built_in_menu == 2 ) )
+		{
+			if ( g_draw_built_in_menu != 2 )
+				g_draw_built_in_menu = 2;
+			else
+				g_draw_built_in_menu = 0;
 		}
 
 		ImGui::EndMenu();
 	}
 
+	ImGui::BeginDisabled( g_videos_file_path == nullptr );
+
+	if ( ImGui::MenuItem( "Save" ) )
+	{
+		save_videos();
+	}
+
+	ImGui::EndDisabled();
+
 	ImGui::EndMenuBar();
 
-	if ( g_draw_style_editor )
+	if ( g_draw_built_in_menu == 1 )
 		ImGui::ShowStyleEditor();
 }
 
@@ -196,6 +251,8 @@ bool replay_editor_set_video( clip_output_video_t* output, u32 input_i )
 	g_clip_current_input  = input_i;
 
 	memcpy( g_output_name_buf, output->name, strlen( output->name ) * sizeof( char ) );
+	g_focus_replay_maker = true;
+	return true;
 }
 
 
@@ -205,11 +262,27 @@ void replay_editor_load_input( clip_output_video_t* output, u32 input_i )
 		return;
 
 	clip_input_video_t& input = output->input[ input_i ];
+	g_focus_replay_maker      = true;
 
-	if ( strcmp( mpv_get_current_video(), input.path ) == 0 )
-		return;
+	if ( mpv_get_current_video() )
+	{
+		if ( strcmp( mpv_get_current_video(), input.path ) == 0 )
+			return;
+	}
 
 	mpv_cmd_loadfile( input.path );
+}
+
+
+void replay_editor_load( clip_output_video_t* output )
+{
+	replay_editor_reset();
+
+	g_clip_current_output = output;
+	g_clip_current_input  = 0;
+
+	memcpy( g_output_name_buf, output->name, strlen( output->name ) * sizeof( char ) );
+	g_focus_replay_maker = true;
 }
 
 
@@ -219,71 +292,142 @@ void draw_replay_list( int size[ 2 ] )
 	if ( !g_clip_data )
 		return;
 
-	// display output videos
-	u32 imgui_id = 1;
+	static char search_box[ 128 ] = { 0 };
 
-	for ( u32 i = 0; i < g_clip_data->output_count; i++ )
+	// Search Box
+	if ( ImGui::InputText( "Search Names", search_box, 128 ) )
 	{
-		ImGui::Indent( 16.f );
+	}
 
-		clip_output_video_t* output = &g_clip_data->output[ i ];
+	// Search by Prefixes
+	static u32 prefix_search = UINT32_MAX;
 
-		// add prefix
-		clip_prefix_t&       prefix = g_clip_data->prefix[ output->prefix ];
+	if ( prefix_search < UINT32_MAX )
+		prefix_search = MIN( g_clip_data->prefix_count, prefix_search );
 
-		ImGui::Text( "Output %d:\n%s%s", i, prefix.prefix, output->name );
+	if ( ImGui::BeginCombo( "Prefix Filter", prefix_search == UINT32_MAX ? "" : g_clip_data->prefix[ prefix_search ].name ) )
+	{
+		if ( ImGui::Selectable( "None", prefix_search == UINT32_MAX ) )
+		{
+			prefix_search = UINT32_MAX;
+		}
 
-		//ImGui::SameLine();
+		for ( u32 i = 0; i < g_clip_data->prefix_count; i++ )
+		{
+			clip_prefix_t& prefix = g_clip_data->prefix[ i ];
+			if ( ImGui::Selectable( prefix.name, i == prefix_search ) )
+			{
+				prefix_search = i;
+			}
+		}
+
+		ImGui::EndCombo();
+	}
+
+	ImGui::Separator();
+
+	bool collapse_all = ImGui::Button( "Collapse All" );
+
+	ImGui::Separator();
+
+	//if ( !ImGui::BeginChild( "##video_list", {}, ImGuiChildFlags_Border ) )
+	if ( !ImGui::BeginChild( "##video_list" ) )
+	{
+		ImGui::EndChild();
+		return;
+	}
+
+	//ImGuiStyle& style = ImGui::GetStyle();
+
+	u64  imgui_id           = 1;
+	char header_name[ 512 ] = { 0 };
+	for ( u32 out_i = 0; out_i < g_clip_data->output_count; out_i++ )
+	{
+		clip_output_video_t& output = g_clip_data->output[ out_i ];
+		clip_prefix_t&       prefix = g_clip_data->prefix[ output.prefix ];
+
+		if ( prefix_search != UINT32_MAX )
+		{
+			if ( prefix_search != output.prefix )
+				continue;
+		}
+
+		if ( search_box[ 0 ] != '\0' )
+		{
+			if ( !strcasestr( output.name, search_box ) )
+			{
+				continue;
+			}
+		}
+
+		ImGui::PushID( imgui_id++ );
+		if ( ImGui::Button( "Load" ) )
+		{
+			replay_editor_load_input( &output, 0 );
+		}
+		ImGui::PopID();
+
+		ImGui::SameLine();
+
+		//ImVec2 load_text_size = ImGui::CalcTextSize( "Load" );
+		//load_text_size.x += style.ItemInnerSpacing.x * 2;
+		//load_text_size.y += style.ItemInnerSpacing.y * 2;
+
+		ImVec2 region_avail = ImGui::GetContentRegionAvail();
+
+		memset( header_name, 0, sizeof( char ) * 512 );
+		
+		snprintf( header_name, 512, "%s - %s - %d Inputs", prefix.name, output.name, output.input_count );
+
+		if ( collapse_all )
+			ImGui::SetNextItemOpen( false );
+
+		if ( !ImGui::CollapsingHeader( header_name ) )
+			continue;
+
+		//ImGui::PushID( imgui_id++ );
 		//
 		//if ( ImGui::Button( "Load" ) )
 		//{
-		//
+		//	replay_editor_load_input( &output, 0 );
 		//}
+		//
+		//ImGui::PopID();
 
-		ImGui::Separator();
-
-		// display input videos
-		ImGui::Text( "Input Videos: %d", output->input_count );
-
-		for ( u32 j = 0; j < output->input_count; j++ )
+		for ( u32 in_i = 0; in_i < output.input_count; in_i++ )
 		{
-			clip_input_video_t* input = &output->input[ j ];
+			clip_input_video_t& input = output.input[ in_i ];
 
-			ImGui::PushID( imgui_id );
-			if ( ImGui::Button( "Load" ) )
+			ImGui::PushID( in_i + 1 );
+
+			if ( ImGui::TreeNode( input.path ) )
 			{
-				replay_editor_load_input( output, j );
+				// display encode presets
+				//for ( u32 preset_i = 0; preset_i < input.encode_overrides.presets_count; preset_i++ )
+				//{
+				//	
+				//}
+
+				// display input video times
+				for ( u32 time_range_i = 0; time_range_i < input.time_range_count; time_range_i++ )
+				{
+					char start_str[ TIME_BUFFER ] = { 0 };
+					char end_str[ TIME_BUFFER ]   = { 0 };
+
+					util_format_time( start_str, input.time_range[ time_range_i ].start );
+					util_format_time( end_str, input.time_range[ time_range_i ].end );
+
+					ImGui::Text( "%d - %s - %s", time_range_i, start_str, end_str );
+				}
+
+				ImGui::TreePop();
 			}
+
 			ImGui::PopID();
-
-			imgui_id++;
-
-			ImGui::Text( "%d - %s", j, input->path );
-
-			ImGui::Separator();
-
-			ImGui::Indent( 16.f );
-
-			// display input video times
-			for ( u32 time_range_i = 0; time_range_i < input->time_range_count; time_range_i++ )
-			{
-				char start_str[ TIME_BUFFER ] = { 0 };
-				char end_str[ TIME_BUFFER ]   = { 0 };
-
-				util_format_time( start_str, input->time_range[ time_range_i ].start );
-				util_format_time( end_str, input->time_range[ time_range_i ].end );
-
-				ImGui::Text( "%d - %s - %s", time_range_i, start_str, end_str );
-			}
-
-			ImGui::Unindent( 16.f );
 		}
-
-		ImGui::Unindent( 16.f );
-
-		ImGui::Separator();
-		ImGui::Separator();
 	}
+
+	ImGui::EndChild();
 }
 
 
@@ -450,10 +594,14 @@ void draw_input_video_edit( u32 input_i, clip_input_video_t* input )
 	for ( u32 time_range_i = 0; time_range_i < input->time_range_count; time_range_i++ )
 	{
 		// push id
+		ImGui::PushID( imgui_id++ );
+
 		if ( ImGui::Button( "X" ) )
 		{
 			delete_time_range = time_range_i;
 		}
+
+		ImGui::PopID();
 
 		ImGui::SameLine();
 
@@ -471,6 +619,8 @@ void draw_input_video_edit( u32 input_i, clip_input_video_t* input )
 		// these buttons aren't implemented yet
 		ImGui::BeginDisabled( true );
 
+		ImGui::PushID( imgui_id++ );
+
 		if ( ImGui::Button( "/\\" ) )
 		{
 			move_time_range = time_range_i;
@@ -484,6 +634,8 @@ void draw_input_video_edit( u32 input_i, clip_input_video_t* input )
 			move_time_range = time_range_i;
 			move_up         = false;
 		}
+
+		ImGui::PopID();
 
 		ImGui::EndDisabled();
 
@@ -664,6 +816,16 @@ void draw_replay_edit( int size[ 2 ] )
 
 	ImGui::Separator();
 
+	const ImVec2 name_text_size   = ImGui::CalcTextSize( "Name" );
+	const ImVec2 prefix_text_size = ImGui::CalcTextSize( "Prefix" );
+
+	float        avaliable_width  = size[ 0 ] - ( style.ItemSpacing.x * 2 );
+	float        name_bar_width   = ( avaliable_width - prefix_text_size.x );
+
+	name_bar_width -= style.ItemSpacing.x * 2;
+
+	ImGui::SetNextItemWidth( name_bar_width );
+
 	// display output video data
 	if ( ImGui::InputText( "Name", g_output_name_buf, 512 ) )
 	{
@@ -690,6 +852,8 @@ void draw_replay_edit( int size[ 2 ] )
 	}
 
 	current_prefix = g_clip_data->prefix[ g_clip_current_output->prefix ].name;
+
+	ImGui::SetNextItemWidth( name_bar_width );
 
 	if ( ImGui::BeginCombo( "Prefix", current_prefix ) )
 	{
@@ -1013,12 +1177,21 @@ void draw_replay_editor_window( int window_size[ 2 ] )
 
 	draw_replay_info_menu_bar();
 
+	if ( g_draw_built_in_menu == 2 )
+	{
+		ImGui::ShowDemoWindow();
+		ImGui::End();
+		return;
+	}
+
 	if ( ImGui::BeginTabBar( "##replay_tabs" ) )
 	{
-		if ( ImGui::BeginTabItem( "Replay Editor" ) )
+		if ( ImGui::BeginTabItem( "Replay Editor", nullptr, g_focus_replay_maker ? ImGuiTabItemFlags_SetSelected : 0 ) )
 		{
 			draw_replay_edit( element_size );
 			ImGui::EndTabItem();
+
+			g_focus_replay_maker = false;
 		}
 
 		if ( ImGui::BeginTabItem( "Clip Entries" ) )

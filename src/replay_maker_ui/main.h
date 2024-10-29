@@ -7,6 +7,18 @@
 #include "mpv/render_gl.h"
 
 
+// metadata grabbed on video load from mpv
+struct video_media_info_t
+{
+	s64 track_count = 0;
+	s64 track_count_video = 0;
+	s64 track_count_audio = 0;
+};
+
+
+extern video_media_info_t g_video_media_info;
+
+
 // --------------------------------------------------------------------------------------------------------
 // win32 stuff
 
@@ -35,6 +47,8 @@ void                               mpv_cmd_toggle_playback();
 void                               mpv_cmd_hook_window( void* window );
 void                               mpv_cmd_hook_window_mpv();
 
+void                               mpv_handle_error();
+
 extern mpv_handle*                 g_mpv;
 extern mpv_render_context*         g_mpv_gl;
 extern bool                        g_wakeup_on_mpv_render_update, g_wakeup_on_mpv_events;
@@ -45,15 +59,24 @@ void                               calc_imgui_window_size( int index, ivec2& siz
 void                               calc_playback_window_size( ivec2& size );
 void                               calc_replay_window_size( ivec2& size );
 
+void                               get_media_info();
+
 void                               draw_imgui_window( int window_size[ 2 ] );
 void                               draw_replay_editor_window( int window_size[ 2 ] );
 void                               draw_playback_controls( int window_size[ 2 ], bool draw_volume );
+
+void                               enable_sidebar( bool enabled );
 
 // save encode presets and video prefixes
 void                               save_settings();
 
 // save videos to currently opened file
 void                               save_videos();
+
+
+void                               write_recently_opened();
+void                               load_recently_opened();
+void                               update_recently_opened( const char* clips_file );
 
 extern bool                        g_running;
 
@@ -62,10 +85,19 @@ extern void*                       g_mpv_window;
 
 extern ivec2                       g_mpv_size;
 extern ivec2                       g_window_size;
+extern bool                        g_show_sidebar;
 
 extern char*                       g_videos_file_path;
 
+extern char*                       g_recently_opened_path;
+extern char**                      g_recently_opened;
+extern u8                          g_recently_opened_count;
+
+constexpr u8                       MAX_RECENT_OPEN = 8;
+
 constexpr int                      DIVIDER_SIZE = 5;  // multiplied by 2
+
+#define RECENTLY_OPENED_FILE "replay_maker_recent.txt"
 
 // --------------------------------------------------------------------------------------------------------
 

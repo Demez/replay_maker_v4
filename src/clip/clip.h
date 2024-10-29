@@ -118,7 +118,7 @@ clip_data_t*          clip_create();
 void                  clip_free( clip_data_t* data );
 
 void                  clip_parse_settings( clip_data_t* data, const char* path );
-void                  clip_parse_videos( clip_data_t* data, const char* path );
+bool                  clip_parse_videos( clip_data_t* data, const char* path );
 
 void                  clip_save_settings( clip_data_t* data, const char* path );
 void                  clip_save_videos( clip_data_t* data, const char* path );

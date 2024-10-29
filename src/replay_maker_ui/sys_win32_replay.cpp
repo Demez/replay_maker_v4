@@ -124,7 +124,7 @@ void handle_mpv_keybind( int key )
 }
 
 
-static bool  g_fullscreen = false;
+static bool  g_fullscreen   = false;
 static ivec2 g_old_mpv_size;
 static ivec2 g_old_window_size;
 
@@ -191,6 +191,32 @@ void win32_mpv_full_window_toggle()
 void win32_update_mpv_window_size()
 {
 	SetWindowPos( (HWND)g_mpv_window, HWND_TOP, 0, 0, g_mpv_size[ 0 ], g_mpv_size[ 1 ], SWP_NOZORDER | SWP_NOACTIVATE );
+}
+
+
+void enable_sidebar( bool enabled )
+{
+	g_show_sidebar           = enabled;
+
+	static int old_mpv_width = g_mpv_size[ 0 ];
+
+	RECT       window_rect;
+	GetClientRect( (HWND)g_main_window, &window_rect );
+
+	int width  = window_rect.right - window_rect.left;
+	int height = window_rect.bottom - window_rect.top;
+
+	if ( !enabled )
+	{
+		old_mpv_width   = g_mpv_size[ 0 ];
+		g_mpv_size[ 0 ] = width;
+	}
+	else
+	{
+		g_mpv_size[ 0 ] = old_mpv_width;
+	}
+
+	win32_update_mpv_window_size();
 }
 
 
@@ -778,7 +804,7 @@ int win32_mouse_in_divider()
 		SetCursor( g_cursor_resize_v );
 		return 0;
 	}
-	else if ( point_in_rect( g_mouse_pos, rect_1 ) )
+	else if ( g_show_sidebar && point_in_rect( g_mouse_pos, rect_1 ) )
 	{
 		io.ConfigFlags |= ImGuiConfigFlags_NoMouseCursorChange | ImGuiConfigFlags_NoMouse;
 		SetCursor( g_cursor_resize_h );
@@ -927,7 +953,7 @@ void win32_update_dividers()
 		SetCursor( g_cursor_resize_v );
 		win32_move_divider( 0 );
 	}
-	else if ( g_grabbed_divider_idx == 1 || point_in_rect( g_mouse_pos, rect_1 ) )
+	else if ( g_show_sidebar && ( g_grabbed_divider_idx == 1 || point_in_rect( g_mouse_pos, rect_1 ) ) )
 	{
 		io.ConfigFlags |= ImGuiConfigFlags_NoMouseCursorChange | ImGuiConfigFlags_NoMouse;
 		SetCursor( g_cursor_resize_h );
@@ -967,6 +993,8 @@ void win32_run()
 
 		if ( !g_running )
 			break;
+
+		mpv_event* event = p_mpv_wait_event( g_mpv, 0.01f );
 
 		// is the window minimized
 		if ( ::IsIconic( (HWND)g_main_window ) )

@@ -3,6 +3,7 @@
 #include <sys/stat.h>
 #include <time.h>
 #include <math.h>
+#include <ctype.h>
 
 #ifdef _WIN32
   #include <direct.h>
@@ -22,6 +23,35 @@
 
 // windows-specific mkdir() is used
   #define mkdir( f ) mkdir( f, 666 )
+#endif
+
+
+#ifdef _WIN32
+// Find the first occurrence of find in s while ignoring case
+char* strcasestr( const char* s, const char* find )
+{
+	char c, sc;
+
+	if ( ( c = *find++ ) == 0 )
+		return ( (char*)s );
+
+	// convert to lower case character
+	c          = tolower( (unsigned char)c );
+	size_t len = strlen( find );
+	do
+	{
+		// compare lower case character
+		do
+		{
+			if ( ( sc = *s++ ) == 0 )
+				return nullptr;
+
+		} while ( (char)tolower( (unsigned char)sc ) != c );
+	} while ( _strnicmp( s, find, len ) != 0 );
+	s--;
+
+	return ( (char*)s );
+}
 #endif
 
 
@@ -313,6 +343,7 @@ char* fs_read_file( const char* path, size_t* len )
 		return nullptr;
 	}
 
+	memset( output, 0, ( size + 1 ) * sizeof( char ) );
 	fread( output, size, 1, fp );
 	fclose( fp );
 

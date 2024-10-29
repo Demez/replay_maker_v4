@@ -262,13 +262,17 @@ void mpv_cmd_loadfile( const char* file )
 {
 	printf( "loading file: %s\n", file );
 
-	const char* cmd[]     = { "loadfile", file, NULL };
+	const char* cmd[]   = { "loadfile", file, NULL };
 	int         cmd_ret = p_mpv_command( g_mpv, cmd );
+
+	mpv_event*  event   = p_mpv_wait_event( g_mpv, 0.01f );
 
 	if ( g_current_video != nullptr )
 		free( g_current_video );
 
 	g_current_video = util_strdup( file );
+
+	get_media_info();
 }
 
 
@@ -293,5 +297,11 @@ void mpv_cmd_hook_window_mpv()
 	int64_t wid = (s64)g_mpv_window;
 	int     ret = p_mpv_set_property( g_mpv, "wid", MPV_FORMAT_INT64, &wid );
 	printf( "hooked mpv window idk\n" );
+}
+
+
+void mpv_handle_error( int )
+{
+	//p_mpv_error_string()
 }
 

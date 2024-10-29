@@ -30,6 +30,9 @@ using module = void*;
 #ifdef _WIN32
   #define PATH_SEP_STR "\\"
   #define PATH_SEP     '\\'
+
+  #define strncasecmp _strnicmp
+  #define strcasecmp  _stricmp
 #else
   #define PATH_SEP_STR "/"
   #define PATH_SEP     '/'
@@ -259,6 +262,9 @@ void        sys_browse_to_file( const char* path );
 // --------------------------------------------------------------------------------------------------------
 // utility functions
 
+#if _WIN32
+char*       strcasestr( const char* s, const char* find );
+#endif
 
 char*       util_strdup( const char* string );
 char*       util_strndup( const char* string, size_t len );

@@ -409,17 +409,17 @@ void clip_parse_video( clip_data_t* data, json_object_t& root, u32 output_i )
 }
 
 
-void clip_parse_videos( clip_data_t* data, const char* path )
+bool clip_parse_videos( clip_data_t* data, const char* path )
 {
 	if ( !data )
-		return;
+		return false;
 
 	char* file = fs_read_file( path );
 
 	if ( !file )
 	{
 		printf( "failed to read file for videos\n" );
-		return;
+		return false;
 	}
 
 	json_object_t root{};
@@ -428,20 +428,25 @@ void clip_parse_videos( clip_data_t* data, const char* path )
 	if ( err != EJsonError_None )
 	{
 		printf( "Error Parsing Json - %s\n", json_error_to_str( err ) );
-		return;
+		return false;
 	}
 
 	if ( root.aType != e_json_type_array )
 	{
 		printf( "%s - Root Type is not an Array\n", path );
-		return;
+		return false;
+	}
+
+	if ( data->output_count )
+	{
+		printf( "TODO: CLEAR OLD OUTPUT VIDEOS" );
 	}
 
 	// allocate all the output videos now
 	clip_output_video_t* new_data = ch_realloc< clip_output_video_t >( data->output, root.aObjects.count );
 
 	if ( !new_data )
-		return;
+		return false;
 
 	memset( new_data, 0, sizeof( clip_output_video_t ) * root.aObjects.count );
 
@@ -457,7 +462,7 @@ void clip_parse_videos( clip_data_t* data, const char* path )
 	json_free( root );
 	free( file );
 
-	printf( "parsed settings\n" );
+	return true;
 }
 
 
@@ -829,13 +834,12 @@ u32 clip_duplicate_input( clip_output_video_t* output, u32 input_i )
 		return UINT32_MAX;
 	}
 
-	clip_input_video_t& input_src   = output->input[ input_i ];
-
-	u32 input_dst_i = clip_add_input( output, input_src.path );
+	u32 input_dst_i = clip_add_input( output, output->input[ input_i ].path );
 
 	if ( input_dst_i == UINT32_MAX )
 		return UINT32_MAX;
 
+	clip_input_video_t& input_src = output->input[ input_i ];
 	clip_input_video_t& input_dst = output->input[ input_dst_i ];
 
 	if ( input_src.time_range_count )
