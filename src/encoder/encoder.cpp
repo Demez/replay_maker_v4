@@ -72,6 +72,26 @@ bool run_ffmpeg_check( const char* cmd, const char* path )
 }
 
 
+bool uses_encode_preset( clip_encode_override_t& override, u32 preset_i )
+{
+	bool valid_preset = override.presets_count == 0;
+
+	for ( u32 i = 0; i < override.presets_count; i++ )
+	{
+		if ( override.presets[ i ] == preset_i )
+		{
+			if ( override.preset_exclude )
+				valid_preset = false;
+			else
+				return true;
+				// valid_preset = true;
+		}
+	}
+
+	return valid_preset;
+}
+
+
 void add_metadata_cmd( clip_output_video_t& output, char* ffmpeg_cmd, bool add_markers, u32 preset_i )
 {
 	// write ffmpeg metadata.txt file
@@ -90,19 +110,8 @@ void add_metadata_cmd( clip_output_video_t& output, char* ffmpeg_cmd, bool add_m
 	{
 		clip_input_video_t& input = output.input[ in_i ];
 
-		// check presets
-		bool                found = false;
-		for ( u32 i = 0; i < input.encode_overrides.presets_count; i++ )
-		{
-			if ( input.encode_overrides.presets[ i ] == preset_i )
-			{
-				found = true;
-				break;
-			}
-		}
-
-		// don't use this one
-		if ( found )
+		// don't use this one if this file is from this preset
+		if ( uses_encode_preset( input.encode_overrides, preset_i ) )
 			continue;
 
 		if ( !time_file_path )
@@ -113,20 +122,100 @@ void add_metadata_cmd( clip_output_video_t& output, char* ffmpeg_cmd, bool add_m
 		if ( !add_markers )
 			break;
 
+		// look for a matching input video first
+
+#if 0
+		clip_input_video_t* src_input   = nullptr;
+		u32                 time_offset = 0;
+		u32                 time_end    = 0;
+
+		for ( u32 src_i = 0; src_i < output.input_count; src_i++ )
+		{
+			src_input = &output.input[ src_i ];
+
+			// this video doesn't use this encode preset
+			if ( !uses_encode_preset( src_input->encode_overrides, preset_i ) )
+				continue;
+
+			for ( u32 time_i = 0; time_i < input.time_range_count; time_i++ )
+			{
+			}
+
+			// make sure this is the same path
+			if ( strcmp( src_input->path, input.path ) != 0 )
+			{
+				time_offset = time_end;
+				continue;
+			}
+
+			break;
+		}
+#endif
+
 		u32 marker_i = 0;
 		for ( u32 time_i = 0; time_i < input.time_range_count; time_i++ )
 		{
-			clip_time_range_t& time_range = input.time_range[ time_i ];
+			clip_time_range_t&  time_range  = input.time_range[ time_i ];
+
+			clip_input_video_t* src_input   = nullptr;
+			u32                 time_offset = 0;
+			u32                 time_end    = 0;
+
+			for ( u32 src_i = 0; src_i < output.input_count; src_i++ )
+			{
+				src_input = &output.input[ src_i ];
+
+				// this video doesn't use this encode preset
+				if ( !uses_encode_preset( src_input->encode_overrides, preset_i ) )
+					continue;
+
+				bool skip_time = false;
+				for ( u32 src_time_i = 0; src_time_i < src_input->time_range_count; src_time_i++ )
+				{
+					clip_time_range_t& src_time_range = src_input->time_range[ src_time_i ];
+
+					// if this raw time range starts later than the discord time range, probably don't use this
+					if ( src_time_range.start > time_range.start )
+					{
+						skip_time = true;
+						break;
+					}
+					
+					// is the raw time range before the discord time range?
+					if ( src_time_range.start < time_range.start )
+					{
+						time_offset = src_time_range.start;
+						time_end    = src_time_range.end;
+					}
+				}
+				
+				// stop offsetting the start time
+				if ( skip_time )
+					break;
+
+				// make sure this is the same path
+				if ( strcmp( src_input->path, input.path ) != 0 )
+				{
+					// skip to the next one
+					time_offset = time_end;
+					continue;
+				}
+
+				break;
+			}
+
+			float start_time = ( time_offset + time_range.start ) * 1000;
+			float end_time   = ( time_offset + time_range.end ) * 1000;
 
 			// TODO: this probably breaks on videos with more than one input
 			// i think we need to offset the start/end times with the raw input video start time? idfk
-			size_t offset = strlen( metadata_file );
+			size_t str_offset = strlen( metadata_file );
 			snprintf(
-			  metadata_file + offset, 2048 - offset,
+			  metadata_file + str_offset, 2048 - str_offset,
 			  "[CHAPTER]\nTIMEBASE=1/1000\nSTART=%.6f\nEND=%.6f\ntitle='%d__%s'\n\n"
 			  "[CHAPTER]\nTIMEBASE=1/1000\nSTART=%.6f\nEND=%.6f\ntitle='%d__%s'\n\n",
-			  time_range.start * 1000, time_range.start * 1000, marker_i++, input.path,
-			  time_range.end * 1000, time_range.end * 1000, marker_i++, input.path
+			  start_time, start_time, marker_i++, input.path,
+			  end_time, end_time, marker_i++, input.path
 			);
 		}
 	}
@@ -580,6 +669,10 @@ enc_video_data_t get_video_segments( enc_output_video_t& enc_output, clip_output
 		clip_input_video_t& input        = output.input[ in_i ];
 
 		// verify the encode preset
+#if 1
+		if ( !uses_encode_preset( input.encode_overrides, preset_i ) )
+			continue;
+#else
 		bool                valid_preset = input.encode_overrides.presets_count == 0;
 
 		for ( u32 i = 0; i < input.encode_overrides.presets_count; i++ )
@@ -598,6 +691,7 @@ enc_video_data_t get_video_segments( enc_output_video_t& enc_output, clip_output
 		// don't use this one
 		if ( !valid_preset )
 			continue;
+#endif
 
 		char* input_name = fs_get_filename_no_ext( input.path );
 
