@@ -208,7 +208,8 @@ void draw_replay_info_menu_bar()
 
 	ImGui::BeginDisabled( g_videos_file_path == nullptr );
 
-	if ( ImGui::MenuItem( "Save" ) )
+	// if ( ImGui::MenuItem( "Save" ) )
+	if ( ImGui::Button( "Save" ) )
 	{
 		save_videos();
 	}
@@ -258,6 +259,8 @@ bool replay_editor_set_video( clip_output_video_t* output, u32 input_i )
 
 void replay_editor_load_input( clip_output_video_t* output, u32 input_i )
 {
+	float cur_start_time = g_time_range_start;
+
 	if ( !replay_editor_set_video( output, input_i ) )
 		return;
 
@@ -267,7 +270,11 @@ void replay_editor_load_input( clip_output_video_t* output, u32 input_i )
 	if ( mpv_get_current_video() )
 	{
 		if ( strcmp( mpv_get_current_video(), input.path ) == 0 )
+		{
+			// hack to keep it lol
+			g_time_range_start = cur_start_time;
 			return;
+		}
 	}
 
 	mpv_cmd_loadfile( input.path );
@@ -308,14 +315,23 @@ void draw_replay_list( int size[ 2 ] )
 	if ( ImGui::BeginCombo( "Prefix Filter", prefix_search == UINT32_MAX ? "" : g_clip_data->prefix[ prefix_search ].name ) )
 	{
 		if ( ImGui::Selectable( "None", prefix_search == UINT32_MAX ) )
-		{
 			prefix_search = UINT32_MAX;
-		}
 
 		for ( u32 i = 0; i < g_clip_data->prefix_count; i++ )
 		{
-			clip_prefix_t& prefix = g_clip_data->prefix[ i ];
-			if ( ImGui::Selectable( prefix.name, i == prefix_search ) )
+			clip_prefix_t& prefix                                     = g_clip_data->prefix[ i ];
+			char           prefix_display[ MAX_LEN_PRESET_NAME + 16 ] = { 0 };
+			u32            result_count                               = 0;
+
+			for ( u32 out_i = 0; out_i < g_clip_data->output_count; out_i++ )
+			{
+				if ( i == g_clip_data->output[ out_i ].prefix )
+					result_count++;
+			}
+
+			snprintf( prefix_display, MAX_LEN_PRESET_NAME + 16, "%d - %s", result_count, prefix.name );
+
+			if ( ImGui::Selectable( prefix_display, i == prefix_search ) )
 			{
 				prefix_search = i;
 			}
@@ -323,6 +339,27 @@ void draw_replay_list( int size[ 2 ] )
 
 		ImGui::EndCombo();
 	}
+
+	ImGui::SameLine();
+
+	// do the search again for this text lol
+	u32 result_count = 0;
+	for ( u32 out_i = 0; out_i < g_clip_data->output_count; out_i++ )
+	{
+		clip_output_video_t& output = g_clip_data->output[ out_i ];
+
+		if ( prefix_search != UINT32_MAX )
+			if ( prefix_search != output.prefix )
+				continue;
+
+		if ( search_box[ 0 ] != '\0' )
+			if ( !strcasestr( output.name, search_box ) )
+				continue;
+
+		result_count++;
+	}
+
+	ImGui::Text( "%d Entries", result_count );
 
 	ImGui::Separator();
 
@@ -347,18 +384,12 @@ void draw_replay_list( int size[ 2 ] )
 		clip_prefix_t&       prefix = g_clip_data->prefix[ output.prefix ];
 
 		if ( prefix_search != UINT32_MAX )
-		{
 			if ( prefix_search != output.prefix )
 				continue;
-		}
 
 		if ( search_box[ 0 ] != '\0' )
-		{
 			if ( !strcasestr( output.name, search_box ) )
-			{
 				continue;
-			}
-		}
 
 		ImGui::PushID( imgui_id++ );
 		if ( ImGui::Button( "Load" ) )
@@ -589,7 +620,9 @@ void draw_input_video_edit( u32 input_i, clip_input_video_t* input )
 
 //	ImGui::Indent( 16.f );
 
-	size_t      imgui_id = 10000;
+	size_t imgui_id          = 10000;
+
+	bool   disabled          = mpv_get_current_video() ? strcmp( input->path, mpv_get_current_video() ) != 0 : true;
 
 	for ( u32 time_range_i = 0; time_range_i < input->time_range_count; time_range_i++ )
 	{
@@ -605,12 +638,15 @@ void draw_input_video_edit( u32 input_i, clip_input_video_t* input )
 
 		ImGui::SameLine();
 
-		static char edit_btn[ 8 ] = { 0 };
-		snprintf( edit_btn, 8, "Edit %d", time_range_i );
+		//static char edit_btn[ 8 ] = { 0 };
+		//snprintf( edit_btn, 8, "Edit %d", time_range_i );
 
-		ImGui::BeginDisabled( input_i != g_clip_current_input );
+		// ImGui::BeginDisabled( input_i != g_clip_current_input );
+		ImGui::BeginDisabled( disabled );
 
-		draw_edit_override_button( g_edit_time_range, &input->time_range[ time_range_i ], edit_btn );
+		ImGui::PushID( imgui_id++ );
+		draw_edit_override_button( g_edit_time_range, &input->time_range[ time_range_i ], "Edit" );
+		ImGui::PopID();
 
 		ImGui::EndDisabled();
 
@@ -627,6 +663,7 @@ void draw_input_video_edit( u32 input_i, clip_input_video_t* input )
 			move_up         = true;
 		}
 
+		ImGui::PushStyleVar( ImGuiStyleVar_ItemSpacing, { 0, 0 } );
 		ImGui::SameLine();
 
 		if ( ImGui::Button( "\\/" ) )
@@ -634,6 +671,8 @@ void draw_input_video_edit( u32 input_i, clip_input_video_t* input )
 			move_time_range = time_range_i;
 			move_up         = false;
 		}
+
+		ImGui::PopStyleVar();
 
 		ImGui::PopID();
 
@@ -643,27 +682,34 @@ void draw_input_video_edit( u32 input_i, clip_input_video_t* input )
 	//	ImGui::Spacing();
 	//	ImGui::SameLine();
 
-		ImVec2 region       = ImGui::GetWindowContentRegionMax();
+		char duration_str[ TIME_BUFFER ] = { 0 };
+		util_format_time( duration_str, input->time_range[ time_range_i ].end - input->time_range[ time_range_i ].start );
 
-		ImVec2 size_x       = ImGui::CalcTextSize( "X" );
-		ImVec2 size_edit    = ImGui::CalcTextSize( edit_btn );
-		ImVec2 size_up      = ImGui::CalcTextSize( "/\\" );
-		ImVec2 size_down    = ImGui::CalcTextSize( "\\/" );
+		ImVec2 region        = ImGui::GetWindowContentRegionMax();
+
+		ImVec2 size_x        = ImGui::CalcTextSize( "X" );
+		ImVec2 size_edit     = ImGui::CalcTextSize( "Edit" );
+		ImVec2 size_up       = ImGui::CalcTextSize( "/\\" );
+		ImVec2 size_down     = ImGui::CalcTextSize( "\\/" );
+		ImVec2 size_duration = ImGui::CalcTextSize( duration_str );
 
 		//float  button_space = region.x - ( ( style.FramePadding.x * 2 ) + ( style.ItemSpacing.x * 4 ) + ( style.WindowPadding.x * 4 ) + 16.f );
 		//float  button_space = region.x - ( ( style.WindowPadding.x * 2 ) + 16.f );
 		float  button_space = region.x;
 
-		button_space -= style.WindowPadding.x * 1;
+ 		button_space -= style.WindowPadding.x * 1;
 	//	button_space -= 16.f;                                                  // indent
 		button_space -= ( size_x.x + size_edit.x + size_up.x + size_down.x );  // text size
 		button_space -= ( style.FramePadding.x * 8 );                          // padding applies to both sides of the frame, so 4 buttons * 2 times per button
 	//	button_space -= ( style.ItemSpacing.x * 4 );                           // 4 buttons + 1 spacers
-		button_space -= ( style.ItemSpacing.x * 3 );                           // 4 buttons + 1 spacers
+		button_space -= ( style.ItemSpacing.x * 2 );                           // 4 buttons + 1 spacers
 
-		float single_button_area = ( button_space / 2.f ) - style.ItemSpacing.x;
+		// idk why duration is so wide
+		float duration_area      = ( size_duration.x / 2 ) + ( style.ItemSpacing.x * 2 );
+		// float single_button_area = ( button_space / 2.f ) - ( style.ItemSpacing.x + duration_area );
+		float single_button_area = ( button_space / 2.f ) - ( duration_area );
 
-		ImGui::BeginDisabled( input_i != g_clip_current_input );
+		ImGui::BeginDisabled( disabled );
 
 		char start_str[ TIME_BUFFER ] = { 0 };
 		char end_str[ TIME_BUFFER ]   = { 0 };
@@ -694,6 +740,11 @@ void draw_input_video_edit( u32 input_i, clip_input_video_t* input )
 			int         cmd_ret = p_mpv_command_async( g_mpv, 0, cmd );
 		}
 
+		ImGui::SameLine();
+		ImGui::PopItemWidth();
+
+		ImGui::PushItemWidth( duration_area );
+		ImGui::TextUnformatted( duration_str );
 		ImGui::PopItemWidth();
 
 		ImGui::EndDisabled();
