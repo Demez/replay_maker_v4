@@ -72,6 +72,8 @@ void                          sys_pause_window_events( bool paused )
 	{                                                               \
 		const char* cmd[]   = { __VA_ARGS__, NULL };                \
 		int         cmd_ret = p_mpv_command_async( g_mpv, 0, cmd ); \
+		if ( cmd_ret != 0 ) \
+			printf( "MPV CMD Error: %d", cmd_ret ); \
 	}
 
 
@@ -89,7 +91,15 @@ void handle_mpv_keybind( int key )
 			mpv_cmd_toggle_playback();
 			break;
 		}
-		case 'f':
+		case '\'':
+		case '\t':
+		//case VK_SUBTRACT: // numpad -
+		case VK_ADD:      // numpad +
+		{
+			enable_sidebar( !g_show_sidebar );
+			break;
+		}
+		case 'F':
 		case VK_NUMPAD4:
 		{
 			win32_mpv_full_window_toggle();
@@ -100,6 +110,7 @@ void handle_mpv_keybind( int key )
 			MPV_CMD( "set", "video-zoom", "0" );
 			MPV_CMD( "set", "video-pan-x", "0" );
 			MPV_CMD( "set", "video-pan-y", "0" );
+			MPV_CMD( "set", "vf", "crop" );
 			break;
 		}
 		case VK_NUMPAD7:
@@ -116,8 +127,9 @@ void handle_mpv_keybind( int key )
 		}
 		case VK_NUMPAD9:
 		{
-			MPV_CMD( "set", "video-zoom", "1.0" );
-			MPV_CMD( "set", "video-pan-x", "-0.25" );
+			// MPV_CMD( "set", "video-zoom", "1.0" );
+			// MPV_CMD( "set", "video-pan-x", "-0.25" );
+			MPV_CMD( "set", "vf", "crop=2560:1440:1920:0" );
 			break;
 		}
 	}
