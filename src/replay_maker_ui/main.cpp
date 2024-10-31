@@ -141,7 +141,7 @@ void draw_playback_controls( int size[ 2 ], bool draw_volume )
 	util_format_time( str_time_pos, time_pos );
 	util_format_time( str_duration, duration );
 
-	ImGui::Text( "%s / %s | ", str_time_pos, str_duration );
+	ImGui::Text( "%s / %s |", str_time_pos, str_duration );
 	// ImGui::ProgressBar( time_pos / duration );
 
 	ImGui::SameLine();
@@ -169,7 +169,7 @@ void draw_playback_controls( int size[ 2 ], bool draw_volume )
 	audio_ret                         = (mpv_error)p_mpv_get_property( g_mpv, "current-tracks/audio/title", MPV_FORMAT_STRING, &audio_track_name );
 
 	ImGui::SameLine();
-	ImGui::Text( " | Audio: %s", audio_track_name );
+	ImGui::Text( "| Audio: %s", audio_track_name );
 
 	// can offset the seek bar to the right depending on the current playback time
 	// ImGui::SameLine();
