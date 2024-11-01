@@ -113,16 +113,11 @@ void handle_mpv_keybind( int key )
 			MPV_CMD( "set", "vf", "crop" );
 			break;
 		}
-		case VK_NUMPAD7:
-		{
-			MPV_CMD( "set", "video-zoom", MONITOR_ZOOM_HACK );
-			MPV_CMD( "set", "video-pan-x", "0.25" );
-			break;
-		}
 		case VK_NUMPAD8:
 		{
-			MPV_CMD( "set", "video-zoom", MONITOR_ZOOM_HACK );
-			MPV_CMD( "set", "video-pan-x", "-0.25" );
+			// MPV_CMD( "set", "video-zoom", MONITOR_ZOOM_HACK );
+			// MPV_CMD( "set", "video-pan-x", "0.25" );
+			MPV_CMD( "set", "vf", "crop=1920:1080:0:360" );
 			break;
 		}
 		case VK_NUMPAD9:
@@ -130,6 +125,18 @@ void handle_mpv_keybind( int key )
 			// MPV_CMD( "set", "video-zoom", "1.0" );
 			// MPV_CMD( "set", "video-pan-x", "-0.25" );
 			MPV_CMD( "set", "vf", "crop=2560:1440:1920:0" );
+			break;
+		}
+		case VK_NUMPAD2:
+		{
+			MPV_CMD( "set", "vf", "crop=1920:1080:0:0" );
+			break;
+		}
+		case VK_NUMPAD3:
+		{
+			//MPV_CMD( "set", "video-zoom", MONITOR_ZOOM_HACK );
+			//MPV_CMD( "set", "video-pan-x", "-0.25" );
+			MPV_CMD( "set", "vf", "crop=1920:1080:1920:0" );
 			break;
 		}
 	}
