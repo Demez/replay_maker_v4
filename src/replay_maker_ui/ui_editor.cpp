@@ -293,6 +293,88 @@ void replay_editor_load( clip_output_video_t* output )
 }
 
 
+void draw_replay_list_entry( u64& imgui_id, u32 out_i, char* search_box, u32 prefix_search, bool collapse_all )
+{
+	clip_output_video_t& output = g_clip_data->output[ out_i ];
+	clip_prefix_t&       prefix = g_clip_data->prefix[ output.prefix ];
+
+	if ( prefix_search != UINT32_MAX )
+		if ( prefix_search != output.prefix )
+			return;
+
+	if ( search_box[ 0 ] != '\0' )
+		if ( !strcasestr( output.name, search_box ) )
+			return;
+
+	ImGui::PushID( imgui_id++ );
+	if ( ImGui::Button( "Load" ) )
+	{
+		replay_editor_load_input( &output, 0 );
+	}
+	ImGui::PopID();
+
+	ImGui::SameLine();
+
+	//ImVec2 load_text_size = ImGui::CalcTextSize( "Load" );
+	//load_text_size.x += style.ItemInnerSpacing.x * 2;
+	//load_text_size.y += style.ItemInnerSpacing.y * 2;
+
+	ImVec2 region_avail = ImGui::GetContentRegionAvail();
+
+	char   header_name[ 512 ] = { 0 };
+	//memset( header_name, 0, sizeof( char ) * 512 );
+
+	snprintf( header_name, 512, "%s - %s - %d Inputs", prefix.name, output.name, output.input_count );
+
+	if ( collapse_all )
+		ImGui::SetNextItemOpen( false );
+
+	if ( !ImGui::CollapsingHeader( header_name ) )
+		return;
+
+	//ImGui::PushID( imgui_id++ );
+	//
+	//if ( ImGui::Button( "Load" ) )
+	//{
+	//	replay_editor_load_input( &output, 0 );
+	//}
+	//
+	//ImGui::PopID();
+
+	for ( u32 in_i = 0; in_i < output.input_count; in_i++ )
+	{
+		clip_input_video_t& input = output.input[ in_i ];
+
+		ImGui::PushID( in_i + 1 );
+
+		if ( ImGui::TreeNode( input.path ) )
+		{
+			// display encode presets
+			//for ( u32 preset_i = 0; preset_i < input.encode_overrides.presets_count; preset_i++ )
+			//{
+			//
+			//}
+
+			// display input video times
+			for ( u32 time_range_i = 0; time_range_i < input.time_range_count; time_range_i++ )
+			{
+				char start_str[ TIME_BUFFER ] = { 0 };
+				char end_str[ TIME_BUFFER ]   = { 0 };
+
+				util_format_time( start_str, input.time_range[ time_range_i ].start );
+				util_format_time( end_str, input.time_range[ time_range_i ].end );
+
+				ImGui::Text( "%d - %s - %s", time_range_i, start_str, end_str );
+			}
+
+			ImGui::TreePop();
+		}
+
+		ImGui::PopID();
+	}
+}
+
+
 void draw_replay_list( int size[ 2 ] )
 {
 	// display current data
@@ -365,6 +447,13 @@ void draw_replay_list( int size[ 2 ] )
 
 	bool collapse_all = ImGui::Button( "Collapse All" );
 
+	ImGui::SameLine();
+
+	static bool sort_newest_top = true;
+
+	if ( ImGui::Button( sort_newest_top ? "Sort: Newest First" : "Sort: Oldest First" ) )
+		sort_newest_top = !sort_newest_top;
+
 	ImGui::Separator();
 
 	//if ( !ImGui::BeginChild( "##video_list", {}, ImGuiChildFlags_Border ) )
@@ -377,6 +466,26 @@ void draw_replay_list( int size[ 2 ] )
 	//ImGuiStyle& style = ImGui::GetStyle();
 
 	u64  imgui_id           = 1;
+
+#if 1
+	// draw_replay_list_entry
+
+	if ( sort_newest_top )
+	{
+		for ( u32 out_i = g_clip_data->output_count; out_i > 0; --out_i )
+		{
+			draw_replay_list_entry( imgui_id, out_i - 1, search_box, prefix_search, collapse_all );
+		}
+	}
+	else
+	{
+		for ( u32 out_i = 0; out_i < g_clip_data->output_count; out_i++ )
+		{
+			draw_replay_list_entry( imgui_id, out_i, search_box, prefix_search, collapse_all );
+		}
+	}
+
+#else
 	char header_name[ 512 ] = { 0 };
 	for ( u32 out_i = 0; out_i < g_clip_data->output_count; out_i++ )
 	{
@@ -457,14 +566,43 @@ void draw_replay_list( int size[ 2 ] )
 			ImGui::PopID();
 		}
 	}
+#endif
 
 	ImGui::EndChild();
 }
 
 
+void draw_preset_override_single( clip_encode_override_t& override )
+{
+	u32 selected = override.presets_count ? override.presets[ 0 ] : UINT32_MAX;
+
+	if ( ImGui::BeginCombo( "Preset", override.presets_count ? g_clip_data->preset[ selected ].name : "" ) )
+	{
+		for ( u32 i = 0; i < g_clip_data->preset_count; i++ )
+		{
+			if ( ImGui::Selectable( g_clip_data->preset[ i ].name, i == selected ) )
+			{
+			}
+		}
+	}
+}
+
+
 void draw_preset_override( clip_encode_override_t& override )
 {
-	if ( ImGui::BeginCombo( "Include/Exclude Presets", "" ) )
+	ImGuiStyle& style = ImGui::GetStyle();
+	
+	// display any overrides
+	if ( ImGui::Button( override.preset_exclude ? "EXCLUDE" : "INCLUDE" ) )
+		override.preset_exclude = !override.preset_exclude;
+
+	ImGui::SameLine();
+
+	ImVec2 text_size  = ImGui::CalcTextSize( "Presets" );
+	float  combo_size = text_size.x + ( ( style.FramePadding.x + style.FramePadding.y + style.ItemSpacing.x ) * 2 );
+	ImGui::SetNextItemWidth( combo_size );
+
+	if ( ImGui::BeginCombo( "##presets", "Presets" ) )
 	{
 		for ( u32 i = 0; i < g_clip_data->preset_count; i++ )
 		{
@@ -491,12 +629,6 @@ void draw_preset_override( clip_encode_override_t& override )
 		ImGui::EndCombo();
 	}
 
-	// display any overrides
-	if ( ImGui::Button( override.preset_exclude ? "Mode: Exclude" : "Mode: Include" ) )
-	{
-		override.preset_exclude = !override.preset_exclude;
-	}
-
 	// index in the array to remove
 	u32 preset_remove = UINT32_MAX;
 
@@ -520,6 +652,43 @@ void draw_preset_override( clip_encode_override_t& override )
 	{
 		util_array_remove_element( override.presets, override.presets_count, preset_remove );
 	}
+
+#if 0
+
+	ImGui::SameLine();
+
+	ImVec2 region_avail = ImGui::GetContentRegionAvail();
+	ImVec2 text_size    = ImGui::CalcTextSize( "Presets" );
+	ImVec2 inc_size    = ImGui::CalcTextSize( "INCLUDE" );
+	ImVec2 exc_size    = ImGui::CalcTextSize( "EXCLUDE" );
+
+	float  include_size = MAX( inc_size.x, exc_size.x );
+	include_size += style.ItemSpacing.x * 2;
+
+	// add Y frame padding for drop down arrow
+	float  combo_size    = text_size.x + ( ( style.FramePadding.x + style.FramePadding.y + style.ItemSpacing.x ) * 2 );
+
+	float  spacing_width = region_avail.x;
+	spacing_width -= combo_size;
+	spacing_width -= style.ItemSpacing.x;
+	spacing_width -= include_size;
+
+	spacing_width = MAX( -style.ItemSpacing.x, spacing_width );
+
+	ImGui::Dummy( { spacing_width, 0.f } );
+	ImGui::SameLine();
+
+	ImGui::SetNextItemWidth( combo_size );
+#endif
+
+
+//	ImGui::SameLine();
+//
+//	if ( ImGui::Button( override.preset_exclude ? "EXCLUDE" : "INCLUDE" ) )
+//	{
+//		override.preset_exclude = !override.preset_exclude;
+//	}
+
 
 	//	ImGui::Separator();
 	//
@@ -584,6 +753,17 @@ void draw_input_video_edit( u32 input_i, clip_input_video_t* input )
 
 	ImGui::SameLine();
 
+	// calcuate total duration
+	float total_duration = 0.f;
+	for ( u32 time_range_i = 0; time_range_i < input->time_range_count; time_range_i++ )
+		total_duration += input->time_range[ time_range_i ].end - input->time_range[ time_range_i ].start;
+
+	char total_duration_str[ TIME_BUFFER ] = { 0 };
+	util_format_time( total_duration_str, total_duration );
+	ImGui::Text( "Duration: %s", total_duration_str );
+
+	ImGui::SameLine();
+
 	ImVec2 line_remain = ImGui::GetContentRegionAvail();
 
 	float  spacing_width = line_remain.x;
@@ -614,6 +794,7 @@ void draw_input_video_edit( u32 input_i, clip_input_video_t* input )
 
 	ImGui::Separator();
 
+	u32  copy_time_range   = UINT32_MAX;
 	u32  delete_time_range = UINT32_MAX;
 	u32  move_time_range   = UINT32_MAX;
 	bool move_up           = false;
@@ -626,12 +807,26 @@ void draw_input_video_edit( u32 input_i, clip_input_video_t* input )
 
 	for ( u32 time_range_i = 0; time_range_i < input->time_range_count; time_range_i++ )
 	{
+		if ( time_range_i > 0 )
+			ImGui::Separator();
+
 		// push id
 		ImGui::PushID( imgui_id++ );
 
 		if ( ImGui::Button( "X" ) )
 		{
 			delete_time_range = time_range_i;
+		}
+
+		ImGui::PopID();
+
+		ImGui::SameLine();
+
+		ImGui::PushID( imgui_id++ );
+
+		if ( ImGui::Button( "Dup" ) )
+		{
+			copy_time_range = time_range_i;
 		}
 
 		ImGui::PopID();
@@ -685,29 +880,10 @@ void draw_input_video_edit( u32 input_i, clip_input_video_t* input )
 		char duration_str[ TIME_BUFFER ] = { 0 };
 		util_format_time( duration_str, input->time_range[ time_range_i ].end - input->time_range[ time_range_i ].start );
 
-		ImVec2 region        = ImGui::GetWindowContentRegionMax();
-
-		ImVec2 size_x        = ImGui::CalcTextSize( "X" );
-		ImVec2 size_edit     = ImGui::CalcTextSize( "Edit" );
-		ImVec2 size_up       = ImGui::CalcTextSize( "/\\" );
-		ImVec2 size_down     = ImGui::CalcTextSize( "\\/" );
-		ImVec2 size_duration = ImGui::CalcTextSize( duration_str );
-
-		//float  button_space = region.x - ( ( style.FramePadding.x * 2 ) + ( style.ItemSpacing.x * 4 ) + ( style.WindowPadding.x * 4 ) + 16.f );
-		//float  button_space = region.x - ( ( style.WindowPadding.x * 2 ) + 16.f );
-		float  button_space = region.x;
-
- 		button_space -= style.WindowPadding.x * 1;
-	//	button_space -= 16.f;                                                  // indent
-		button_space -= ( size_x.x + size_edit.x + size_up.x + size_down.x );  // text size
-		button_space -= ( style.FramePadding.x * 8 );                          // padding applies to both sides of the frame, so 4 buttons * 2 times per button
-	//	button_space -= ( style.ItemSpacing.x * 4 );                           // 4 buttons + 1 spacers
-		button_space -= ( style.ItemSpacing.x * 2 );                           // 4 buttons + 1 spacers
-
-		// idk why duration is so wide
-		float duration_area      = ( size_duration.x / 2 ) + ( style.ItemSpacing.x * 2 );
-		// float single_button_area = ( button_space / 2.f ) - ( style.ItemSpacing.x + duration_area );
-		float single_button_area = ( button_space / 2.f ) - ( duration_area );
+		ImVec2 region_avail       = ImGui::GetContentRegionAvail();
+		ImVec2 size_duration      = ImGui::CalcTextSize( duration_str );
+		float  duration_area      = ( size_duration.x / 2 ) + style.ItemSpacing.x;
+		float  single_button_area = ( region_avail.x / 2.f ) - duration_area;
 
 		ImGui::BeginDisabled( disabled );
 
@@ -748,6 +924,10 @@ void draw_input_video_edit( u32 input_i, clip_input_video_t* input )
 		ImGui::PopItemWidth();
 
 		ImGui::EndDisabled();
+
+		ImGui::PushID( imgui_id++ );
+		draw_preset_override( input->time_range[ time_range_i ].encode_overrides );
+		ImGui::PopID();
 		// ImGui::Text( "%.4f - %.4f", input->time_range[ time_range_i ].start, input->time_range[ time_range_i ].end );
 	}
 
@@ -776,6 +956,13 @@ void draw_input_video_edit( u32 input_i, clip_input_video_t* input )
 	{
 		clip_remove_time_range( g_clip_current_output, input_i, delete_time_range );
 		delete_time_range = UINT32_MAX;
+	}
+
+	// does the user want to copy a time range
+	else if ( copy_time_range != UINT32_MAX )
+	{
+		clip_duplicate_time_range( g_clip_current_output, input_i, copy_time_range );
+		copy_time_range = UINT32_MAX;
 	}
 }
 
@@ -1024,7 +1211,9 @@ void draw_replay_edit( int size[ 2 ] )
 	}
 
 	// show current start time?
-	ImGui::Text( "Current Start Time: %.4f", g_time_range_start );
+	char start_time_str[ TIME_BUFFER ] = { 0 };
+	util_format_time( start_time_str, g_time_range_start );
+	ImGui::Text( "Current Start Time: %s", start_time_str );
 	ImGui::Separator();
 
 	ImGui::EndDisabled();
@@ -1266,6 +1455,15 @@ void draw_replay_editor_window( int window_size[ 2 ] )
 		if ( ImGui::BeginTabItem( "Folder View" ) )
 		{
 			draw_folder_view( element_size );
+			ImGui::EndTabItem();
+		}
+
+		if ( ImGui::BeginTabItem( "Style Editor" ) )
+		{
+			// TODO: maybe have this be a separate window so you can preview another tab easily?
+			// TODO: pass in a ref pointer to allow saving to and loading from a file
+			// TODO: when you implement that, implement a very basic theme loader/saver
+			ImGui::ShowStyleEditor();
 			ImGui::EndTabItem();
 		}
 

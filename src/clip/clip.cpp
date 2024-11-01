@@ -329,16 +329,41 @@ bool clip_parse_input( clip_data_t* data, clip_output_video_t& output, json_obje
 			for ( size_t range_i = 0; range_i < object.aObjects.count; range_i++ )
 			{
 				json_object_t& range_json = object.aObjects.data[ range_i ];
-
-				if ( range_json.aObjects.count != 2 )
+				
+				if ( range_json.aType == e_json_type_object )
 				{
-					printf( "time_ranges entry does not have only 2 entires\n" );
-					continue;
-				}
+					clip_time_range_t& time_range = input.time_range[ input.time_range_count++ ];
 
-				clip_time_range_t& time_range = input.time_range[ input.time_range_count++ ];
-				time_range.start              = range_json.aObjects.data[ 0 ].aDouble;
-				time_range.end                = range_json.aObjects.data[ 1 ].aDouble;
+					for ( size_t time_i = 0; time_i < range_json.aObjects.count; time_i++ )
+					{
+						json_object_t& time_entry = range_json.aObjects.data[ time_i ];
+
+						if ( util_strncmp( time_entry.aName.data, time_entry.aName.size, "encode_overrides", 16 ) )
+						{
+							clip_parse_encode_override( data, time_range.encode_overrides, time_entry );
+						}
+						else if ( util_strncmp( time_entry.aName.data, time_entry.aName.size, "start", 5 ) )
+						{
+							time_range.start = time_entry.aDouble;
+						}
+						else if ( util_strncmp( time_entry.aName.data, time_entry.aName.size, "end", 3 ) )
+						{
+							time_range.end = time_entry.aDouble;
+						}
+					}
+				}
+				else if ( range_json.aType == e_json_type_array )
+				{
+					if ( range_json.aObjects.count != 2 )
+					{
+						printf( "time_ranges entry does not have only 2 entires\n" );
+						continue;
+					}
+
+					clip_time_range_t& time_range = input.time_range[ input.time_range_count++ ];
+					time_range.start              = range_json.aObjects.data[ 0 ].aDouble;
+					time_range.end                = range_json.aObjects.data[ 1 ].aDouble;
+				}
 			}
 		}
 		else
@@ -375,9 +400,10 @@ void clip_parse_video( clip_data_t* data, json_object_t& root, u32 output_i )
 				break;
 			}
 		}
+		// output videos don't use encode overrides anymore, only on input videos and time ranges
 		else if ( util_strncmp( "encode_overrides", 16, object.aName.data, object.aName.size ) )
 		{
-			clip_parse_encode_override( data, output.encode_overrides, object );
+		//	clip_parse_encode_override( data, output.encode_overrides, object );
 		}
 		else if ( util_strncmp( "inputs", 6, object.aName.data, object.aName.size ) )
 		{
@@ -414,6 +440,11 @@ bool clip_parse_videos( clip_data_t* data, const char* path )
 	if ( !data )
 		return false;
 
+	if ( data->output_count )
+	{
+		printf( "TODO: CLEAR OLD OUTPUT VIDEOS" );
+	}
+
 	char* file = fs_read_file( path );
 
 	if ( !file )
@@ -422,47 +453,89 @@ bool clip_parse_videos( clip_data_t* data, const char* path )
 		return false;
 	}
 
+	clip_output_video_t* new_data = nullptr;
+	json_object_t*       videos_root = nullptr;
+
 	json_object_t root{};
 	EJsonError    err = json_parse( root, file );
 
 	if ( err != EJsonError_None )
 	{
 		printf( "Error Parsing Json - %s\n", json_error_to_str( err ) );
-		return false;
+		goto fail;
 	}
 
-	if ( root.aType != e_json_type_array )
+	if ( root.aType != e_json_type_object )
 	{
-		printf( "%s - Root Type is not an Array\n", path );
-		return false;
+		printf( "%s - Root Type is not an Object\n", path );
+		goto fail;
 	}
 
-	if ( data->output_count )
+	if ( root.aObjects.count != 2 )
 	{
-		printf( "TODO: CLEAR OLD OUTPUT VIDEOS" );
+		printf( "Root object count is not 2 entries (version, videos)\n" );
+		goto fail;
 	}
+
+	if ( !root.aObjects.data[ 0 ].aName.size )
+	{
+		printf( "First object name is empty?\n" );
+		goto fail;
+	}
+
+	if ( util_strncmp( "version", 7, root.aObjects.data[ 0 ].aName.data, root.aObjects.data[ 0 ].aName.size ) )
+	{
+		json_object_t& version = root.aObjects.data[ 0 ];
+		if ( version.aType != e_json_type_int )
+		{
+			printf( "Version entry is not an integer type!\n" );
+			goto fail;
+		}
+		else if ( version.aInt < CLIP_VIDEO_FORMAT_VER )
+		{
+			printf( "File is older video format version (got version %d, expected version %d)\n", version.aInt, CLIP_VIDEO_FORMAT_VER );
+			goto fail;
+		}
+	}
+	else
+	{
+		printf( "First entry is not \"version\"\n" );
+		goto fail;
+	}
+
+	if ( !util_strncmp( "videos", 6, root.aObjects.data[ 1 ].aName.data, root.aObjects.data[ 1 ].aName.size ) )
+	{
+		printf( "Second entry is not \"videos\"\n" );
+		goto fail;
+	}
+
+	videos_root = &root.aObjects.data[ 1 ];
 
 	// allocate all the output videos now
-	clip_output_video_t* new_data = ch_realloc< clip_output_video_t >( data->output, root.aObjects.count );
+	new_data    = ch_realloc< clip_output_video_t >( data->output, videos_root->aObjects.count );
 
 	if ( !new_data )
 		return false;
 
-	memset( new_data, 0, sizeof( clip_output_video_t ) * root.aObjects.count );
+	memset( new_data, 0, sizeof( clip_output_video_t ) * videos_root->aObjects.count );
 
 	data->output       = new_data;
-	data->output_count = root.aObjects.count;
+	data->output_count = videos_root->aObjects.count;
 
-	for ( size_t root_i = 0; root_i < root.aObjects.count; root_i++ )
+	for ( size_t root_i = 0; root_i < videos_root->aObjects.count; root_i++ )
 	{
-		json_object_t& object = root.aObjects.data[ root_i ];
+		json_object_t& object = videos_root->aObjects.data[ root_i ];
 		clip_parse_video( data, object, root_i );
 	}
 
 	json_free( root );
 	free( file );
-
 	return true;
+
+fail:
+	json_free( root );
+	free( file );
+	return false;
 }
 
 
@@ -522,19 +595,30 @@ void clip_save_videos( clip_data_t* data, const char* path )
 
 	// build json5
 	json_object_t root{};
-	root.aType          = e_json_type_array;
-	root.aObjects.count = data->output_count;
-	root.aObjects.data  = ch_malloc< json_object_t >( data->output_count );
+	root.aType = e_json_type_object;
 
-	if ( !root.aObjects.data )
+	if ( !json_add_objects( root, 2 ) )
 	{
-		free( root.aObjects.data );
+		json_free( root );
 		return;
 	}
 
-	for ( size_t root_i = 0; root_i < root.aObjects.count; root_i++ )
+	root.aObjects.data[ 0 ].aName = json_strn( "version", 7 );
+	root.aObjects.data[ 0 ].aType = e_json_type_int;
+	root.aObjects.data[ 0 ].aInt  = CLIP_VIDEO_FORMAT_VER;
+
+	if ( !json_add_array( root.aObjects.data[ 1 ], data->output_count ) )
 	{
-		json_object_t&       output_json = root.aObjects.data[ root_i ];
+		json_free( root );
+		return;
+	}
+
+	json_object_t& video_root = root.aObjects.data[ 1 ];
+	video_root.aName          = json_strn( "videos", 6 );
+
+	for ( size_t root_i = 0; root_i < video_root.aObjects.count; root_i++ )
+	{
+		json_object_t&       output_json = video_root.aObjects.data[ root_i ];
 		clip_output_video_t& output      = data->output[ root_i ];
 		output_json.aType                = e_json_type_object;
 
@@ -559,11 +643,11 @@ void clip_save_videos( clip_data_t* data, const char* path )
 		output_json.aObjects.data[ 1 ].aString = json_str( data->prefix[ output.prefix ].name );
 
 		// encode_overrides
-		if ( !clip_save_encode_override( data, output.encode_overrides, output_json.aObjects.data[ 2 ] ) )
-		{
-			json_free( root );
-			return;
-		}
+	//	if ( !clip_save_encode_override( data, output.encode_overrides, output_json.aObjects.data[ 2 ] ) )
+	//	{
+	//		json_free( root );
+	//		return;
+	//	}
 
 		// inputs
 		output_json.aObjects.data[ 3 ].aName          = json_strn( "inputs", 6 );
@@ -615,17 +699,21 @@ void clip_save_videos( clip_data_t* data, const char* path )
 				{
 					json_object_t& json_time = input_json.aObjects.data[ 2 ].aObjects.data[ time_i ];
 
-					if ( !json_add_array( json_time, 2 ) )
+					if ( !json_add_objects( json_time, 3 ) )
 					{
 						json_free( root );
 						return;
 					}
 
-					json_time.aObjects.data[ 0 ].aType   = e_json_type_double;
-					json_time.aObjects.data[ 0 ].aDouble = input.time_range[ time_i ].start;
+					clip_save_encode_override( data, input.time_range[ time_i ].encode_overrides, json_time.aObjects.data[ 0 ] );
 
+					json_time.aObjects.data[ 1 ].aName   = json_strn( "start", 5 );
 					json_time.aObjects.data[ 1 ].aType   = e_json_type_double;
-					json_time.aObjects.data[ 1 ].aDouble = input.time_range[ time_i ].end;
+					json_time.aObjects.data[ 1 ].aDouble = input.time_range[ time_i ].start;
+
+					json_time.aObjects.data[ 2 ].aName   = json_strn( "end", 3 );
+					json_time.aObjects.data[ 2 ].aType   = e_json_type_double;
+					json_time.aObjects.data[ 2 ].aDouble = input.time_range[ time_i ].end;
 				}
 			}
 		}
@@ -823,6 +911,20 @@ u32 clip_add_input( clip_output_video_t* output, const char* path )
 }
 
 
+void duplicate_encode_overrides( clip_encode_override_t& src, clip_encode_override_t& dst )
+{
+	if ( src.presets )
+	{
+		dst.presets_count = src.presets_count;
+		dst.presets       = ch_malloc< u32 >( src.presets_count );
+
+		memcpy( dst.presets, src.presets, sizeof( u32 ) * src.presets_count );
+	}
+
+	dst.preset_exclude = src.preset_exclude;
+}
+
+
 u32 clip_duplicate_input( clip_output_video_t* output, u32 input_i )
 {
 	if ( !output )
@@ -854,15 +956,7 @@ u32 clip_duplicate_input( clip_output_video_t* output, u32 input_i )
 		}
 	}
 
-	if ( input_src.encode_overrides.presets )
-	{
-		input_dst.encode_overrides.presets_count = input_src.encode_overrides.presets_count;
-		input_dst.encode_overrides.presets       = ch_malloc< u32 >( input_src.encode_overrides.presets_count );
-
-		memcpy( input_dst.encode_overrides.presets, input_src.encode_overrides.presets, sizeof( u32 ) * input_src.encode_overrides.presets_count );
-	}
-
-	input_dst.encode_overrides.preset_exclude = input_src.encode_overrides.preset_exclude;
+	duplicate_encode_overrides( input_src.encode_overrides, input_dst.encode_overrides );
 
 	return input_dst_i;
 }
@@ -913,7 +1007,6 @@ void clip_remove_output( clip_data_t* data, u32 output_i )
 	}
 
 	free( output.input );
-	free( output.encode_overrides.presets );
 
 	util_array_remove_element( data->output, data->output_count, output_i );
 }
@@ -982,6 +1075,38 @@ void clip_remove_time_range( clip_output_video_t* output, u32 input_i, u32 time_
 
 	clip_input_video_t& input = output->input[ input_i ];
 	util_array_remove_element( input.time_range, input.time_range_count, time_range );
+}
+
+
+void clip_duplicate_time_range( clip_output_video_t* output, u32 input_i, u32 src_time_range_i )
+{
+	if ( !output )
+		return;
+
+	if ( input_i > output->input_count )
+	{
+		printf( "invalid input index\n" );
+		return;
+	}
+
+	clip_input_video_t& input = output->input[ input_i ];
+
+	if ( src_time_range_i > input.time_range_count )
+	{
+		printf( "invalid time range to duplicate\n" );
+		return;
+	}
+
+	if ( array_append( input.time_range, input.time_range_count ) )
+		return;
+
+	clip_time_range_t& src_time = input.time_range[ src_time_range_i ];
+	clip_time_range_t& dst_time = input.time_range[ input.time_range_count++ ];
+
+	dst_time.start              = src_time.start;
+	dst_time.end                = src_time.end;
+	
+	duplicate_encode_overrides( src_time.encode_overrides, dst_time.encode_overrides );
 }
 
 

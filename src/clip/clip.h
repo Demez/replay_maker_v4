@@ -4,8 +4,11 @@
 #include "clip/json5.h"
 
 
-constexpr size_t MAX_LEN_EXT         = 5;
-constexpr size_t MAX_LEN_PRESET_NAME = 64;
+constexpr size_t MAX_LEN_EXT           = 5;
+constexpr size_t MAX_LEN_PRESET_NAME   = 64;
+
+constexpr u32    CLIP_VIDEO_FORMAT_VER = 2;
+constexpr u32    CLIP_SETTINGS_VER     = 1;
 
 
 enum e_encode_preset
@@ -33,8 +36,10 @@ struct clip_encode_override_t
 
 struct clip_time_range_t
 {
-	float start;
-	float end;
+	float                  start;
+	float                  end;
+
+	clip_encode_override_t encode_overrides;
 };
 
 
@@ -55,8 +60,6 @@ struct clip_output_video_t
 
 	clip_input_video_t*    input;
 	u32                    input_count;
-
-	clip_encode_override_t encode_overrides;
 
 	u32                    prefix;
 	bool                   enabled;  // if false, don't encode this video
@@ -144,6 +147,7 @@ void                  clip_remove_input( clip_output_video_t* output, u32 input_
 
 void                  clip_add_time_range( clip_output_video_t* output, u32 input_i, float start_time, float end_time );
 void                  clip_remove_time_range( clip_output_video_t* output, u32 input_i, u32 time_range );
+void                  clip_duplicate_time_range( clip_output_video_t* output, u32 input_i, u32 time_range );
 
 void                  clip_add_preset_to_encode_override( clip_data_t* data, clip_encode_override_t& override, const char* preset_name );
 void                  clip_add_preset_to_encode_override( clip_data_t* data, clip_encode_override_t& override, u32 preset_index );
