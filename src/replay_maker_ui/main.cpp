@@ -657,9 +657,21 @@ auto main( int argc, char* argv[] ) -> int
 	ImGui_ImplWin32_InitForOpenGL( g_main_window );
 	ImGui_ImplOpenGL3_Init();
 
+	size_t exe_dir_len = 0;
+	char*  exe_dir     = sys_get_exe_folder( &exe_dir_len );
+
+	{
+		char font_path[ 260 ] = { 0 };
+
+		memcpy( font_path, exe_dir, exe_dir_len * sizeof( char ) );
+		strcat( font_path, PATH_SEP_STR "CascadiaCode.ttf" );
+
+		ImGui::GetIO().Fonts->AddFontFromFileTTF( font_path, 15, nullptr );
+	}
+
 	// load fonts
 	// ImGui::GetIO().Fonts->AddFontFromFileTTF( "D:\\projects\\replay_maker_v4\\out\\SourceSans3-Regular.ttf", 16, nullptr );
-	ImGui::GetIO().Fonts->AddFontFromFileTTF( "D:\\projects\\replay_maker_v4\\out\\CascadiaCode.ttf", 15, nullptr );
+	// ImGui::GetIO().Fonts->AddFontFromFileTTF( "D:\\projects\\replay_maker_v4\\out\\CascadiaCode.ttf", 15, nullptr );
 
 	ImGui_ImplOpenGL3_CreateFontsTexture();
 
@@ -683,9 +695,6 @@ auto main( int argc, char* argv[] ) -> int
 		printf( "failed to create clip data\n" );
 		return 1;
 	}
-
-	size_t exe_dir_len = 0;
-	char*  exe_dir     = sys_get_exe_folder( &exe_dir_len );
 
 	{
 		char settings_path[ 4096 ] = { 0 };
