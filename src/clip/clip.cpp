@@ -953,6 +953,8 @@ u32 clip_duplicate_input( clip_output_video_t* output, u32 input_i )
 		{
 			input_dst.time_range[ i ].start = input_src.time_range[ i ].start;
 			input_dst.time_range[ i ].end   = input_src.time_range[ i ].end;
+
+			duplicate_encode_overrides( input_src.time_range[ i ].encode_overrides, input_dst.time_range[ i ].encode_overrides );
 		}
 	}
 

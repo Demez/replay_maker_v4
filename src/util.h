@@ -298,6 +298,9 @@ bool        fs_make_dir( const char* path );
 bool        fs_is_dir( const char* path );
 bool        fs_is_file( const char* path );
 
+// replace all backslash path separators with forward slashes
+char*       fs_replace_path_seps_unix( const char* path );
+
 // checks if it exists and if it's a file and not a directory
 bool        fs_make_dir_check( const char* path );
 

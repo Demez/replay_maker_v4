@@ -193,6 +193,31 @@ void util_format_time( char* buffer, double time )
 // ============================================================================================
 
 
+// replace all backslash path separators with forward slashes
+char* fs_replace_path_seps_unix( const char* path )
+{
+	if ( !path )
+		return nullptr;
+
+	size_t path_len = strlen( path );
+	char*  out      = ch_calloc< char >( path_len + 1 );
+
+	if ( !out )
+		return nullptr;
+
+	// TODO: maybe use strchr later? not sure if that's faster
+	for ( size_t i = 0; i < path_len; i++ )
+	{
+		if ( path[ i ] == '\\' )
+			out[ i ] = '/';
+		else
+			out[ i ] = path[ i ];
+	}
+
+	return out;
+}
+
+
 char* fs_get_filename( const char* path, size_t path_len )
 {
 	if ( !path || path_len == 0 )

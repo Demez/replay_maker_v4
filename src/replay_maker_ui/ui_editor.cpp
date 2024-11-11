@@ -22,7 +22,8 @@ static clip_encode_override_t* g_encode_override        = nullptr;
 static clip_time_range_t*      g_edit_time_range        = nullptr;
 
 // constexpr ImVec4               g_selected_btn_color( 1.f, 1.f, 1.f, 1.f );
-constexpr ImVec4               g_selected_btn_color( 0.21f, 0.45f, 0.73f, 1.f );
+// constexpr ImVec4               g_selected_btn_color( 0.21f, 0.45f, 0.73f, 1.f );
+constexpr ImVec4               g_selected_btn_color( 0.31f, 0.55f, 0.86f, 1.f );
 static u32                     g_default_prefix   = 0;
 
 char*                          g_video_input_dir;
@@ -329,8 +330,27 @@ void draw_replay_list_entry( u64& imgui_id, u32 out_i, char* search_box, u32 pre
 	if ( collapse_all )
 		ImGui::SetNextItemOpen( false );
 
-	if ( !ImGui::CollapsingHeader( header_name ) )
+	ImGui::PushID( imgui_id++ );
+
+	bool current_output = &output == g_clip_current_output;
+
+	// TODO THEME: change to a green color
+	if ( current_output )
+		ImGui::PushStyleColor( ImGuiCol_Header, { 0.28f, 1.f, 0.21f, 0.31f } );
+
+	if ( !ImGui::CollapsingHeader( header_name, current_output ? ImGuiTreeNodeFlags_Selected | ImGuiTreeNodeFlags_Framed : 0 ) )
+	{
+		if ( current_output )
+			ImGui::PopStyleColor();
+
+		ImGui::PopID();
 		return;
+	}
+
+	if ( current_output )
+		ImGui::PopStyleColor();
+
+	ImGui::PopID();
 
 	//ImGui::PushID( imgui_id++ );
 	//
@@ -347,7 +367,9 @@ void draw_replay_list_entry( u64& imgui_id, u32 out_i, char* search_box, u32 pre
 
 		ImGui::PushID( in_i + 1 );
 
-		if ( ImGui::TreeNode( input.path ) )
+		ImGui::TextUnformatted( input.path );
+
+		// if ( ImGui::TreeNode( input.path ) )
 		{
 			// display encode presets
 			//for ( u32 preset_i = 0; preset_i < input.encode_overrides.presets_count; preset_i++ )
@@ -364,10 +386,10 @@ void draw_replay_list_entry( u64& imgui_id, u32 out_i, char* search_box, u32 pre
 				util_format_time( start_str, input.time_range[ time_range_i ].start );
 				util_format_time( end_str, input.time_range[ time_range_i ].end );
 
-				ImGui::Text( "%d - %s - %s", time_range_i, start_str, end_str );
+				ImGui::Text( "  %d - %s - %s", time_range_i, start_str, end_str );
 			}
 
-			ImGui::TreePop();
+			// ImGui::TreePop();
 		}
 
 		ImGui::PopID();
@@ -465,108 +487,18 @@ void draw_replay_list( int size[ 2 ] )
 
 	//ImGuiStyle& style = ImGui::GetStyle();
 
-	u64  imgui_id           = 1;
-
-#if 1
-	// draw_replay_list_entry
+	u64 imgui_id = 1;
 
 	if ( sort_newest_top )
 	{
 		for ( u32 out_i = g_clip_data->output_count; out_i > 0; --out_i )
-		{
 			draw_replay_list_entry( imgui_id, out_i - 1, search_box, prefix_search, collapse_all );
-		}
 	}
 	else
 	{
 		for ( u32 out_i = 0; out_i < g_clip_data->output_count; out_i++ )
-		{
 			draw_replay_list_entry( imgui_id, out_i, search_box, prefix_search, collapse_all );
-		}
 	}
-
-#else
-	char header_name[ 512 ] = { 0 };
-	for ( u32 out_i = 0; out_i < g_clip_data->output_count; out_i++ )
-	{
-		clip_output_video_t& output = g_clip_data->output[ out_i ];
-		clip_prefix_t&       prefix = g_clip_data->prefix[ output.prefix ];
-
-		if ( prefix_search != UINT32_MAX )
-			if ( prefix_search != output.prefix )
-				continue;
-
-		if ( search_box[ 0 ] != '\0' )
-			if ( !strcasestr( output.name, search_box ) )
-				continue;
-
-		ImGui::PushID( imgui_id++ );
-		if ( ImGui::Button( "Load" ) )
-		{
-			replay_editor_load_input( &output, 0 );
-		}
-		ImGui::PopID();
-
-		ImGui::SameLine();
-
-		//ImVec2 load_text_size = ImGui::CalcTextSize( "Load" );
-		//load_text_size.x += style.ItemInnerSpacing.x * 2;
-		//load_text_size.y += style.ItemInnerSpacing.y * 2;
-
-		ImVec2 region_avail = ImGui::GetContentRegionAvail();
-
-		memset( header_name, 0, sizeof( char ) * 512 );
-		
-		snprintf( header_name, 512, "%s - %s - %d Inputs", prefix.name, output.name, output.input_count );
-
-		if ( collapse_all )
-			ImGui::SetNextItemOpen( false );
-
-		if ( !ImGui::CollapsingHeader( header_name ) )
-			continue;
-
-		//ImGui::PushID( imgui_id++ );
-		//
-		//if ( ImGui::Button( "Load" ) )
-		//{
-		//	replay_editor_load_input( &output, 0 );
-		//}
-		//
-		//ImGui::PopID();
-
-		for ( u32 in_i = 0; in_i < output.input_count; in_i++ )
-		{
-			clip_input_video_t& input = output.input[ in_i ];
-
-			ImGui::PushID( in_i + 1 );
-
-			if ( ImGui::TreeNode( input.path ) )
-			{
-				// display encode presets
-				//for ( u32 preset_i = 0; preset_i < input.encode_overrides.presets_count; preset_i++ )
-				//{
-				//	
-				//}
-
-				// display input video times
-				for ( u32 time_range_i = 0; time_range_i < input.time_range_count; time_range_i++ )
-				{
-					char start_str[ TIME_BUFFER ] = { 0 };
-					char end_str[ TIME_BUFFER ]   = { 0 };
-
-					util_format_time( start_str, input.time_range[ time_range_i ].start );
-					util_format_time( end_str, input.time_range[ time_range_i ].end );
-
-					ImGui::Text( "%d - %s - %s", time_range_i, start_str, end_str );
-				}
-
-				ImGui::TreePop();
-			}
-
-			ImGui::PopID();
-		}
-	}
-#endif
 
 	ImGui::EndChild();
 }
