@@ -72,6 +72,26 @@ bool run_ffmpeg_check( const char* cmd, const char* path )
 }
 
 
+bool only_uses_encode_preset( clip_encode_override_t& override, u32 preset_i )
+{
+	bool valid_preset = override.presets_count == 0;
+
+	for ( u32 i = 0; i < override.presets_count; i++ )
+	{
+		if ( override.presets[ i ] == preset_i )
+		{
+			if ( override.preset_exclude )
+				valid_preset = false;
+			else
+				return true;
+				// valid_preset = true;
+		}
+	}
+
+	return valid_preset;
+}
+
+
 bool uses_encode_preset( clip_encode_override_t& override, u32 preset_i )
 {
 	bool valid_preset = override.presets_count == 0;
@@ -111,7 +131,7 @@ void add_metadata_cmd( clip_output_video_t& output, char* ffmpeg_cmd, bool add_m
 		clip_input_video_t& input = output.input[ in_i ];
 
 		// don't use this one if this file is from this preset
-		if ( uses_encode_preset( input.encode_overrides, preset_i ) )
+		if ( input.encode_overrides.presets_count <= 1 && uses_encode_preset( input.encode_overrides, preset_i ) )
 			continue;
 
 		if ( !time_file_path )
@@ -158,8 +178,8 @@ void add_metadata_cmd( clip_output_video_t& output, char* ffmpeg_cmd, bool add_m
 			clip_time_range_t&  time_range  = input.time_range[ time_i ];
 
 			clip_input_video_t* src_input   = nullptr;
-			u32                 time_offset = 0;
-			u32                 time_end    = 0;
+			float               time_offset = 0.f;
+			float               time_end    = 0.f;
 
 			for ( u32 src_i = 0; src_i < output.input_count; src_i++ )
 			{
@@ -182,7 +202,7 @@ void add_metadata_cmd( clip_output_video_t& output, char* ffmpeg_cmd, bool add_m
 					}
 					
 					// is the raw time range before the discord time range?
-					if ( src_time_range.start < time_range.start )
+					if ( src_time_range.start <= time_range.start )
 					{
 						time_offset = src_time_range.start;
 						time_end    = src_time_range.end;
@@ -204,19 +224,26 @@ void add_metadata_cmd( clip_output_video_t& output, char* ffmpeg_cmd, bool add_m
 				break;
 			}
 
-			float start_time = ( time_offset + time_range.start ) * 1000;
-			float end_time   = ( time_offset + time_range.end ) * 1000;
+			float  start_time  = ( time_range.start - time_offset ) * 1000;
+			float  end_time    = ( time_range.end - time_offset ) * 1000;
+
+			char*  path_unix   = fs_replace_path_seps_unix( input.path );
+			char*  preset_name = g_clip_data->preset[ input.encode_overrides.presets[ preset_i ] ].name;
 
 			// TODO: this probably breaks on videos with more than one input
 			// i think we need to offset the start/end times with the raw input video start time? idfk
 			size_t str_offset = strlen( metadata_file );
 			snprintf(
 			  metadata_file + str_offset, 2048 - str_offset,
-			  "[CHAPTER]\nTIMEBASE=1/1000\nSTART=%.6f\nEND=%.6f\ntitle='%d__%s'\n\n"
-			  "[CHAPTER]\nTIMEBASE=1/1000\nSTART=%.6f\nEND=%.6f\ntitle='%d__%s'\n\n",
-			  start_time, start_time, marker_i++, input.path,
-			  end_time, end_time, marker_i++, input.path
+			  "[CHAPTER]\nTIMEBASE=1/1000\nSTART=%.6f\nEND=%.6f\ntitle='%d - %s - %s'\n\n"
+			  "[CHAPTER]\nTIMEBASE=1/1000\nSTART=%.6f\nEND=%.6f\ntitle='%d - %s - %s'\n\n",
+			  start_time, start_time, marker_i, path_unix ? path_unix : input.path, preset_name,
+			  end_time, end_time, marker_i + 1, path_unix ? path_unix : input.path, preset_name
 			);
+
+			marker_i += 2;
+
+			free( path_unix );
 		}
 	}
 
@@ -738,8 +765,6 @@ void run_encode_preset( char* out_dir, clip_encode_preset_t& preset, u32 preset_
 		clip_prefix_t&       prefix     = g_clip_data->prefix[ output.prefix ];
 		enc_output_video_t&  enc_output = g_output_videos[ out_i ];
 
-		printf( "\n----------------------------------------------------\n\n" );
-
 		if ( !enc_output.valid )
 		{
 			printf( "skipping invalid video: \"%s\"\n", output.name );
@@ -759,6 +784,8 @@ void run_encode_preset( char* out_dir, clip_encode_preset_t& preset, u32 preset_
 
 		if ( !valid_preset )
 			continue;
+
+		printf( "\n----------------------------------------------------\n\n" );
 
 		memset( full_out_path, 0, sizeof( char ) * 4096 );
 		strcat( full_out_path, out_dir );
@@ -796,7 +823,7 @@ void run_encode_preset( char* out_dir, clip_encode_preset_t& preset, u32 preset_
 		// create all video segments
 		if ( preset.target_size )
 			skip_output = !run_encode_inputs_target_size( video_data, preset );
-
+		
 		else
 			skip_output = !run_encode_inputs_standard( video_data, preset );
 
