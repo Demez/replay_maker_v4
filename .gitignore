@@ -5,3 +5,4 @@ out/*
 *.so
 *.a
 *.lib
+nativefiledialog/build/*

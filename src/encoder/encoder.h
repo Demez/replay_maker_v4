@@ -28,7 +28,7 @@ struct video_metadata_t
 // encoder output video
 struct enc_output_video_t
 {
-	clip_output_video_t* output;
+	clip_entry_t* output;
 
 	// array of video metadata, index is equal to input video index in output
 	video_metadata_t*    metadata;
@@ -57,7 +57,7 @@ struct video_segment_t
 struct enc_video_data_t
 {
 	enc_output_video_t*  enc_output;
-	clip_output_video_t* output;
+	clip_entry_t* output;
 
 	video_segment_t*     segment;
 	u32                  segment_count;

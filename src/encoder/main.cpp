@@ -218,7 +218,7 @@ bool used_in_preset( clip_encode_override_t& override, u32 preset_i )
 
 bool collect_video_info()
 {
-	g_output_videos = ch_calloc< enc_output_video_t >( g_clip_data->output_count );
+	g_output_videos = ch_calloc< enc_output_video_t >( g_clip_data->clip_entry_count );
 
 	if ( !g_output_videos )
 	{
@@ -241,15 +241,15 @@ bool collect_video_info()
 	  "\n"
 	  "----------------------------------------------------\n",
 	  g_video_files, g_output_dir,
-	  g_clip_data->preset_count, g_clip_data->prefix_count, g_clip_data->output_count );
+	  g_clip_data->preset_count, g_clip_data->prefix_count, g_clip_data->clip_entry_count );
 
 	// check this for each encode preset
-	for ( u32 out_i = 0; out_i < g_clip_data->output_count; out_i++ )
+	for ( u32 out_i = 0; out_i < g_clip_data->clip_entry_count; out_i++ )
 	{
-		clip_output_video_t& output     = g_clip_data->output[ out_i ];
+		clip_entry_t& output     = g_clip_data->clip_entry[ out_i ];
 		enc_output_video_t&  enc_output = g_output_videos[ out_i ];
 		enc_output.output               = &output;
-		enc_output.metadata             = ch_calloc< video_metadata_t >( output.input_count );
+		enc_output.metadata             = ch_calloc< video_metadata_t >( output.output_count );
 
 		if ( !enc_output.metadata )
 		{
@@ -263,9 +263,9 @@ bool collect_video_info()
 		// determine encode presets for this output video
 
 		// figure out what encode presets this runs on
-		for ( u32 in_i = 0; in_i < output.input_count; in_i++ )
+		for ( u32 in_i = 0; in_i < output.output_count; in_i++ )
 		{
-			clip_input_video_t& input = output.input[ in_i ];
+			clip_input_video_t& input = output.output[ in_i ];
 
 			for ( u32 preset_i = 0; preset_i < input.encode_overrides.presets_count; preset_i++ )
 			{
@@ -312,27 +312,27 @@ bool collect_video_info()
 
 		// find all unique input videos, there will be duplicates for different encode presets
 		// this way we don't need get metadata for the same video multiple times
-		bool* missing_videos = ch_calloc< bool >( output.input_count );
+		bool* missing_videos = ch_calloc< bool >( output.output_count );
 
-		for ( u32 in_i = 0; in_i < output.input_count; in_i++ )
+		for ( u32 in_i = 0; in_i < output.output_count; in_i++ )
 		{
-			clip_input_video_t& input = output.input[ in_i ];
+			clip_input_video_t& input = output.output[ in_i ];
 
 			// did we get metadata for this video already?
 			if ( in_i > 0 )
 			{
 				u32 metadata_i = 0;
-				for ( ; metadata_i < output.input_count; metadata_i++ )
+				for ( ; metadata_i < output.output_count; metadata_i++ )
 				{
 					if ( metadata_i == in_i )
 						continue;
 
 					// check for a matching video path
-					if ( strcmp( input.path, output.input[ metadata_i ].path ) == 0 )
+					if ( strcmp( input.path, output.output[ metadata_i ].path ) == 0 )
 						break;
 				}
 
-				if ( metadata_i < output.input_count )
+				if ( metadata_i < output.output_count )
 				{
 					// copy it
 					enc_output.metadata[ in_i ] = enc_output.metadata[ metadata_i ];
@@ -374,9 +374,9 @@ bool collect_video_info()
 
 			float duration         = 0.f;
 			bool  duration_invalid = false;
-			for ( u32 in_i = 0; in_i < output.input_count; in_i++ )
+			for ( u32 in_i = 0; in_i < output.output_count; in_i++ )
 			{
-				clip_input_video_t& input = output.input[ in_i ];
+				clip_input_video_t& input = output.output[ in_i ];
 
 				if ( !used_in_preset( input.encode_overrides, preset_i ) )
 					continue;
@@ -393,9 +393,9 @@ bool collect_video_info()
 			printf( "    Duration: %.4f%s\n\n", duration, duration_invalid ? " [INVALID]" : "" );
 
 			// print input videos for this preset and their time ranges
-			for ( u32 in_i = 0; in_i < output.input_count; in_i++ )
+			for ( u32 in_i = 0; in_i < output.output_count; in_i++ )
 			{
-				clip_input_video_t& input = output.input[ in_i ];
+				clip_input_video_t& input = output.output[ in_i ];
 
 				// validate preset
 				if ( !used_in_preset( input.encode_overrides, preset_i ) )
@@ -483,7 +483,7 @@ auto main( int argc, char* argv[] ) -> int
 
 	clip_parse_videos( g_clip_data, g_video_files );
 
-	if ( g_clip_data->output_count == 0 )
+	if ( g_clip_data->clip_entry_count == 0 )
 	{
 		printf( "no output videos found!\n" );
 		return 0;

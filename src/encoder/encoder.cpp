@@ -112,7 +112,7 @@ bool uses_encode_preset( clip_encode_override_t& override, u32 preset_i )
 }
 
 
-void add_metadata_cmd( clip_output_video_t& output, char* ffmpeg_cmd, bool add_markers, u32 preset_i )
+void add_metadata_cmd( clip_entry_t& output, char* ffmpeg_cmd, bool add_markers, u32 preset_i )
 {
 	// write ffmpeg metadata.txt file
 	char metadata_path[ 256 ] = { 0 };
@@ -126,9 +126,9 @@ void add_metadata_cmd( clip_output_video_t& output, char* ffmpeg_cmd, bool add_m
 
 	char* time_file_path = nullptr;
 
-	for ( u32 in_i = 0; in_i < output.input_count; in_i++ )
+	for ( u32 in_i = 0; in_i < output.output_count; in_i++ )
 	{
-		clip_input_video_t& input = output.input[ in_i ];
+		clip_input_video_t& input = output.output[ in_i ];
 
 		// don't use this one if this file is from this preset
 		if ( input.encode_overrides.presets_count <= 1 && uses_encode_preset( input.encode_overrides, preset_i ) )
@@ -181,9 +181,9 @@ void add_metadata_cmd( clip_output_video_t& output, char* ffmpeg_cmd, bool add_m
 			float               time_offset = 0.f;
 			float               time_end    = 0.f;
 
-			for ( u32 src_i = 0; src_i < output.input_count; src_i++ )
+			for ( u32 src_i = 0; src_i < output.output_count; src_i++ )
 			{
-				src_input = &output.input[ src_i ];
+				src_input = &output.output[ src_i ];
 
 				// this video doesn't use this encode preset
 				if ( !uses_encode_preset( src_input->encode_overrides, preset_i ) )
@@ -285,7 +285,7 @@ void add_metadata_cmd( clip_output_video_t& output, char* ffmpeg_cmd, bool add_m
 }
 
 
-void create_output_video( clip_output_video_t& output, char* full_out_path, enc_video_data_t& video_data, bool add_markers, u32 preset_i )
+void create_output_video( clip_entry_t& output, char* full_out_path, enc_video_data_t& video_data, bool add_markers, u32 preset_i )
 {
 	// write ffmpeg concat.txt file
 	FILE* fp = fopen( "concat.txt", "wb" );
@@ -344,7 +344,7 @@ void calc_target_bitrates( enc_video_data_t& video_data, clip_encode_preset_t& p
 	for ( u32 seg_i = 0; seg_i < video_data.segment_count; seg_i++ )
 	{
 		video_segment_t&    segment    = video_data.segment[ seg_i ];
-		clip_input_video_t& input      = video_data.output->input[ segment.input ];
+		clip_input_video_t& input      = video_data.output->output[ segment.input ];
 		clip_time_range_t&  time_range = input.time_range[ segment.time ];
 
 		float               duration   = time_range.end - time_range.start;
@@ -393,7 +393,7 @@ int run_encode_inputs_target_size_pass( enc_video_data_t& video_data, clip_encod
 	for ( u32 seg_i = 0; seg_i < video_data.segment_count; seg_i++ )
 	{
 		video_segment_t&    segment    = video_data.segment[ seg_i ];
-		clip_input_video_t& input      = video_data.output->input[ segment.input ];
+		clip_input_video_t& input      = video_data.output->output[ segment.input ];
 		clip_time_range_t&  time_range = input.time_range[ segment.time ];
 
 		// for raw encodes only right now, need to setup discord stuff later
@@ -596,7 +596,7 @@ bool run_encode_inputs_standard( enc_video_data_t& video_data, clip_encode_prese
 	for ( u32 seg_i = 0; seg_i < video_data.segment_count; seg_i++ )
 	{
 		video_segment_t&    segment    = video_data.segment[ seg_i ];
-		clip_input_video_t& input      = video_data.output->input[ segment.input ];
+		clip_input_video_t& input      = video_data.output->output[ segment.input ];
 		clip_time_range_t&  time_range = input.time_range[ segment.time ];
 
 		// for raw encodes only right now, need to setup discord stuff later
@@ -681,7 +681,7 @@ bool run_encode_inputs_standard( clip_output_video_t& output, char**& segment_pa
 #endif
 
 
-enc_video_data_t get_video_segments( enc_output_video_t& enc_output, clip_output_video_t& output, u32 preset_i )
+enc_video_data_t get_video_segments( enc_output_video_t& enc_output, clip_entry_t& output, u32 preset_i )
 {
 	enc_video_data_t video_data{};
 	video_data.enc_output        = &enc_output;
@@ -691,9 +691,9 @@ enc_video_data_t get_video_segments( enc_output_video_t& enc_output, clip_output
 
 	bool                  failed = false;
 
-	for ( u32 in_i = 0; in_i < output.input_count; in_i++ )
+	for ( u32 in_i = 0; in_i < output.output_count; in_i++ )
 	{
-		clip_input_video_t& input        = output.input[ in_i ];
+		clip_input_video_t& input        = output.output[ in_i ];
 
 		// verify the encode preset
 #if 1
@@ -759,9 +759,9 @@ void run_encode_preset( char* out_dir, clip_encode_preset_t& preset, u32 preset_
 	printf( "Encoding for %s preset\n", preset.name );
 	char full_out_path[ 4096 ] = { 0 };
 
-	for ( u32 out_i = 0; out_i < g_clip_data->output_count; out_i++ )
+	for ( u32 out_i = 0; out_i < g_clip_data->clip_entry_count; out_i++ )
 	{
-		clip_output_video_t& output     = g_clip_data->output[ out_i ];
+		clip_entry_t& output     = g_clip_data->clip_entry[ out_i ];
 		clip_prefix_t&       prefix     = g_clip_data->prefix[ output.prefix ];
 		enc_output_video_t&  enc_output = g_output_videos[ out_i ];
 

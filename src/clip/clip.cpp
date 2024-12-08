@@ -289,7 +289,7 @@ void clip_parse_encode_override( clip_data_t* data, clip_encode_override_t& over
 }
 
 
-bool clip_parse_input( clip_data_t* data, clip_output_video_t& output, json_object_t& root, u32 input_i )
+bool clip_parse_input( clip_data_t* data, clip_entry_t& output, json_object_t& root, u32 input_i )
 {
 	if ( root.aType != e_json_type_object )
 	{
@@ -297,7 +297,7 @@ bool clip_parse_input( clip_data_t* data, clip_output_video_t& output, json_obje
 		return false;
 	}
 
-	clip_input_video_t& input = output.input[ input_i ];
+	clip_input_video_t& input = output.output[ input_i ];
 
 	for ( size_t root_i = 0; root_i < root.aObjects.count; root_i++ )
 	{
@@ -378,7 +378,7 @@ bool clip_parse_input( clip_data_t* data, clip_output_video_t& output, json_obje
 
 void clip_parse_video( clip_data_t* data, json_object_t& root, u32 output_i )
 {
-	clip_output_video_t& output = data->output[ output_i ];
+	clip_entry_t& output = data->clip_entry[ output_i ];
 
 	for ( size_t root_i = 0; root_i < root.aObjects.count; root_i++ )
 	{
@@ -418,13 +418,13 @@ void clip_parse_video( clip_data_t* data, json_object_t& root, u32 output_i )
 			if ( !video_array )
 				continue;
 
-			output.input = video_array;
+			output.output = video_array;
 
 			for ( size_t video_i = 0; video_i < object.aObjects.count; video_i++ )
 			{
 				json_object_t& json_video = object.aObjects.data[ video_i ];
 				if ( clip_parse_input( data, output, json_video, video_i ) )
-					output.input_count++;
+					output.output_count++;
 			}
 		}
 		else
@@ -440,7 +440,7 @@ bool clip_parse_videos( clip_data_t* data, const char* path )
 	if ( !data )
 		return false;
 
-	if ( data->output_count )
+	if ( data->clip_entry_count )
 	{
 		printf( "TODO: CLEAR OLD OUTPUT VIDEOS" );
 	}
@@ -453,7 +453,7 @@ bool clip_parse_videos( clip_data_t* data, const char* path )
 		return false;
 	}
 
-	clip_output_video_t* new_data = nullptr;
+	clip_entry_t* new_data = nullptr;
 	json_object_t*       videos_root = nullptr;
 
 	json_object_t root{};
@@ -512,15 +512,15 @@ bool clip_parse_videos( clip_data_t* data, const char* path )
 	videos_root = &root.aObjects.data[ 1 ];
 
 	// allocate all the output videos now
-	new_data    = ch_realloc< clip_output_video_t >( data->output, videos_root->aObjects.count );
+	new_data    = ch_realloc< clip_entry_t >( data->clip_entry, videos_root->aObjects.count );
 
 	if ( !new_data )
 		return false;
 
-	memset( new_data, 0, sizeof( clip_output_video_t ) * videos_root->aObjects.count );
+	memset( new_data, 0, sizeof( clip_entry_t ) * videos_root->aObjects.count );
 
-	data->output       = new_data;
-	data->output_count = videos_root->aObjects.count;
+	data->clip_entry       = new_data;
+	data->clip_entry_count = videos_root->aObjects.count;
 
 	for ( size_t root_i = 0; root_i < videos_root->aObjects.count; root_i++ )
 	{
@@ -590,7 +590,7 @@ void clip_save_videos( clip_data_t* data, const char* path )
 	if ( !data )
 		return;
 
-	if ( !data->output_count )
+	if ( !data->clip_entry_count )
 		return;
 
 	// build json5
@@ -607,7 +607,7 @@ void clip_save_videos( clip_data_t* data, const char* path )
 	root.aObjects.data[ 0 ].aType = e_json_type_int;
 	root.aObjects.data[ 0 ].aInt  = CLIP_VIDEO_FORMAT_VER;
 
-	if ( !json_add_array( root.aObjects.data[ 1 ], data->output_count ) )
+	if ( !json_add_array( root.aObjects.data[ 1 ], data->clip_entry_count ) )
 	{
 		json_free( root );
 		return;
@@ -619,7 +619,7 @@ void clip_save_videos( clip_data_t* data, const char* path )
 	for ( size_t root_i = 0; root_i < video_root.aObjects.count; root_i++ )
 	{
 		json_object_t&       output_json = video_root.aObjects.data[ root_i ];
-		clip_output_video_t& output      = data->output[ root_i ];
+		clip_entry_t& output      = data->clip_entry[ root_i ];
 		output_json.aType                = e_json_type_object;
 
 		// output video has 4 objects
@@ -652,10 +652,10 @@ void clip_save_videos( clip_data_t* data, const char* path )
 		// inputs
 		output_json.aObjects.data[ 3 ].aName          = json_strn( "inputs", 6 );
 		output_json.aObjects.data[ 3 ].aType          = e_json_type_array;
-		output_json.aObjects.data[ 3 ].aObjects.count = output.input_count;
-		output_json.aObjects.data[ 3 ].aObjects.data  = ch_malloc< json_object_t >( output.input_count );
+		output_json.aObjects.data[ 3 ].aObjects.count = output.output_count;
+		output_json.aObjects.data[ 3 ].aObjects.data  = ch_malloc< json_object_t >( output.output_count );
 
-		if ( output.input_count )
+		if ( output.output_count )
 		{
 			if ( !output_json.aObjects.data[ 3 ].aObjects.data )
 			{
@@ -663,10 +663,10 @@ void clip_save_videos( clip_data_t* data, const char* path )
 				return;
 			}
 
-			for ( u32 input_i = 0; input_i < output.input_count; input_i++ )
+			for ( u32 input_i = 0; input_i < output.output_count; input_i++ )
 			{
 				json_object_t&      input_json = output_json.aObjects.data[ 3 ].aObjects.data[ input_i ];
-				clip_input_video_t& input      = output.input[ input_i ];
+				clip_input_video_t& input      = output.output[ input_i ];
 
 				if ( !json_add_objects( input_json, 3 ) )
 				{
@@ -841,20 +841,20 @@ char* clip_replay_name_trim( const char* name, u32 prefix_len )
 }
 
 
-clip_output_video_t* clip_add_output( clip_data_t* data, const char* name )
+clip_entry_t* clip_add_entry( clip_data_t* data, const char* name ) // originally clip_add_output
 {
 	if ( !data )
 		return nullptr;
 
-	clip_output_video_t* new_data = ch_realloc< clip_output_video_t >( data->output, data->output_count + 1 );
+	clip_entry_t* new_data = ch_realloc< clip_entry_t >( data->clip_entry, data->clip_entry_count + 1 );
 
 	if ( !new_data )
 		return nullptr;
 
-	data->output = new_data;
-	memset( &data->output[ data->output_count ], 0, sizeof( clip_output_video_t ) );
+	data->clip_entry = new_data;
+	memset( &data->clip_entry[ data->clip_entry_count ], 0, sizeof( clip_entry_t ) );
 
-	clip_output_video_t* output = &data->output[ data->output_count ];
+	clip_entry_t* output = &data->clip_entry[ data->clip_entry_count ];
 	output->name                = fs_get_filename_no_ext( name );
 	output->enabled             = true;
 
@@ -882,32 +882,32 @@ clip_output_video_t* clip_add_output( clip_data_t* data, const char* name )
 		}
 	}
 
-	data->output_count++;
+	data->clip_entry_count++;
 
 	return output;
 }
 
 
-u32 clip_add_input( clip_output_video_t* output, const char* path )
+u32 clip_add_input( clip_entry_t* clip, u32 output_video, const char* path )
 {
-	if ( !output )
+	if ( !clip )
 		return UINT32_MAX;
 
-	clip_input_video_t* new_data = ch_realloc< clip_input_video_t >( output->input, output->input_count + 1 );
+	clip_input_video_t* new_data = ch_realloc< clip_input_video_t >( clip->output[ output_video ].input_video, clip->output[ output_video ].input_video_count + 1 );
 
 	if ( !new_data )
 		return UINT32_MAX;
 
-	output->input = new_data;
-	memset( &output->input[ output->input_count ], 0, sizeof( clip_input_video_t ) );
+	clip->output[ output_video ].input_video = new_data;
+	memset( &clip->output[ output_video ].input_video[ clip->output[ output_video ].input_video_count ], 0, sizeof( clip_input_video_t ) );
 
-	clip_input_video_t* input = &output->input[ output->input_count ];
+	clip_input_video_t* input = &clip->output[ output_video ].input_video[ clip->output[ output_video ].input_video_count ];
 	input->path               = ch_malloc< char >( strlen( path ) + 1 );
 
 	strcpy( input->path, path );
 	input->path[ strlen( path ) ] = 0;
 
-	return output->input_count++;
+	return clip->output[ output_video ].input_video_count++;
 }
 
 
@@ -925,24 +925,24 @@ void duplicate_encode_overrides( clip_encode_override_t& src, clip_encode_overri
 }
 
 
-u32 clip_duplicate_input( clip_output_video_t* output, u32 input_i )
+u32 clip_duplicate_input( clip_entry_t* output, u32 input_i )
 {
 	if ( !output )
 		return UINT32_MAX;
 
-	if ( input_i >= output->input_count )
+	if ( input_i >= output->output_count )
 	{
 		printf( "invalid input index\n" );
 		return UINT32_MAX;
 	}
 
-	u32 input_dst_i = clip_add_input( output, output->input[ input_i ].path );
+	u32 input_dst_i = clip_add_input( output, output->output[ input_i ].path );
 
 	if ( input_dst_i == UINT32_MAX )
 		return UINT32_MAX;
 
-	clip_input_video_t& input_src = output->input[ input_i ];
-	clip_input_video_t& input_dst = output->input[ input_dst_i ];
+	clip_input_video_t& input_src = output->output[ input_i ];
+	clip_input_video_t& input_dst = output->output[ input_dst_i ];
 
 	if ( input_src.time_range_count )
 	{
@@ -964,20 +964,20 @@ u32 clip_duplicate_input( clip_output_video_t* output, u32 input_i )
 }
 
 
-void clip_remove_output( clip_data_t* data, clip_output_video_t* output )
+void clip_remove_output( clip_data_t* data, clip_entry_t* output )
 {
 	if ( !data )
 		return;
 
 	// look for the pointer
 	u32 output_i = 0;
-	for ( ; output_i < data->output_count; output_i++ )
+	for ( ; output_i < data->clip_entry_count; output_i++ )
 	{
-		if ( &data->output[ output_i ] == output )
+		if ( &data->clip_entry[ output_i ] == output )
 			break;
 	}
 
-	if ( output_i == data->output_count )
+	if ( output_i == data->clip_entry_count )
 	{
 		printf( "invalid output\n" );
 		return;
@@ -992,61 +992,61 @@ void clip_remove_output( clip_data_t* data, u32 output_i )
 	if ( !data )
 		return;
 
-	if ( output_i > data->output_count )
+	if ( output_i > data->clip_entry_count )
 	{
 		printf( "invalid output index\n" );
 		return;
 	}
 
-	clip_output_video_t& output = data->output[ output_i ];
+	clip_entry_t& output = data->clip_entry[ output_i ];
 
 	// remove input videos
-	for ( u32 i = 0; i < output.input_count; i++ )
+	for ( u32 i = 0; i < output.output_count; i++ )
 	{
-		free( output.input[ i ].path );
-		free( output.input[ i ].time_range );
-		free( output.input[ i ].encode_overrides.presets );
+		free( output.output[ i ].path );
+		free( output.output[ i ].time_range );
+		free( output.output[ i ].encode_overrides.presets );
 	}
 
-	free( output.input );
+	free( output.output );
 
-	util_array_remove_element( data->output, data->output_count, output_i );
+	util_array_remove_element( data->clip_entry, data->clip_entry_count, output_i );
 }
 
 
-void clip_remove_input( clip_output_video_t* output, u32 input_i )
+void clip_remove_input( clip_entry_t* output, u32 input_i )
 {
 	if ( !output )
 		return;
 
-	if ( input_i > output->input_count )
+	if ( input_i > output->output_count )
 	{
 		printf( "invalid input index\n" );
 		return;
 	}
 
-	clip_input_video_t& input = output->input[ input_i ];
+	clip_input_video_t& input = output->output[ input_i ];
 	
 	free( input.path );
 	free( input.time_range );
 	free( input.encode_overrides.presets );
 
-	util_array_remove_element( output->input, output->input_count, input_i );
+	util_array_remove_element( output->output, output->output_count, input_i );
 }
 
 
-void clip_add_time_range( clip_output_video_t* output, u32 input_i, float start_time, float end_time )
+void clip_add_time_range( clip_entry_t* output, u32 input_i, float start_time, float end_time )
 {
 	if ( !output )
 		return;
 
-	if ( input_i > output->input_count )
+	if ( input_i > output->output_count )
 	{
 		printf( "invalid input index\n" );
 		return;
 	}
 
-	clip_input_video_t& input = output->input[ input_i ];
+	clip_input_video_t& input = output->output[ input_i ];
 
 	// What if you made time ranges linked lists? maybe the same with input videos? would allow for easy re-ordering
 	clip_time_range_t* new_data = ch_realloc< clip_time_range_t >( input.time_range, input.time_range_count + 1 );
@@ -1064,34 +1064,34 @@ void clip_add_time_range( clip_output_video_t* output, u32 input_i, float start_
 }
 
 
-void clip_remove_time_range( clip_output_video_t* output, u32 input_i, u32 time_range )
+void clip_remove_time_range( clip_entry_t* output, u32 input_i, u32 time_range )
 {
 	if ( !output )
 		return;
 
-	if ( input_i > output->input_count )
+	if ( input_i > output->output_count )
 	{
 		printf( "invalid input index\n" );
 		return;
 	}
 
-	clip_input_video_t& input = output->input[ input_i ];
+	clip_input_video_t& input = output->output[ input_i ];
 	util_array_remove_element( input.time_range, input.time_range_count, time_range );
 }
 
 
-void clip_duplicate_time_range( clip_output_video_t* output, u32 input_i, u32 src_time_range_i )
+void clip_duplicate_time_range( clip_entry_t* output, u32 input_i, u32 src_time_range_i )
 {
 	if ( !output )
 		return;
 
-	if ( input_i > output->input_count )
+	if ( input_i > output->output_count )
 	{
 		printf( "invalid input index\n" );
 		return;
 	}
 
-	clip_input_video_t& input = output->input[ input_i ];
+	clip_input_video_t& input = output->output[ input_i ];
 
 	if ( src_time_range_i > input.time_range_count )
 	{

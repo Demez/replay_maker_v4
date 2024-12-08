@@ -136,7 +136,8 @@ void handle_mpv_keybind( int key )
 		{
 			//MPV_CMD( "set", "video-zoom", MONITOR_ZOOM_HACK );
 			//MPV_CMD( "set", "video-pan-x", "-0.25" );
-			MPV_CMD( "set", "vf", "crop=1920:1080:1920:0" );
+			//MPV_CMD( "set", "vf", "crop=1920:1080:1920:0" ); // Demez
+			MPV_CMD( "set", "vf", "crop=2560:1440:0:1080" ); // Source
 			break;
 		}
 	}

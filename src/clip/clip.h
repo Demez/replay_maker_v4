@@ -53,13 +53,21 @@ struct clip_input_video_t
 	clip_encode_override_t encode_overrides;
 };
 
-
 struct clip_output_video_t
+{
+	clip_input_video_t*	   input_video;
+	u32                    input_video_count;
+
+	clip_encode_override_t encode_overrides;
+};
+
+
+struct clip_entry_t // Originally clip_output_video_t
 {
 	char*                  name;
 
-	clip_input_video_t*    input;
-	u32                    input_count;
+	clip_output_video_t*   output; // Originally type clip_input_video_t called input
+	u32                    output_count; // Originally input_count
 
 	u32                    prefix;
 	bool                   enabled;  // if false, don't encode this video
@@ -103,8 +111,8 @@ struct clip_prefix_t
 
 struct clip_data_t
 {
-	clip_output_video_t*  output;
-	u32                   output_count;
+	clip_entry_t*         clip_entry;
+	u32                   clip_entry_count;
 
 	clip_encode_preset_t* preset;
 	u32                   preset_count;
@@ -136,18 +144,18 @@ clip_encode_preset_t* clip_create_encode_preset( clip_data_t* data );
 u32                   clip_add_prefix( clip_data_t* data, const char* name, const char* prefix );
 clip_encode_preset_t* clip_add_encode_preset( clip_data_t* data, const char* name, const char* ext );
 
-clip_output_video_t*  clip_add_output( clip_data_t* data, const char* name );
-u32                   clip_add_input( clip_output_video_t* output, const char* path );
+clip_entry_t*         clip_add_entry( clip_data_t* data, const char* name );
+u32                   clip_add_input( clip_entry_t* output, u32 output_video, const char* path );
 
-u32                   clip_duplicate_input( clip_output_video_t* output, u32 input_i );
+u32                   clip_duplicate_input( clip_entry_t* output, u32 input_i );
 
-void                  clip_remove_output( clip_data_t* data, clip_output_video_t* );
+void                  clip_remove_output( clip_data_t* data, clip_entry_t* );
 void                  clip_remove_output( clip_data_t* data, u32 output_i );
-void                  clip_remove_input( clip_output_video_t* output, u32 input_i );
+void                  clip_remove_input( clip_entry_t* output, u32 input_i );
 
-void                  clip_add_time_range( clip_output_video_t* output, u32 input_i, float start_time, float end_time );
-void                  clip_remove_time_range( clip_output_video_t* output, u32 input_i, u32 time_range );
-void                  clip_duplicate_time_range( clip_output_video_t* output, u32 input_i, u32 time_range );
+void                  clip_add_time_range( clip_entry_t* output, u32 input_i, float start_time, float end_time );
+void                  clip_remove_time_range( clip_entry_t* output, u32 input_i, u32 time_range );
+void                  clip_duplicate_time_range( clip_entry_t* output, u32 input_i, u32 time_range );
 
 void                  clip_add_preset_to_encode_override( clip_data_t* data, clip_encode_override_t& override, const char* preset_name );
 void                  clip_add_preset_to_encode_override( clip_data_t* data, clip_encode_override_t& override, u32 preset_index );
