@@ -662,12 +662,12 @@ void draw_preset_override_button( clip_encode_override_t* override, const char* 
 }
 
 
-void draw_output_video_edit( u32 input_i, clip_input_video_t* input )
+void draw_input_video_edit( u32 input_i, clip_input_video_t* input )
 {
 	ImGuiStyle& style = ImGui::GetStyle();
 
-	draw_preset_override( input->encode_overrides );
-	ImGui::Separator();
+	//draw_preset_override( input->encode_overrides );
+	//ImGui::Separator();
 
 	// ImGui::Text( "Input %d:\n%s", input_i, input->path );
 	ImGui::TextUnformatted( input->path );
@@ -901,7 +901,6 @@ void draw_output_video_edit( u32 input_i, clip_input_video_t* input )
 		copy_time_range = UINT32_MAX;
 	}
 }
-
 
 void draw_replay_edit( int size[ 2 ] )
 {
@@ -1155,10 +1154,12 @@ void draw_replay_edit( int size[ 2 ] )
 
 	ImGui::EndDisabled();
 
-	// display input videos
+	// display output videos
 	for ( u32 j = 0; j < g_clip_current_clip->output_count; j++ )
 	{
-		clip_input_video_t* input    = &g_clip_current_clip->output[ j ];
+
+		clip_output_video_t* output  = &g_clip_current_clip->output[ j ];
+		//clip_input_video_t*  input   = &g_clip_current_clip->output[ j ];
 
 		// in case this is changed in the function
 		u32                 current  = g_clip_current_output;
@@ -1168,36 +1169,49 @@ void draw_replay_edit( int size[ 2 ] )
 
 		if ( current == j )
 		{
-			// flags |= ImGuiChildFlags_FrameStyle;
-			// frame_bg.x = 0.5;
-			// frame_bg.y = 0.5;
-			// frame_bg.z = 0.5;
-
-			frame_bg.x = 0.15;
-			frame_bg.y = 0.15;
-			frame_bg.z = 0.15;
-			frame_bg.w = 1;
-		}
-		else
-		{
-			// frame_bg.x *= 0.4;
-			// frame_bg.y *= 0.4;
-			// frame_bg.z *= 0.4;
+			//frame_bg.x = 0.15;
+			//frame_bg.y = 0.15;
+			//frame_bg.z = 0.15;
+			//frame_bg.w = 1;
 		}
 
-		ImGui::PushStyleColor( ImGuiCol_ChildBg, frame_bg );
+		//ImGui::PushStyleColor( ImGuiCol_ChildBg, frame_bg );
 
-		if ( ImGui::BeginChild( (size_t)input, ImVec2( 0.f, 0.f ), flags ) )
+		if ( ImGui::BeginChild( (size_t)output, ImVec2( 0.f, 0.f ), flags ) )
 		{
-			draw_output_video_edit( j, input );
+			draw_preset_override( output->encode_overrides );
+			ImGui::Separator();
+
+			// Draw sub-input videos for each output video
+			for ( u32 i; i < output->input_video_count; i++ )
+			{
+				if (current == j &&
+					mpv_get_current_video() == output->input_video[i].path )
+				{
+					frame_bg.x = 0.15;
+					frame_bg.y = 0.15;
+					frame_bg.z = 0.15;
+					frame_bg.w = 1;
+				}
+
+				ImGui::PushStyleColor( ImGuiCol_ChildBg, frame_bg );
+
+				if ( ImGui::BeginChild( (size_t)output, ImVec2( 0.f, 0.f ), flags ) )
+				{
+					draw_input_video_edit( i, &output->input_video[ i ] );
+
+					if (i != output->input_video_count - 1)
+					{
+						ImGui::Separator();
+					}
+				}
+
+				ImGui::PopStyleColor();
+			}
 		}
 
 		ImGui::EndChild();
-
-		//if ( current == j )
-		{
-			ImGui::PopStyleColor();
-		}
+		//ImGui::PopStyleColor();
 	}
 
 	if ( g_encode_override )

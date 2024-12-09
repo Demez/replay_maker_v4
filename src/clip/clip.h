@@ -53,8 +53,23 @@ struct clip_input_video_t
 	clip_encode_override_t encode_overrides;
 };
 
-struct clip_output_video_t
+/*
+/  I restructured these structs to make more sense
+/  in the context of this UI change. each "clip entry"
+/  is a new entry that shows up in the "Clip Entries"
+/  tab in the UI. This was previously called an output
+/  video, but this naming no longer makes sense with
+/  the new structure. Each clip entry contains output
+/  video(s) which will each contain input video(s) and
+/  time range(s). All of the input videos and time
+/  ranges within each output video will be concatenated
+/  and encoded in the set preset.
+*/
+
+struct clip_output_video_t // new struct to encapsulate clip_input_video_t
 {
+	char*                  name_postfix;
+
 	clip_input_video_t*	   input_video;
 	u32                    input_video_count;
 
