@@ -198,10 +198,10 @@ void add_metadata_cmd( clip_output_video_t& output, char* ffmpeg_cmd, bool add_m
 			float               time_offset = 0.f;
 			float               time_end               = 0.f;
 
-			u32                 dst_input_preset_index = get_used_encode_preset_index( input.encode_overrides, preset_i );
-
-			if ( dst_input_preset_index == UINT32_MAX )
-				continue;
+			//u32                 dst_input_preset_index = get_used_encode_preset_index( input.encode_overrides, preset_i );
+			//
+			//if ( dst_input_preset_index == UINT32_MAX )
+			//	continue;
 
 			for ( u32 src_i = 0; src_i < output.input_count; src_i++ )
 			{
@@ -255,7 +255,7 @@ void add_metadata_cmd( clip_output_video_t& output, char* ffmpeg_cmd, bool add_m
 			float  end_time    = ( time_range.end - time_offset ) * 1000;
 
 			char*  path_unix   = fs_replace_path_seps_unix( input.path );
-			char*  preset_name = g_clip_data->preset[ input.encode_overrides.presets[ dst_input_preset_index ] ].name;
+			char*  preset_name = g_clip_data->preset[ preset_i ].name;
 
 			// TODO: this probably breaks on videos with more than one input
 			// i think we need to offset the start/end times with the raw input video start time? idfk
