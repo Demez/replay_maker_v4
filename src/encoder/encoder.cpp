@@ -112,6 +112,23 @@ bool uses_encode_preset( clip_encode_override_t& override, u32 preset_i )
 }
 
 
+u32 get_used_encode_preset_index( clip_encode_override_t& override, u32 preset_i )
+{
+	for ( u32 i = 0; i < override.presets_count; i++ )
+	{
+		if ( override.presets[ i ] == preset_i )
+		{
+			if ( override.preset_exclude )
+				return UINT32_MAX;
+			else
+				return i;
+		}
+	}
+
+	return UINT32_MAX;
+}
+
+
 void add_metadata_cmd( clip_output_video_t& output, char* ffmpeg_cmd, bool add_markers, u32 preset_i )
 {
 	// write ffmpeg metadata.txt file
@@ -179,14 +196,24 @@ void add_metadata_cmd( clip_output_video_t& output, char* ffmpeg_cmd, bool add_m
 
 			clip_input_video_t* src_input   = nullptr;
 			float               time_offset = 0.f;
-			float               time_end    = 0.f;
+			float               time_end               = 0.f;
+
+			u32                 dst_input_preset_index = get_used_encode_preset_index( input.encode_overrides, preset_i );
+
+			if ( dst_input_preset_index == UINT32_MAX )
+				continue;
 
 			for ( u32 src_i = 0; src_i < output.input_count; src_i++ )
 			{
 				src_input = &output.input[ src_i ];
 
 				// this video doesn't use this encode preset
-				if ( !uses_encode_preset( src_input->encode_overrides, preset_i ) )
+				// if ( !uses_encode_preset( src_input->encode_overrides, preset_i ) )
+				// 	continue;
+
+				u32 src_input_preset_index = get_used_encode_preset_index( src_input->encode_overrides, preset_i );
+				
+				if ( src_input_preset_index == UINT32_MAX )
 					continue;
 
 				bool skip_time = false;
@@ -228,7 +255,7 @@ void add_metadata_cmd( clip_output_video_t& output, char* ffmpeg_cmd, bool add_m
 			float  end_time    = ( time_range.end - time_offset ) * 1000;
 
 			char*  path_unix   = fs_replace_path_seps_unix( input.path );
-			char*  preset_name = g_clip_data->preset[ input.encode_overrides.presets[ preset_i ] ].name;
+			char*  preset_name = g_clip_data->preset[ input.encode_overrides.presets[ dst_input_preset_index ] ].name;
 
 			// TODO: this probably breaks on videos with more than one input
 			// i think we need to offset the start/end times with the raw input video start time? idfk
