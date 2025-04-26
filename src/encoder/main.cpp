@@ -429,6 +429,8 @@ auto main( int argc, char* argv[] ) -> int
 {
 	args_init( argc, argv );
 
+	sys_init();
+
 	size_t exe_dir_len         = 0;
 	char*  exe_dir             = sys_get_exe_folder( &exe_dir_len );
 

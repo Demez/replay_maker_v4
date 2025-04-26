@@ -18,6 +18,9 @@
 // ----------------------------------------------------
 
 
+HANDLE g_con_out = INVALID_HANDLE_VALUE;
+
+
 module sys_load_library( const wchar_t* path )
 {
 	return (module)LoadLibrary( path );
@@ -568,5 +571,24 @@ void sys_browse_to_file( const char* path )
 	}
 
 	free( path_w );
+}
+
+
+int sys_init()
+{
+	g_con_out = GetStdHandle( STD_OUTPUT_HANDLE );
+
+	if ( g_con_out == INVALID_HANDLE_VALUE )
+	{
+		sys_print_last_error();
+		return 1;
+	}
+
+	return 0;
+}
+
+
+void sys_shutdown()
+{
 }
 

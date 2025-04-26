@@ -604,6 +604,8 @@ auto main( int argc, char* argv[] ) -> int
 	// only works on Windows 10 version 1803 (10.0.17134.0) and above
 	setlocale( LC_ALL, ".UTF-8" );
 
+	sys_init();
+
 	if ( NFD_Init() != NFD_OKAY )
 	{
 		printf( "Failed to Init NativeFileDialog\n" );

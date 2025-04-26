@@ -662,19 +662,21 @@ void draw_preset_override_button( clip_encode_override_t* override, const char* 
 }
 
 
-void draw_input_video_edit( u32 input_i, clip_input_video_t* input )
+void draw_input_video_edit( u32 input_i, clip_input_video_t* input, bool edit )
 {
 	ImGuiStyle& style = ImGui::GetStyle();
 
 	// ImGui::Text( "Input %d:\n%s", input_i, input->path );
 	ImGui::TextUnformatted( input->path );
 
-	if ( ImGui::Button( "Set Current" ) )
+	if ( !edit && ImGui::Button( "Set Current" ) )
 	{
 		replay_editor_load_input( g_clip_current_output, input_i );
 	}
+	
+	if ( !edit )
+		ImGui::SameLine();
 
-	ImGui::SameLine();
 	if ( ImGui::Button( "Duplicate" ) )
 	{
 		u32 i = clip_duplicate_input( g_clip_current_output, input_i );
@@ -742,72 +744,76 @@ void draw_input_video_edit( u32 input_i, clip_input_video_t* input )
 		if ( time_range_i > 0 )
 			ImGui::Separator();
 
-		// push id
-		ImGui::PushID( imgui_id++ );
-
-		if ( ImGui::Button( "X" ) )
+		if ( edit )
 		{
-			delete_time_range = time_range_i;
+			// push id
+			ImGui::PushID( imgui_id++ );
+
+			if ( ImGui::Button( "X" ) )
+			{
+				delete_time_range = time_range_i;
+			}
+
+			ImGui::PopID();
+
+			ImGui::SameLine();
+
+			ImGui::PushID( imgui_id++ );
+
+			if ( ImGui::Button( "Dup" ) )
+			{
+				copy_time_range = time_range_i;
+			}
+
+			ImGui::PopID();
+
+			ImGui::SameLine();
+
+			//static char edit_btn[ 8 ] = { 0 };
+			//snprintf( edit_btn, 8, "Edit %d", time_range_i );
+
+			// ImGui::BeginDisabled( input_i != g_clip_current_input );
+			ImGui::BeginDisabled( disabled );
+
+			ImGui::PushID( imgui_id++ );
+			draw_edit_override_button( g_edit_time_range, &input->time_range[ time_range_i ], "Edit" );
+			ImGui::PopID();
+
+			ImGui::EndDisabled();
+
+			ImGui::SameLine();
+
+			// these buttons aren't implemented yet
+			ImGui::BeginDisabled( true );
+
+			ImGui::PushID( imgui_id++ );
+
+			if ( ImGui::Button( "/\\" ) )
+			{
+				move_time_range = time_range_i;
+				move_up         = true;
+			}
+
+			ImGui::PushStyleVar( ImGuiStyleVar_ItemSpacing, { 0, 0 } );
+			ImGui::SameLine();
+
+			if ( ImGui::Button( "\\/" ) )
+			{
+				move_time_range = time_range_i;
+				move_up         = false;
+			}
+
+			ImGui::PopStyleVar();
+
+			ImGui::PopID();
+
+			ImGui::EndDisabled();
+
+			ImGui::SameLine();
+		//	ImGui::Spacing();
+		//	ImGui::SameLine();
+
 		}
-
-		ImGui::PopID();
-
-		ImGui::SameLine();
-
-		ImGui::PushID( imgui_id++ );
-
-		if ( ImGui::Button( "Dup" ) )
-		{
-			copy_time_range = time_range_i;
-		}
-
-		ImGui::PopID();
-
-		ImGui::SameLine();
-
-		//static char edit_btn[ 8 ] = { 0 };
-		//snprintf( edit_btn, 8, "Edit %d", time_range_i );
-
-		// ImGui::BeginDisabled( input_i != g_clip_current_input );
-		ImGui::BeginDisabled( disabled );
-
-		ImGui::PushID( imgui_id++ );
-		draw_edit_override_button( g_edit_time_range, &input->time_range[ time_range_i ], "Edit" );
-		ImGui::PopID();
-
-		ImGui::EndDisabled();
-
-		ImGui::SameLine();
-
-		// these buttons aren't implemented yet
-		ImGui::BeginDisabled( true );
-
-		ImGui::PushID( imgui_id++ );
-
-		if ( ImGui::Button( "/\\" ) )
-		{
-			move_time_range = time_range_i;
-			move_up         = true;
-		}
-
-		ImGui::PushStyleVar( ImGuiStyleVar_ItemSpacing, { 0, 0 } );
-		ImGui::SameLine();
-
-		if ( ImGui::Button( "\\/" ) )
-		{
-			move_time_range = time_range_i;
-			move_up         = false;
-		}
-
-		ImGui::PopStyleVar();
-
-		ImGui::PopID();
-
-		ImGui::EndDisabled();
-
-		ImGui::SameLine();
-	//	ImGui::Spacing();
-	//	ImGui::SameLine();
 
 		char duration_str[ TIME_BUFFER ] = { 0 };
 		util_format_time( duration_str, input->time_range[ time_range_i ].end - input->time_range[ time_range_i ].start );
@@ -857,9 +863,9 @@ void draw_input_video_edit( u32 input_i, clip_input_video_t* input )
 
 		ImGui::EndDisabled();
 
-		ImGui::PushID( imgui_id++ );
-		draw_preset_override( input->time_range[ time_range_i ].encode_overrides );
-		ImGui::PopID();
+		// ImGui::PushID( imgui_id++ );
+		// draw_preset_override( input->time_range[ time_range_i ].encode_overrides );
+		// ImGui::PopID();
 		// ImGui::Text( "%.4f - %.4f", input->time_range[ time_range_i ].start, input->time_range[ time_range_i ].end );
 	}
 
@@ -895,6 +901,46 @@ void draw_input_video_edit( u32 input_i, clip_input_video_t* input )
 	{
 		clip_duplicate_time_range( g_clip_current_output, input_i, copy_time_range );
 		copy_time_range = UINT32_MAX;
+	}
+}
+
+
+void draw_input_video_edit_wrapper( u32 input_i, clip_input_video_t* input, bool edit )
+{
+	ImVec4          frame_bg = ImGui::GetStyleColorVec4( ImGuiCol_ChildBg );
+	ImGuiChildFlags flags    = ImGuiChildFlags_Border | ImGuiChildFlags_AutoResizeY;
+
+	if ( edit || input_i == g_clip_current_input )
+	{
+		// flags |= ImGuiChildFlags_FrameStyle;
+		// frame_bg.x = 0.5;
+		// frame_bg.y = 0.5;
+		// frame_bg.z = 0.5;
+
+		frame_bg.x = 0.15;
+		frame_bg.y = 0.15;
+		frame_bg.z = 0.15;
+		frame_bg.w = 1;
+	}
+	else
+	{
+		// frame_bg.x *= 0.4;
+		// frame_bg.y *= 0.4;
+		// frame_bg.z *= 0.4;
+	}
+
+	ImGui::PushStyleColor( ImGuiCol_ChildBg, frame_bg );
+
+	if ( ImGui::BeginChild( edit ? edit : (size_t)input, ImVec2( 0.f, 0.f ), flags ) )
+	{
+		draw_input_video_edit( input_i, input, edit );
+	}
+
+	ImGui::EndChild();
+
+	//if ( current == j )
+	{
+		ImGui::PopStyleColor();
 	}
 }
 
@@ -954,7 +1000,7 @@ void draw_replay_edit( int size[ 2 ] )
 
 	ImGui::SameLine();
 
-	if ( ImGui::Button( "Add Input Video" ) )
+	if ( ImGui::Button( "Add Entry" ) )
 	{
 		u32 i = clip_add_input( g_clip_current_output, mpv_get_current_video() );
 
@@ -1047,7 +1093,7 @@ void draw_replay_edit( int size[ 2 ] )
 	//ImGui::Spacing();
 	//ImGui::Spacing();
 	//ImGui::Spacing();
-	ImGui::Separator();
+	//ImGui::Separator();
 
 	// probably not needed, we can just use the presets stored on output videos to determine what encode presets to run this video on
 	//draw_preset_override( g_clip_current_output->encode_overrides );
@@ -1066,95 +1112,133 @@ void draw_replay_edit( int size[ 2 ] )
 	//ImGui::Separator();
 
 	// lmao
-	draw_playback_controls( size, false );
-	ImGui::Separator(); 
+	//draw_playback_controls( size, false );
+	//ImGui::Separator(); 
 
 	ImGui::BeginDisabled( g_clip_current_input == UINT32_MAX );
 
-	if ( ImGui::Button( "Set Start Time" ) )
+	// Current Clip Editor
+
+//	if ( ImGui::Button( "Add Entry" ) )
+//	{
+//		u32 i = clip_add_input( g_clip_current_output, mpv_get_current_video() );
+//		replay_editor_load_input( g_clip_current_output, i );
+//	}
+
+	ImGui::Separator();
+
+	ImVec4          frame_bg = ImGui::GetStyleColorVec4( ImGuiCol_ChildBg );
+	ImGuiChildFlags flags    = ImGuiChildFlags_Border | ImGuiChildFlags_AutoResizeY;
+
+	frame_bg.x = 0.15;
+	frame_bg.y = 0.15;
+	frame_bg.z = 0.15;
+	frame_bg.w = 1;
+
+	ImGui::PushStyleColor( ImGuiCol_ChildBg, frame_bg );
+
+	if ( ImGui::BeginChild( "##entry_editor", ImVec2( 0.f, 0.f ), flags ) )
 	{
-		// get position from mkv
-		double time_pos = 0;
-		p_mpv_get_property( g_mpv, "time-pos", MPV_FORMAT_DOUBLE, &time_pos );
-
-		if ( g_edit_time_range )
+		if ( ImGui::Button( "Set Start Time" ) )
 		{
-			// NOTE: maybe allow the user to set a start time later than the end time
-			// but color the time range as red so the user knows it's invalid
-			g_edit_time_range->start = time_pos;
-		}
-		else
-		{
-			g_time_range_start = time_pos;
-		}
-	}
+			// get position from mkv
+			double time_pos = 0;
+			p_mpv_get_property( g_mpv, "time-pos", MPV_FORMAT_DOUBLE, &time_pos );
 
-	ImGui::SameLine();
-
-	if ( ImGui::Button( "Set End Time" ) )
-	{
-		double time_pos = 0;
-		p_mpv_get_property( g_mpv, "time-pos", MPV_FORMAT_DOUBLE, &time_pos );
-
-		if ( g_edit_time_range )
-		{
-			// set end time
-			// TODO: add undo system and have this be an action you can undo
-
-			// NOTE: maybe allow the user to set a start time later than the end time
-			// but color the time range as red so the user knows it's invalid
-			if ( time_pos < g_edit_time_range->start )
+			if ( g_edit_time_range )
 			{
-				printf( "end time is earlier than start time! - %.4f > %.4f\n", g_edit_time_range->start, time_pos );
+				// NOTE: maybe allow the user to set a start time later than the end time
+				// but color the time range as red so the user knows it's invalid
+				g_edit_time_range->start = time_pos;
 			}
 			else
 			{
-				g_edit_time_range->end = time_pos;
-			}
-		}
-		else
-		{
-			if ( time_pos < g_time_range_start )
-			{
-				printf( "end time is earlier than start time! - %.4f > %.4f\n", g_time_range_start, time_pos );
-			}
-			else
-			{
-				clip_add_time_range( g_clip_current_output, g_clip_current_input, g_time_range_start, time_pos );
 				g_time_range_start = time_pos;
 			}
 		}
+
+		ImGui::SameLine();
+
+		if ( ImGui::Button( "Set End Time" ) )
+		{
+			double time_pos = 0;
+			p_mpv_get_property( g_mpv, "time-pos", MPV_FORMAT_DOUBLE, &time_pos );
+
+			if ( g_edit_time_range )
+			{
+				// set end time
+				// TODO: add undo system and have this be an action you can undo
+
+				// NOTE: maybe allow the user to set a start time later than the end time
+				// but color the time range as red so the user knows it's invalid
+				if ( time_pos < g_edit_time_range->start )
+				{
+					printf( "end time is earlier than start time! - %.4f > %.4f\n", g_edit_time_range->start, time_pos );
+				}
+				else
+				{
+					g_edit_time_range->end = time_pos;
+				}
+			}
+			else
+			{
+				if ( time_pos < g_time_range_start )
+				{
+					printf( "end time is earlier than start time! - %.4f > %.4f\n", g_time_range_start, time_pos );
+				}
+				else
+				{
+					clip_add_time_range( g_clip_current_output, g_clip_current_input, g_time_range_start, time_pos );
+					g_time_range_start = time_pos;
+				}
+			}
+		}
+
+		ImGui::SameLine();
+
+		if ( ImGui::Button( "Reset Start Time" ) )
+		{
+			g_time_range_start = 0;
+		}
+
+		ImGui::SameLine();
+
+		if ( ImGui::Button( "Add Full Video Time" ) )
+		{
+			double duration = 0;
+			p_mpv_get_property( g_mpv, "duration", MPV_FORMAT_DOUBLE, &duration );
+			clip_add_time_range( g_clip_current_output, g_clip_current_input, 0, duration );
+		}
+
+		// show current start time?
+		char start_time_str[ TIME_BUFFER ] = { 0 };
+		util_format_time( start_time_str, g_time_range_start );
+		ImGui::Text( "Current Start Time: %s", start_time_str );
+
+		draw_input_video_edit( g_clip_current_input, &g_clip_current_output->input[ g_clip_current_input ], true );
 	}
 
-	ImGui::SameLine();
+	ImGui::EndChild();
 
-	if ( ImGui::Button( "Reset Start Time" ) )
+	//if ( current == j )
 	{
-		g_time_range_start = 0;
-	}
-	
-	ImGui::SameLine();
-
-	if ( ImGui::Button( "Add Full Video Time" ) )
-	{
-		double duration = 0;
-		p_mpv_get_property( g_mpv, "duration", MPV_FORMAT_DOUBLE, &duration );
-		clip_add_time_range( g_clip_current_output, g_clip_current_input, 0, duration );
+		ImGui::PopStyleColor();
 	}
 
-	// show current start time?
-	char start_time_str[ TIME_BUFFER ] = { 0 };
-	util_format_time( start_time_str, g_time_range_start );
-	ImGui::Text( "Current Start Time: %s", start_time_str );
-	ImGui::Separator();
+
 
 	ImGui::EndDisabled();
+	ImGui::Separator();
+	ImGui::TextUnformatted( "Entries" );
 
 	// display input videos
 	for ( u32 j = 0; j < g_clip_current_output->input_count; j++ )
 	{
 		clip_input_video_t* input    = &g_clip_current_output->input[ j ];
 
+		draw_input_video_edit_wrapper( j, input, false );
+
+#if 0
 		// in case this is changed in the function
 		u32                 current  = g_clip_current_input;
 
@@ -1163,6 +1247,8 @@ void draw_replay_edit( int size[ 2 ] )
 
 		if ( current == j )
 		{
+			//continue;
+
 			// flags |= ImGuiChildFlags_FrameStyle;
 			// frame_bg.x = 0.5;
 			// frame_bg.y = 0.5;
@@ -1184,7 +1270,7 @@ void draw_replay_edit( int size[ 2 ] )
 
 		if ( ImGui::BeginChild( (size_t)input, ImVec2( 0.f, 0.f ), flags ) )
 		{
-			draw_input_video_edit( j, input );
+			draw_input_video_edit( j, input, current == j );
 		}
 
 		ImGui::EndChild();
@@ -1193,6 +1279,7 @@ void draw_replay_edit( int size[ 2 ] )
 		{
 			ImGui::PopStyleColor();
 		}
+#endif
 	}
 
 	if ( g_encode_override )

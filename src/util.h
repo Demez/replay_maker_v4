@@ -214,6 +214,9 @@ void*       sys_load_func( module mod, const char* path );
 const char* sys_get_error();
 void        sys_print_last_error();
 
+int         sys_init();
+void        sys_shutdown();
+
 // also known as "sys_to_utf16"
 wchar_t*    sys_to_wchar( const char* spStr, int sSize );
 wchar_t*    sys_to_wchar( const char* spStr );
@@ -257,6 +260,9 @@ int         sys_execute( const char* command );
 
 // NOTE: path cannot be over MAX_PATH (260 characters), thanks windows shell
 void        sys_browse_to_file( const char* path );
+
+// print color with \aFFF escape codes for color values
+//void        sys_print_color( const char* string );
 
 
 // --------------------------------------------------------------------------------------------------------

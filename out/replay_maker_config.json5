@@ -104,5 +104,7 @@
         {"Garry's Mod": "gmod_d_"},   
         {"Minecraft": "mc_d_"},   
         {"Mario Kart: Wii": "mkwii_d_"},   
+        {"FlatOut 2": "flatout2_d_"},   
+        {"Sven-Coop": "svencoop_d_"},   
     ],
 }
