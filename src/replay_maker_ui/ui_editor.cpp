@@ -520,45 +520,48 @@ void draw_preset_override_single( clip_encode_override_t& override )
 }
 
 
-void draw_preset_override( clip_encode_override_t& override )
+void draw_preset_override( clip_encode_override_t& override, bool edit )
 {
 	ImGuiStyle& style = ImGui::GetStyle();
-	
-	// display any overrides
-	if ( ImGui::Button( override.preset_exclude ? "EXCLUDE" : "INCLUDE" ) )
-		override.preset_exclude = !override.preset_exclude;
 
-	ImGui::SameLine();
-
-	ImVec2 text_size  = ImGui::CalcTextSize( "Presets" );
-	float  combo_size = text_size.x + ( ( style.FramePadding.x + style.FramePadding.y + style.ItemSpacing.x ) * 2 );
-	ImGui::SetNextItemWidth( combo_size );
-
-	if ( ImGui::BeginCombo( "##presets", "Presets" ) )
+	if ( edit )
 	{
-		for ( u32 i = 0; i < g_clip_data->preset_count; i++ )
+		// display any overrides
+		if ( ImGui::Button( override.preset_exclude ? "EXCLUDE" : "INCLUDE" ) )
+			override.preset_exclude = !override.preset_exclude;
+
+		ImGui::SameLine();
+
+		ImVec2 text_size  = ImGui::CalcTextSize( "Presets" );
+		float  combo_size = text_size.x + ( ( style.FramePadding.x + style.FramePadding.y + style.ItemSpacing.x ) * 2 );
+		ImGui::SetNextItemWidth( combo_size );
+
+		if ( ImGui::BeginCombo( "##presets", "Presets" ) )
 		{
-			// lmao what the fuck
-			bool skip = false;
-			for ( u32 used_preset_i = 0; used_preset_i < override.presets_count; used_preset_i++ )
+			for ( u32 i = 0; i < g_clip_data->preset_count; i++ )
 			{
-				if ( i == override.presets[ used_preset_i ] )
+				// lmao what the fuck
+				bool skip = false;
+				for ( u32 used_preset_i = 0; used_preset_i < override.presets_count; used_preset_i++ )
 				{
-					skip = true;
+					if ( i == override.presets[ used_preset_i ] )
+					{
+						skip = true;
+						continue;
+					}
+				}
+
+				if ( skip )
 					continue;
+
+				if ( ImGui::Selectable( g_clip_data->preset[ i ].name ) )
+				{
+					clip_add_preset_to_encode_override( g_clip_data, override, i );
 				}
 			}
 
-			if ( skip )
-				continue;
-
-			if ( ImGui::Selectable( g_clip_data->preset[ i ].name ) )
-			{
-				clip_add_preset_to_encode_override( g_clip_data, override, i );
-			}
+			ImGui::EndCombo();
 		}
-
-		ImGui::EndCombo();
 	}
 
 	// index in the array to remove
@@ -566,7 +569,8 @@ void draw_preset_override( clip_encode_override_t& override )
 
 	for ( u32 i = 0; i < override.presets_count; i++ )
 	{
-		ImGui::SameLine();
+		if ( edit || i > 0 )
+			ImGui::SameLine();
 
 		char                  button_name[ MAX_LEN_PRESET_NAME + 4 ] = { "(X) " };
 
@@ -673,7 +677,7 @@ void draw_input_video_edit( u32 input_i, clip_input_video_t* input, bool edit )
 	{
 		replay_editor_load_input( g_clip_current_output, input_i );
 	}
-	
+
 	if ( !edit )
 		ImGui::SameLine();
 
@@ -698,7 +702,7 @@ void draw_input_video_edit( u32 input_i, clip_input_video_t* input, bool edit )
 
 	ImGui::SameLine();
 
-	ImVec2 line_remain = ImGui::GetContentRegionAvail();
+	ImVec2 line_remain   = ImGui::GetContentRegionAvail();
 
 	float  spacing_width = line_remain.x;
 	spacing_width -= ImGui::CalcTextSize( "Delete" ).x;
@@ -720,7 +724,7 @@ void draw_input_video_edit( u32 input_i, clip_input_video_t* input, bool edit )
 
 	ImGui::Separator();
 
-	draw_preset_override( input->encode_overrides );
+	draw_preset_override( input->encode_overrides, edit );
 
 	// display input video times
 	if ( input->time_range_count == 0 )
@@ -728,12 +732,12 @@ void draw_input_video_edit( u32 input_i, clip_input_video_t* input, bool edit )
 
 	ImGui::Separator();
 
-	u32  copy_time_range   = UINT32_MAX;
-	u32  delete_time_range = UINT32_MAX;
-	u32  move_time_range   = UINT32_MAX;
-	bool move_up           = false;
+	u32    copy_time_range   = UINT32_MAX;
+	u32    delete_time_range = UINT32_MAX;
+	u32    move_time_range   = UINT32_MAX;
+	bool   move_up           = false;
 
-//	ImGui::Indent( 16.f );
+	//	ImGui::Indent( 16.f );
 
 	size_t imgui_id          = 10000;
 
@@ -810,9 +814,8 @@ void draw_input_video_edit( u32 input_i, clip_input_video_t* input, bool edit )
 			ImGui::EndDisabled();
 
 			ImGui::SameLine();
-		//	ImGui::Spacing();
-		//	ImGui::SameLine();
-
+			//	ImGui::Spacing();
+			//	ImGui::SameLine();
 		}
 
 		char duration_str[ TIME_BUFFER ] = { 0 };
@@ -867,6 +870,14 @@ void draw_input_video_edit( u32 input_i, clip_input_video_t* input, bool edit )
 		// draw_preset_override( input->time_range[ time_range_i ].encode_overrides );
 		// ImGui::PopID();
 		// ImGui::Text( "%.4f - %.4f", input->time_range[ time_range_i ].start, input->time_range[ time_range_i ].end );
+	}
+
+	if ( edit )
+	{
+		// show current start time
+		char start_time_str[ TIME_BUFFER ] = { 0 };
+		util_format_time( start_time_str, g_time_range_start );
+		ImGui::Text( "Current Start Time: %s", start_time_str );
 	}
 
 //	ImGui::Unindent( 16.f );
@@ -1210,11 +1221,6 @@ void draw_replay_edit( int size[ 2 ] )
 			clip_add_time_range( g_clip_current_output, g_clip_current_input, 0, duration );
 		}
 
-		// show current start time?
-		char start_time_str[ TIME_BUFFER ] = { 0 };
-		util_format_time( start_time_str, g_time_range_start );
-		ImGui::Text( "Current Start Time: %s", start_time_str );
-
 		draw_input_video_edit( g_clip_current_input, &g_clip_current_output->input[ g_clip_current_input ], true );
 	}
 
@@ -1285,7 +1291,7 @@ void draw_replay_edit( int size[ 2 ] )
 	if ( g_encode_override )
 	{
 		ImGui::Separator();
-		draw_preset_override( *g_encode_override );
+		draw_preset_override( *g_encode_override, false );
 	}
 
 	if ( g_clip_delete_input != UINT32_MAX )
