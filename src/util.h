@@ -212,6 +212,7 @@ module      sys_load_library( const wchar_t* path );
 void        sys_close_library( module mod );
 void*       sys_load_func( module mod, const char* path );
 const char* sys_get_error();
+const wchar_t* sys_get_error_w();
 void        sys_print_last_error();
 
 int         sys_init();

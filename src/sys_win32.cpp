@@ -46,31 +46,32 @@ const wchar_t* sys_get_error_w()
 	if ( errorID == 0 )
 		return L"";  // No error message
 
-	LPTSTR strErrorMessage = NULL;
+	// LPTSTR strErrorMessage = NULL;
+	WCHAR strErrorMessage[ 1024 ];
 
 	DWORD ret = FormatMessageW(
-	  FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS | FORMAT_MESSAGE_ARGUMENT_ARRAY | FORMAT_MESSAGE_ALLOCATE_BUFFER,
+	  FORMAT_MESSAGE_FROM_SYSTEM,
 	  NULL,
 	  errorID,
 	  0,
 	  strErrorMessage,
-	  0,
+	  1024,
 	  NULL );
 
-	static wchar_t message[ 512 ];
-	memset( message, 512, 0 );
+	static wchar_t message[ 1100 ];
+	memset( message, 1100, 0 );
 
 	if ( ret == 0 )
 	{
 		printf( "smh FormatMessageW failed with %d\n", GetLastError() );
-		_snwprintf( message, 512, L"Win32 API Error %ud", errorID );
+		_snwprintf( message, 1100, L"Win32 API Error %ud", errorID );
 		return message;
 	}
 
-	_snwprintf( message, 512, L"Win32 API Error %ud: %s", errorID, strErrorMessage );
+	_snwprintf( message, 1100, L"Win32 API Error %ud: %s", errorID, strErrorMessage );
 
 	// Free the Win32 string buffer.
-	LocalFree( strErrorMessage );
+	// LocalFree( strErrorMessage );
 
 	return message;
 }
