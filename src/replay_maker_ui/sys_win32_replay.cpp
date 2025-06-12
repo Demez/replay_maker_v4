@@ -780,12 +780,6 @@ void win32_render_all()
 }
 
 
-struct rect_t
-{
-
-};
-
-
 static bool point_in_rect( ivec2 point, RECT rect )
 {
 	return point[ 0 ] >= rect.left && point[ 0 ] <= rect.right && point[ 1 ] <= rect.bottom && point[ 1 ] >= rect.top;

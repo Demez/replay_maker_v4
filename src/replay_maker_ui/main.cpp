@@ -186,6 +186,9 @@ void draw_playback_controls( int size[ 2 ], bool draw_volume )
 	float        vol_bar_width   = vol_text_size.x * 3;
 	float        seek_bar_width  = ( avaliable_width - seek_text_size.x );
 
+	draw_timeline();
+
+#if 0
 	if ( draw_volume )
 		seek_bar_width -= ( vol_bar_width + vol_text_size.x + ( style.ItemSpacing.x * 2 ) );
 
@@ -202,26 +205,7 @@ void draw_playback_controls( int size[ 2 ], bool draw_volume )
 		int         cmd_ret = p_mpv_command_async( g_mpv, 0, cmd );
 		printf( "seek - %d\n", cmd_ret );
 	}
-
-	if ( draw_volume )
-	{
-		double volume = 0;
-		p_mpv_get_property( g_mpv, "volume", MPV_FORMAT_DOUBLE, &volume );
-
-		ImGui::SameLine();
-		ImGui::SetNextItemWidth( vol_bar_width );
-
-		float volume_f = volume;
-		if ( ImGui::SliderFloat( "Volume", &volume_f, 0.f, 130.f ) )
-		{
-			// convert float to string in c
-			char volume_str[ 16 ];
-			gcvt( volume_f, 4, volume_str );
-
-			const char* cmd[]   = { "set", "volume", volume_str, NULL };
-			int         cmd_ret = p_mpv_command_async( g_mpv, 0, cmd );
-		}
-	}
+#endif
 
 	const ImVec2     label_size    = ImGui::CalcTextSize( "Pause", NULL, true );
 	ImVec2           play_btn_size = ImGui::CalcItemSize( { 0, 0 }, label_size.x + style.FramePadding.x * 2.0f, label_size.y + style.FramePadding.y * 2.0f );
@@ -350,6 +334,26 @@ void draw_playback_controls( int size[ 2 ], bool draw_volume )
 	}
 
 	ImGui::EndDisabled();
+
+	if ( draw_volume )
+	{
+		double volume = 0;
+		p_mpv_get_property( g_mpv, "volume", MPV_FORMAT_DOUBLE, &volume );
+
+		ImGui::SameLine();
+		ImGui::SetNextItemWidth( vol_bar_width );
+
+		float volume_f = volume;
+		if ( ImGui::SliderFloat( "Volume", &volume_f, 0.f, 130.f ) )
+		{
+			// convert float to string in c
+			char volume_str[ 16 ];
+			gcvt( volume_f, 4, volume_str );
+
+			const char* cmd[]   = { "set", "volume", volume_str, NULL };
+			int         cmd_ret = p_mpv_command_async( g_mpv, 0, cmd );
+		}
+	}
 }
 
 
@@ -641,7 +645,7 @@ auto main( int argc, char* argv[] ) -> int
 
 	// calculate the size of the mpv window (what about DPI Scale here later?)
 	g_mpv_size[ 0 ] = g_window_size[ 0 ] - 600;  // replay editor/sidebar
-	g_mpv_size[ 1 ] = g_window_size[ 1 ] - 82;   // playback controls
+	g_mpv_size[ 1 ] = g_window_size[ 1 ] - 150;   // playback controls
 
 	// 2 imgui windows
 	if ( !win32_create_windows( g_window_size[ 0 ], g_window_size[ 1 ] ) )

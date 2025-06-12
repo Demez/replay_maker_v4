@@ -1,6 +1,7 @@
 #pragma once
 
 #include "util.h"
+#include "imgui.h"
 
 #include "mpv/client.h"
 #include "mpv/render.h"
@@ -98,6 +99,14 @@ constexpr u8                       MAX_RECENT_OPEN = 8;
 constexpr int                      DIVIDER_SIZE = 5;  // multiplied by 2
 
 #define RECENTLY_OPENED_FILE "replay_maker_recent.txt"
+
+// --------------------------------------------------------------------------------------------------------
+// Timeline
+
+void draw_timeline();
+
+extern ImVec2 g_timeline_size;
+extern ImVec2 g_timeline_pos;
 
 // --------------------------------------------------------------------------------------------------------
 
