@@ -68,7 +68,7 @@ const wchar_t* sys_get_error_w()
 		return message;
 	}
 
-	_snwprintf( message, 1100, L"Win32 API Error %ud: %s", errorID, strErrorMessage );
+	_snwprintf( message, 1100, L"Win32 API Error %u: %s", errorID, strErrorMessage );
 
 	// Free the Win32 string buffer.
 	// LocalFree( strErrorMessage );
