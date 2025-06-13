@@ -953,9 +953,13 @@ void win32_update_dividers()
 
 	ImGuiIO& io   = ImGui::GetIO();
 
+	static bool last_frame_left_click = false;
+	bool        left_click            = ( GetKeyState( VK_LBUTTON ) & 0x8000 ) != 0;
+
 	if ( g_grabbed_divider_idx != -1 )
 	{
 		win32_move_divider( g_grabbed_divider_idx );
+		last_frame_left_click = left_click;
 		return;
 	}
 
@@ -964,13 +968,17 @@ void win32_update_dividers()
 	{
 		io.ConfigFlags |= ImGuiConfigFlags_NoMouseCursorChange | ImGuiConfigFlags_NoMouse;
 		SetCursor( g_cursor_resize_v );
-		win32_move_divider( 0 );
+
+		if ( !last_frame_left_click && left_click )
+			win32_move_divider( 0 );
 	}
 	else if ( g_show_sidebar && ( g_grabbed_divider_idx == 1 || point_in_rect( g_mouse_pos, rect_1 ) ) )
 	{
 		io.ConfigFlags |= ImGuiConfigFlags_NoMouseCursorChange | ImGuiConfigFlags_NoMouse;
 		SetCursor( g_cursor_resize_h );
-		win32_move_divider( 1 );
+
+		if ( !last_frame_left_click && left_click )
+			win32_move_divider( 1 );
 	}
 	else if ( io.ConfigFlags & ( ImGuiConfigFlags_NoMouseCursorChange | ImGuiConfigFlags_NoMouse ) ) 
 	{
@@ -979,6 +987,8 @@ void win32_update_dividers()
 		SetCursor( g_cursor_default );
 		g_grabbed_divider_idx = -1;
 	}
+
+	last_frame_left_click = left_click;
 #endif
 }
 

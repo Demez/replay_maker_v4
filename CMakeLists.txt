@@ -29,6 +29,8 @@ endforeach( OUTPUTCONFIG CMAKE_CONFIGURATION_TYPES )
 set_property( GLOBAL PROPERTY PREFIX "" )
 set_property( GLOBAL PROPERTY USE_FOLDERS ON )
 
+set( CMAKE_CXX_STANDARD 20 )
+
 # Compiler/Platform specifc options
 if ( MSVC )
 

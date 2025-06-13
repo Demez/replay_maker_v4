@@ -21,7 +21,7 @@ using u64   = unsigned long long;
 using f32   = float;
 using f64   = double;
 
-using module = void*;
+using module_t = void*;
 
 
 // --------------------------------------------------------------------------------------------------------
@@ -208,9 +208,9 @@ bool array_append_err( T*& data, u32 count, const char* msg )
 
 
 // library loading
-module      sys_load_library( const wchar_t* path );
-void        sys_close_library( module mod );
-void*       sys_load_func( module mod, const char* path );
+module_t    sys_load_library( const wchar_t* path );
+void        sys_close_library( module_t mod );
+void*       sys_load_func( module_t mod, const char* path );
 const char* sys_get_error();
 const wchar_t* sys_get_error_w();
 void        sys_print_last_error();

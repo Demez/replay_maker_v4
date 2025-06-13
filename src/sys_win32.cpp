@@ -21,19 +21,19 @@
 HANDLE g_con_out = INVALID_HANDLE_VALUE;
 
 
-module sys_load_library( const wchar_t* path )
+module_t sys_load_library( const wchar_t* path )
 {
-	return (module)LoadLibrary( path );
+	return (module_t)LoadLibrary( path );
 }
 
 
-void sys_close_library( module mod )
+void sys_close_library( module_t mod )
 {
 	FreeLibrary( (HMODULE)mod );
 }
 
 
-void* sys_load_func( module mod, const char* name )
+void* sys_load_func( module_t mod, const char* name )
 {
 	return GetProcAddress( (HMODULE)mod, name );
 }
