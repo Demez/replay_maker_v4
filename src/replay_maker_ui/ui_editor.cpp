@@ -233,6 +233,8 @@ void replay_editor_reset()
 	g_clip_delete_input   = UINT32_MAX;
 	g_time_range_start    = 0.f;
 	memset( g_output_name_buf, 0, 512 * sizeof( char ) );
+
+	timeline_reset();
 }
 
 
@@ -291,6 +293,144 @@ void replay_editor_load( clip_output_video_t* output )
 
 	memcpy( g_output_name_buf, output->name, strlen( output->name ) * sizeof( char ) );
 	g_focus_replay_maker = true;
+}
+
+
+void draw_replay_edit_basic_info( int size[ 2 ] )
+{
+	// select default prefix
+	if ( g_default_prefix >= g_clip_data->prefix_count )
+		g_default_prefix = 0;
+
+	if ( ImGui::BeginCombo( "Default Prefix", g_clip_data->prefix[ g_default_prefix ].name ) )
+	{
+		for ( u32 i = 0; i < g_clip_data->prefix_count; i++ )
+		{
+			if ( ImGui::Selectable( g_clip_data->prefix[ i ].name, i == g_default_prefix ) )
+			{
+				g_default_prefix = i;
+			}
+		}
+
+		ImGui::EndCombo();
+	}
+
+	ImGui::TextUnformatted( "TODO: Default Encode Presets Here" );
+
+	if ( ImGui::Button( "New Output Video" ) )
+	{
+		// create a new output video based on the filename of the playing video
+		char* current_video = mpv_get_current_video();
+
+		if ( current_video )
+		{
+			replay_editor_reset();
+
+			clip_output_video_t* output = clip_add_output( g_clip_data, current_video );
+			g_clip_current_output       = output;
+
+			if ( output )
+			{
+				clip_add_input( output, current_video );
+
+				replay_editor_set_video( output, 0 );
+
+				output->prefix = g_default_prefix;
+			}
+		}
+	}
+
+	if ( !g_clip_current_output )
+		return;
+
+	ImGui::SameLine();
+
+	if ( ImGui::Button( "Add Entry" ) )
+	{
+		u32 i = clip_add_input( g_clip_current_output, mpv_get_current_video() );
+
+		replay_editor_load_input( g_clip_current_output, i );
+	}
+
+	ImGui::SameLine();
+
+	ImGuiStyle& style         = ImGui::GetStyle();
+
+	ImVec2      line_remain   = ImGui::GetContentRegionAvail();
+
+	float       spacing_width = line_remain.x;
+	spacing_width -= ImGui::CalcTextSize( "Delete" ).x;
+	spacing_width -= style.FramePadding.x * 2;
+	spacing_width -= style.ItemSpacing.x;
+
+	spacing_width = MAX( -style.ItemSpacing.x, spacing_width );
+
+	ImGui::Dummy( { spacing_width, 0.f } );
+	ImGui::SameLine();
+
+	if ( ImGui::Button( "Delete" ) )
+	{
+		clip_remove_output( g_clip_data, g_clip_current_output );
+		replay_editor_reset();
+		return;
+	}
+
+	ImGui::Separator();
+
+	const ImVec2 name_text_size   = ImGui::CalcTextSize( "Name" );
+	const ImVec2 prefix_text_size = ImGui::CalcTextSize( "Prefix" );
+
+	float        avaliable_width  = size[ 0 ] - ( style.ItemSpacing.x * 2 );
+	float        name_bar_width   = ( avaliable_width - prefix_text_size.x );
+
+	name_bar_width -= style.ItemSpacing.x * 2;
+
+	ImGui::SetNextItemWidth( name_bar_width );
+
+	// display output video data
+	if ( ImGui::InputText( "Name", g_output_name_buf, 512 ) )
+	{
+		// lol
+		size_t name_len = strlen( g_output_name_buf );
+
+		char*  new_data = ch_realloc( g_clip_current_output->name, name_len + 1 );
+
+		if ( new_data )
+		{
+			g_clip_current_output->name = new_data;
+			memcpy( g_clip_current_output->name, g_output_name_buf, name_len * sizeof( char ) );
+			g_clip_current_output->name[ name_len ] = '\0';
+		}
+	}
+
+	// combo box to select prefix
+	char* current_prefix = nullptr;
+
+	if ( g_clip_current_output->prefix >= g_clip_data->prefix_count )
+	{
+		// reset to general profile
+		g_clip_current_output->prefix = 0;
+	}
+
+	current_prefix = g_clip_data->prefix[ g_clip_current_output->prefix ].name;
+
+	ImGui::SetNextItemWidth( name_bar_width );
+
+	if ( ImGui::BeginCombo( "Prefix", current_prefix ) )
+	{
+		for ( u32 i = 0; i < g_clip_data->prefix_count; i++ )
+		{
+			// if ( i == g_clip_current_output->prefix )
+			// 	continue;
+
+			if ( ImGui::Selectable( g_clip_data->prefix[ i ].name, i == g_clip_current_output->prefix ) )
+			{
+				g_clip_current_output->prefix = i;
+			}
+		}
+
+		ImGui::EndCombo();
+	}
 }
 
 
@@ -402,6 +542,12 @@ void draw_replay_list( int size[ 2 ] )
 	// display current data
 	if ( !g_clip_data )
 		return;
+
+	draw_replay_edit_basic_info( size );
+
+	ImGui::Separator();
+
+	ImGui::Text( "Clip Entries" );
 
 	static char search_box[ 128 ] = { 0 };
 
@@ -964,139 +1110,10 @@ void draw_replay_edit( int size[ 2 ] )
 		return;
 	}
 
-	// select default prefix
-	if ( g_default_prefix >= g_clip_data->prefix_count )
-		g_default_prefix = 0;
-
-	if ( ImGui::BeginCombo( "Default Prefix", g_clip_data->prefix[ g_default_prefix ].name ) )
-	{
-		for ( u32 i = 0; i < g_clip_data->prefix_count; i++ )
-		{
-			if ( ImGui::Selectable( g_clip_data->prefix[ i ].name, i == g_default_prefix ) )
-			{
-				g_default_prefix = i;
-			}
-		}
-
-		ImGui::EndCombo();
-	}
-
-	ImGui::TextUnformatted( "TODO: Default Encode Presets Here" );
-
-	if ( ImGui::Button( "New Output Video" ) )
-	{
-		// create a new output video based on the filename of the playing video
-		char* current_video = mpv_get_current_video();
-
-		if ( current_video )
-		{
-			replay_editor_reset();
-
-			clip_output_video_t* output = clip_add_output( g_clip_data, current_video );
-			g_clip_current_output       = output;
-
-			if ( output )
-			{
-				clip_add_input( output, current_video );
-
-				replay_editor_set_video( output, 0 );
-
-				output->prefix = g_default_prefix;
-			}
-		}
-	}
+	draw_replay_edit_basic_info( size );
 
 	if ( !g_clip_current_output )
 		return;
-
-	ImGui::SameLine();
-
-	if ( ImGui::Button( "Add Entry" ) )
-	{
-		u32 i = clip_add_input( g_clip_current_output, mpv_get_current_video() );
-
-		replay_editor_load_input( g_clip_current_output, i );
-	}
-
-	ImGui::SameLine();
-
-	ImGuiStyle& style         = ImGui::GetStyle();
-
-	ImVec2 line_remain   = ImGui::GetContentRegionAvail();
-
-	float  spacing_width = line_remain.x;
-	spacing_width -= ImGui::CalcTextSize( "Delete" ).x;
-	spacing_width -= style.FramePadding.x * 2;
-	spacing_width -= style.ItemSpacing.x;
-
-	spacing_width = MAX( -style.ItemSpacing.x, spacing_width );
-
-	ImGui::Dummy( { spacing_width, 0.f } );
-	ImGui::SameLine();
-
-	if ( ImGui::Button( "Delete" ) )
-	{
-		clip_remove_output( g_clip_data, g_clip_current_output );
-		replay_editor_reset();
-		return;
-	}
-
-	ImGui::Separator();
-
-	const ImVec2 name_text_size   = ImGui::CalcTextSize( "Name" );
-	const ImVec2 prefix_text_size = ImGui::CalcTextSize( "Prefix" );
-
-	float        avaliable_width  = size[ 0 ] - ( style.ItemSpacing.x * 2 );
-	float        name_bar_width   = ( avaliable_width - prefix_text_size.x );
-
-	name_bar_width -= style.ItemSpacing.x * 2;
-
-	ImGui::SetNextItemWidth( name_bar_width );
-
-	// display output video data
-	if ( ImGui::InputText( "Name", g_output_name_buf, 512 ) )
-	{
-		// lol
-		size_t name_len = strlen( g_output_name_buf );
-
-		char*  new_data = ch_realloc( g_clip_current_output->name, name_len + 1 );
-
-		if ( new_data )
-		{
-			g_clip_current_output->name = new_data;
-			memcpy( g_clip_current_output->name, g_output_name_buf, name_len * sizeof( char ) );
-			g_clip_current_output->name[ name_len ] = '\0';
-		}
-	}
-
-	// combo box to select prefix
-	char* current_prefix = nullptr;
-
-	if ( g_clip_current_output->prefix >= g_clip_data->prefix_count )
-	{
-		// reset to general profile
-		g_clip_current_output->prefix = 0;
-	}
-
-	current_prefix = g_clip_data->prefix[ g_clip_current_output->prefix ].name;
-
-	ImGui::SetNextItemWidth( name_bar_width );
-
-	if ( ImGui::BeginCombo( "Prefix", current_prefix ) )
-	{
-		for ( u32 i = 0; i < g_clip_data->prefix_count; i++ )
-		{
-			// if ( i == g_clip_current_output->prefix )
-			// 	continue;
-
-			if ( ImGui::Selectable( g_clip_data->prefix[ i ].name, i == g_clip_current_output->prefix ) )
-			{
-				g_clip_current_output->prefix = i;
-			}
-		}
-
-		ImGui::EndCombo();
-	}
 
 	// draw_preset_override_button( &g_clip_current_output->encode_overrides, "Edit Presets" );
 
@@ -1451,7 +1468,7 @@ void draw_replay_editor_window( int window_size[ 2 ] )
 
 	if ( ImGui::BeginTabBar( "##replay_tabs" ) )
 	{
-		if ( ImGui::BeginTabItem( "Replay Editor", nullptr, g_focus_replay_maker ? ImGuiTabItemFlags_SetSelected : 0 ) )
+		if ( ImGui::BeginTabItem( "Replay Editor" /*, nullptr, g_focus_replay_maker ? ImGuiTabItemFlags_SetSelected : 0*/ ) )
 		{
 			draw_replay_edit( element_size );
 			ImGui::EndTabItem();
@@ -1477,11 +1494,11 @@ void draw_replay_editor_window( int window_size[ 2 ] )
 			ImGui::EndTabItem();
 		}
 
-		if ( ImGui::BeginTabItem( "Folder View" ) )
-		{
-			draw_folder_view( element_size );
-			ImGui::EndTabItem();
-		}
+	//	if ( ImGui::BeginTabItem( "Folder View" ) )
+	//	{
+	//		draw_folder_view( element_size );
+	//		ImGui::EndTabItem();
+	//	}
 
 		if ( ImGui::BeginTabItem( "Style Editor" ) )
 		{

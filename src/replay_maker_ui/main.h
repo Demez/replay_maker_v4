@@ -2,6 +2,7 @@
 
 #include "util.h"
 #include "imgui.h"
+#include "clip/clip.h"
 
 #include "mpv/client.h"
 #include "mpv/render.h"
@@ -66,6 +67,11 @@ void                               draw_imgui_window( int window_size[ 2 ] );
 void                               draw_replay_editor_window( int window_size[ 2 ] );
 void                               draw_playback_controls( int window_size[ 2 ], bool draw_volume );
 
+void                               replay_editor_load_input( clip_output_video_t* output, u32 input_i );
+void                               replay_editor_reset();
+
+void                               draw_preset_override( clip_encode_override_t& override, bool edit );
+
 void                               enable_sidebar( bool enabled );
 
 // save encode presets and video prefixes
@@ -103,7 +109,8 @@ constexpr int                      DIVIDER_SIZE = 5;  // multiplied by 2
 // --------------------------------------------------------------------------------------------------------
 // Timeline
 
-void draw_timeline();
+void          timeline_reset();
+void          timeline_draw();
 
 extern ImVec2 g_timeline_size;
 extern ImVec2 g_timeline_pos;

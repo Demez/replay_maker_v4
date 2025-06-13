@@ -186,7 +186,7 @@ void draw_playback_controls( int size[ 2 ], bool draw_volume )
 	float        vol_bar_width   = vol_text_size.x * 3;
 	float        seek_bar_width  = ( avaliable_width - seek_text_size.x );
 
-	draw_timeline();
+	timeline_draw();
 
 #if 0
 	if ( draw_volume )
@@ -645,7 +645,7 @@ auto main( int argc, char* argv[] ) -> int
 
 	// calculate the size of the mpv window (what about DPI Scale here later?)
 	g_mpv_size[ 0 ] = g_window_size[ 0 ] - 600;  // replay editor/sidebar
-	g_mpv_size[ 1 ] = g_window_size[ 1 ] - 150;   // playback controls
+	g_mpv_size[ 1 ] = g_window_size[ 1 ] - 180;   // playback controls
 
 	// 2 imgui windows
 	if ( !win32_create_windows( g_window_size[ 0 ], g_window_size[ 1 ] ) )
