@@ -67,7 +67,7 @@ void draw_replay_info_menu_bar()
 
 			char*                 cwd      = sys_get_cwd();
 			nfdu8char_t*          out_path = nullptr;
-			nfdu8filteritem_t     filter   = { "replay maker videos", "json,json5,rmv" };
+			nfdu8filteritem_t     filter   = { "replay maker videos", "json5" };
 			nfdopendialogu8args_t args     = { 0 };
 
 			args.filterList                = &filter;
@@ -147,14 +147,14 @@ void draw_replay_info_menu_bar()
 
 			char*                 cwd          = sys_get_cwd();
 			nfdu8char_t*          out_path     = nullptr;
-			// nfdu8filteritem_t     filter   = { "video timestamps", "json,json5,rmv" };
-			nfdu8filteritem_t     filters[ 2 ] = { { "replay maker videos", "rmv" }, { "replay maker videos json5", "json5" } };
+			// nfdu8filteritem_t     filter   = { "video timestamps", "json,json5" };
+			nfdu8filteritem_t     filters[ 1 ] = { { "replay maker videos json5", "json5" } };
 			nfdsavedialogu8args_t args{};
 
 			args.defaultPath      = cwd;
 			args.defaultName      = videos_filename;
 			args.filterList       = filters;
-			args.filterCount      = 2;
+			args.filterCount      = 1;
 
 			nfdresult_t  result   = NFD_SaveDialogU8_With( &out_path, &args );
 
