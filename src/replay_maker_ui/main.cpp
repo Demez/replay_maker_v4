@@ -606,7 +606,7 @@ auto main( int argc, char* argv[] ) -> int
 	// https://learn.microsoft.com/en-us/cpp/c-runtime-library/reference/setlocale-wsetlocale?view=msvc-170#utf-8-support
 	// allows c ansi functions to use utf-8
 	// only works on Windows 10 version 1803 (10.0.17134.0) and above
-	setlocale( LC_ALL, ".UTF-8" );
+	// setlocale( LC_ALL, ".UTF-8" );
 
 	sys_init();
 
