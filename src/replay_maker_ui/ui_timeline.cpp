@@ -38,6 +38,26 @@ u32                         g_selected_section      = UINT32_MAX;
 bool                        g_timeline_marker_active[ 2 ]{};
 float                       g_timeline_marker_times[ 2 ]{};
 
+
+// ============================================================================
+// UNDO HISTORY DATA TO STORE
+// 
+// Timeline:
+// - Section Resizing
+// - Adding a section
+// - Deleting a section
+// - Adding a marker
+// - Moving a marker
+// - Deleting a marker
+// 
+// Clip List:
+// - Adding an output video
+// - Deleting an output video
+// - Adding a video entry
+// - Deleting a video entry
+// 
+
+
 static bool                 point_in_rect( ImVec2 point, ImVec2 min_size, ImVec2 max_size )
 {
 	// return point[ 0 ] >= min_size.left && point[ 0 ] <= rect.right && point[ 1 ] <= rect.bottom && point[ 1 ] >= rect.top;
@@ -187,10 +207,10 @@ void timeline_draw()
 	if ( duration )
 	{
 		timeline_marker_control( io, ImGuiKey_Q, 0 );
-		timeline_marker_control( io, ImGuiKey_W, 1 );
+		timeline_marker_control( io, ImGuiKey_E, 1 );
 
 		// Create section from markers, both markers don't need to be active, it will default to the start or end of the video
-		if ( ImGui::IsKeyPressed( ImGuiKey_E, false ) )
+		if ( ImGui::IsKeyPressed( ImGuiKey_R, false ) )
 		{
 			float start_time = g_timeline_marker_active[ 0 ] ? g_timeline_marker_times[ 0 ] : 0.f;
 			float end_time   = g_timeline_marker_active[ 1 ] ? g_timeline_marker_times[ 1 ] : duration;
