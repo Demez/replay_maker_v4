@@ -162,6 +162,10 @@ void draw_replay_info_menu_bar()
 			{
 				g_videos_file_path = util_strdup_r( g_videos_file_path, out_path );
 				save_videos();
+
+				// add this to recently opened
+				update_recently_opened( out_path );
+
 				NFD_FreePathU8( out_path );
 			}
 			else if ( result == NFD_ERROR )
