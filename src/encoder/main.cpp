@@ -431,19 +431,14 @@ auto main( int argc, char* argv[] ) -> int
 
 	sys_init();
 
-	size_t exe_dir_len         = 0;
-	char*  exe_dir             = sys_get_exe_folder( &exe_dir_len );
+	size_t exe_dir_len = 0;
+	char*  exe_dir     = sys_get_exe_folder( &exe_dir_len );
 
-	char   videos_path[ 4096 ] = { 0 };
+	g_video_files      = args_register_str( "", "File containing all the videos to encode", "--videos" );
+	g_output_dir       = args_register_str( "output4", "Output Directory", "--output" );
+	g_temp_video_dir   = args_register_str( "temp4", "Temp Video Directory", "--temp" );
 
-	memcpy( videos_path, exe_dir, exe_dir_len * sizeof( char ) );
-	strcat( videos_path, PATH_SEP_STR "test_video.json5" );
-
-	g_video_files    = args_register_str( videos_path, "File containing all the videos to encode", "--videos" );
-	g_output_dir     = args_register_str( "output4", "Output Directory", "--output" );
-	g_temp_video_dir = args_register_str( "temp4", "Temp Video Directory", "--temp" );
-
-	bool show_help   = args_register_bool( "Show help message", "--help" );
+	bool show_help     = args_register_bool( "Show help message", "--help" );
 	show_help |= args_register_bool( "Show help message", "-h" );
 	show_help |= args_register_bool( "Show help message", "-?" );
 
