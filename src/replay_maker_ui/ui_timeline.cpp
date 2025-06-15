@@ -107,7 +107,8 @@ void timeline_draw()
 
 	// if ( draw_tabs_and_sections )
 	{
-		ImGui::BeginDisabled( !draw_tabs_and_sections );
+		// ImGui::BeginDisabled( !draw_tabs_and_sections );
+		ImGui::BeginDisabled( !( g_clip_current_output && g_clip_current_input != UINT32_MAX ) );
 		// ImGui::SameLine();
 
 		if ( ImGui::Button( "Add Video Entry" ) )
