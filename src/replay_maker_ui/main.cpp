@@ -610,6 +610,12 @@ auto main( int argc, char* argv[] ) -> int
 
 	sys_init();
 
+	if ( !undo_history_init() )
+	{
+		printf( "Failed to allocate undo history system\n" );
+		return 1;
+	}
+
 	if ( NFD_Init() != NFD_OKAY )
 	{
 		printf( "Failed to Init NativeFileDialog\n" );
@@ -775,6 +781,8 @@ auto main( int argc, char* argv[] ) -> int
 
 	free( g_recently_opened );
 	free( g_recently_opened_path );
+
+	undo_history_shutdown();
 
 	return 0;
 }

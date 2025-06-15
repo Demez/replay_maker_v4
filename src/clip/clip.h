@@ -39,6 +39,7 @@ struct clip_time_range_t
 	float                  start;
 	float                  end;
 
+	// TODO: remove this, just makes things overly complicated
 	clip_encode_override_t encode_overrides;
 };
 

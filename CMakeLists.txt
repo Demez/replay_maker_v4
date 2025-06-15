@@ -169,6 +169,7 @@ set(
     src/replay_maker_ui/sys_win32_replay.cpp
     src/replay_maker_ui/ui_editor.cpp
     src/replay_maker_ui/ui_timeline.cpp
+    src/replay_maker_ui/undo.cpp
 
     src/imgui/imgui.cpp
     src/imgui/imgui_demo.cpp

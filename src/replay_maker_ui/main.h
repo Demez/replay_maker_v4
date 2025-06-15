@@ -116,8 +116,98 @@ extern ImVec2 g_timeline_size;
 extern ImVec2 g_timeline_pos;
 
 // --------------------------------------------------------------------------------------------------------
+// Undo System
 
 
+// UNDO HISTORY DATA TO STORE
+// 
+// Timeline:
+// - Section Resizing
+// - Adding a section
+// - Deleting a section
+// - Adding a marker
+// - Moving a marker
+// - Deleting a marker
+// 
+// Clip List:
+// - Adding an output video
+// - Deleting an output video
+// - Adding a video entry
+// - Deleting a video entry
+// 
+
+
+enum e_action
+{
+	e_action_invalid,
+
+	// e_action_timeline_section_add,
+	// e_action_timeline_section_delete,
+	// e_action_timeline_section_resize,
+	e_action_timeline_section_modify,
+	e_action_timeline_marker_modify,
+
+	e_action_clip_output_add,
+	e_action_clip_output_delete,
+	e_action_clip_output_rename,
+
+	e_action_clip_input_add,
+	e_action_clip_input_delete,
+
+	e_action_count,
+};
+
+
+struct clip_time_range_t;
+
+
+// Undo Action Structs
+struct undo_action_timeline_section_t
+{
+	u32                output_video;
+	u32                input_video;
+	u32                time_range_count;
+	clip_time_range_t* time_ranges;
+};
+
+
+struct undo_action_marker_modify_t
+{
+	bool  marker_active[ 2 ];
+	float marker_times[ 2 ];
+};
+
+
+struct undo_action_output_rename_t
+{
+	char* name;
+};
+
+
+struct undo_action_t
+{
+	e_action type;
+
+	union
+	{
+		undo_action_timeline_section_t section_modify;
+		undo_action_marker_modify_t    marker_modify;
+		undo_action_output_rename_t    output_rename;
+	};
+};
+
+
+bool           undo_history_init();
+void           undo_history_shutdown();
+
+// Returns a new undo_action_t pointer, where you can fill in your data for it there, do not store this pointer anywhere
+undo_action_t* undo_history_add_action( e_action type );
+
+void           undo_history_do_undo();
+void           undo_history_do_redo();
+
+
+// --------------------------------------------------------------------------------------------------------
 // mpv function pointer typedefs, cause im not compiling the mpv source just to link to it
 
 #define MPV_PTR( return_type, func, ... ) \

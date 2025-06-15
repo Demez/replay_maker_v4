@@ -365,12 +365,16 @@ LRESULT __stdcall win32_window_proc_mpv( HWND hwnd, UINT uMsg, WPARAM wParam, LP
 		{
 			if ( !g_fullscreen )
 				break;
+			
+			ImGui::SetWindowFocus( nullptr );
 
 			handle_mpv_keybind( wParam );
 			break;
 		}
 		case WM_LBUTTONDOWN:
 		{
+			ImGui::SetWindowFocus( nullptr );
+
 			win32_update_dividers();
 
 			if ( g_grabbed_divider_idx == -1 )

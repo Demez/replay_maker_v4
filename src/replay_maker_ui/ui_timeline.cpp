@@ -39,25 +39,6 @@ bool                        g_timeline_marker_active[ 2 ]{};
 float                       g_timeline_marker_times[ 2 ]{};
 
 
-// ============================================================================
-// UNDO HISTORY DATA TO STORE
-// 
-// Timeline:
-// - Section Resizing
-// - Adding a section
-// - Deleting a section
-// - Adding a marker
-// - Moving a marker
-// - Deleting a marker
-// 
-// Clip List:
-// - Adding an output video
-// - Deleting an output video
-// - Adding a video entry
-// - Deleting a video entry
-// 
-
-
 static bool                 point_in_rect( ImVec2 point, ImVec2 min_size, ImVec2 max_size )
 {
 	// return point[ 0 ] >= min_size.left && point[ 0 ] <= rect.right && point[ 1 ] <= rect.bottom && point[ 1 ] >= rect.top;
@@ -121,9 +102,13 @@ void timeline_marker_control( ImGuiIO& io, ImGuiKey key, int marker )
 
 void timeline_draw()
 {
-	if ( g_clip_current_output && g_clip_current_input != UINT32_MAX )
+	bool draw_tabs_and_sections = g_clip_current_output && g_clip_current_input != UINT32_MAX &&
+		( mpv_get_current_video() ? strcmp( g_clip_current_output->input[ g_clip_current_input ].path, mpv_get_current_video() ) == 0 : false );
+
+	// if ( draw_tabs_and_sections )
 	{
-		ImGui::SameLine();
+		ImGui::BeginDisabled( !draw_tabs_and_sections );
+		// ImGui::SameLine();
 
 		if ( ImGui::Button( "Add Video Entry" ) )
 		{
@@ -131,15 +116,6 @@ void timeline_draw()
 			replay_editor_load_input( g_clip_current_output, i );
 		}
 
-		ImGui::SameLine();
-		ImGui::Spacing();
-		ImGui::SameLine();
-
-		clip_input_video_t& current_input = g_clip_current_output->input[ g_clip_current_input ];
-		draw_preset_override( current_input.encode_overrides, true );
-
-		ImGui::SameLine();
-		ImGui::Spacing();
 		ImGui::SameLine();
 
 		if ( ImGui::Button( "Delete Video Entry" ) )
@@ -151,6 +127,16 @@ void timeline_draw()
 
 			g_clip_current_input = g_clip_current_output->input_count > 0 ? 0 : UINT32_MAX;
 		}
+
+		ImGui::EndDisabled();
+
+		if ( draw_tabs_and_sections )
+		{
+			ImGui::SameLine();
+
+			clip_input_video_t& current_input = g_clip_current_output->input[ g_clip_current_input ];
+			draw_preset_override( current_input.encode_overrides, true );
+		}
 	}
 
 	ImGuiIO&    io           = ImGui::GetIO();
@@ -161,13 +147,19 @@ void timeline_draw()
 	double      duration     = 0;
 	p_mpv_get_property( g_mpv, "duration", MPV_FORMAT_DOUBLE, &duration );
 
+	// TODO: make sure no inputs get captured if focused in a drop down or typing in a text box
+
+	bool        capture_inputs = !io.WantTextInput;
+
+	// test WantCaptureMouseUnlessPopupClose?
+
 	// ------------------------------------------------------------------------------------------
 	// Draw tabs on top for which encode preset currently in use and current input video?
 	float       text_height  = ImGui::CalcTextSize( "TEMP" ).y;
 
 	if ( ImGui::BeginTabBar( "##timeline_tabs" ) )
 	{
-		if ( g_clip_current_output )
+		if ( draw_tabs_and_sections )
 		{
 			for ( u32 input_i = 0; input_i < g_clip_current_output->input_count; input_i++ )
 			{
@@ -204,7 +196,7 @@ void timeline_draw()
 	// ------------------------------------------------------------------------------------------
 	// Marker controls for creating new sections (Q and W, E to create as a section and clear markers)
 
-	if ( duration )
+	if ( duration && capture_inputs )
 	{
 		timeline_marker_control( io, ImGuiKey_Q, 0 );
 		timeline_marker_control( io, ImGuiKey_E, 1 );
@@ -237,7 +229,7 @@ void timeline_draw()
 	// ------------------------------------------------------------------------------------------
 	// Use [ and ] keys to jump to start and end points of each section and start/end of video
 	
-	if ( duration && g_clip_current_output && g_clip_current_input != UINT32_MAX )
+	if ( duration && draw_tabs_and_sections && capture_inputs )
 	{
 		if ( ImGui::IsKeyPressed( ImGuiKey_A, false ) )
 		{
@@ -253,10 +245,10 @@ void timeline_draw()
 			{
 				clip_time_range_t& time_range = current_input.time_range[ time_i ];
 
-				if ( /*time_range.start < time_pos + 0.05 ||*/ time_range.start < time_pos - 0.05 )
+				if ( /*time_range.start < time_pos + 0.05 ||*/ time_range.start < time_pos - 0.15 )
 					closest_time = std::max( closest_time, time_range.start );
 
-				if ( /*time_range.end < time_pos + 0.05 ||*/ time_range.end < time_pos - 0.05 )
+				if ( /*time_range.end < time_pos + 0.05 ||*/ time_range.end < time_pos - 0.15 )
 					closest_time = std::max( closest_time, time_range.end );
 			}
 
@@ -279,10 +271,10 @@ void timeline_draw()
 			{
 				clip_time_range_t& time_range = current_input.time_range[ time_i ];
 
-				if ( time_range.start > time_pos + 0.05 )
+				if ( time_range.start > time_pos + 0.15 )
 					closest_time = std::min( closest_time, time_range.start );
 
-				if ( time_range.end > time_pos + 0.05 )
+				if ( time_range.end > time_pos + 0.15 )
 					closest_time = std::min( closest_time, time_range.end );
 			}
 
@@ -359,7 +351,7 @@ void timeline_draw()
 
 	// static std::unordered_set< u32 > selected_sections;
 
-	if ( g_clip_current_output && g_clip_current_input != UINT32_MAX )
+	if ( draw_tabs_and_sections )
 	{
 		clip_input_video_t& current_input = g_clip_current_output->input[ g_clip_current_input ];
 
@@ -394,6 +386,9 @@ void timeline_draw()
 			// draw grab points
 			//draw_list->AddRectFilled( ImVec2( section_pos_left, window_area_min.y ), ImVec2( section_pos_left + 16, window_area_max.y ), SECTION_COLOR_BORDER );
 			//draw_list->AddRectFilled( ImVec2( section_pos_right - 16, window_area_min.y ), ImVec2( section_pos_right, window_area_max.y ), SECTION_COLOR_BORDER );
+
+			// if ( !capture_inputs )
+			// 	continue;
 
 			// check if we want to select this one
 			if ( io.MouseClicked[ 0 ] && point_in_rect( mouse_pos, ImVec2( section_pos_left, window_area_min.y ), ImVec2( section_pos_right, window_area_max.y ) ) )
@@ -505,7 +500,7 @@ void timeline_draw()
 	static float new_seek_percent = 0.f;
 	static float new_time_pos     = 0.f;
 
-	if ( duration /*&& !section_resize*/ )
+	if ( duration && capture_inputs /*&& !section_resize*/ )
 	{
 		if ( mouse_hovered && io.MouseClicked[ 0 ] )
 		{
@@ -544,7 +539,7 @@ void timeline_draw()
 	// ------------------------------------------------------------------------------------------
 	// Key binding controls
 
-	if ( g_selected_section != UINT32_MAX && ImGui::IsKeyPressed( ImGuiKey_Delete ) )
+	if ( capture_inputs && g_selected_section != UINT32_MAX && ImGui::IsKeyPressed( ImGuiKey_Delete ) )
 	{
 		clip_remove_time_range( g_clip_current_output, g_clip_current_input, g_selected_section );
 		g_selected_section = UINT32_MAX;
