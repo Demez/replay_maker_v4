@@ -24,7 +24,7 @@ foreach( OUTPUTCONFIG ${CMAKE_CONFIGURATION_TYPES} )
     set( CMAKE_RUNTIME_OUTPUT_DIRECTORY_${OUTPUTCONFIG} ${PROJ_OUT} )
     set( CMAKE_LIBRARY_OUTPUT_DIRECTORY_${OUTPUTCONFIG} ${PROJ_OUT} )
     set( CMAKE_ARCHIVE_OUTPUT_DIRECTORY_${OUTPUTCONFIG} ${PROJ_OUT} )
-endforeach( OUTPUTCONFIG CMAKE_CONFIGURATION_TYPES )
+endforeach( OUTPUTCONFIG ${CMAKE_CONFIGURATION_TYPES} )
 
 set_property( GLOBAL PROPERTY PREFIX "" )
 set_property( GLOBAL PROPERTY USE_FOLDERS ON )
@@ -207,6 +207,10 @@ source_group(
 # native file dialog
 target_link_libraries( replay_maker PRIVATE nfd )
 target_link_directories( replay_maker PRIVATE "nativefiledialog/build/src" )
+
+foreach( OUTPUT_CONFIG ${CMAKE_CONFIGURATION_TYPES} )
+	target_link_directories( replay_maker PRIVATE "nativefiledialog/build/src/${OUTPUT_CONFIG}" )
+endforeach( OUTPUT_CONFIG ${CMAKE_CONFIGURATION_TYPES} )
 
 target_include_directories(
 	replay_maker PRIVATE
