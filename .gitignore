@@ -5,3 +5,12 @@ out/*
 *.so
 *.a
 *.lib
+
+nativefiledialog/build/*
+
+.idea/*
+cmake-build-debug-visual-studio/*
+cmake-build-release-visual-studio/*
+cmake-build-relwithdebinfo-visual-studio/*
+
+zipped_builds/*
