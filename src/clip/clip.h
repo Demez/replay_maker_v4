@@ -24,11 +24,13 @@ enum e_encode_preset
 // controls how to use parts of videos in a encode preset
 struct clip_encode_override_t
 {
+	// TODO: implement this! this will only be allowed with one encode preset being used, and still needs a preset active to override
 //	char* ffmpeg_cmd;  // overrides the encode preset's ffmpeg cmd if not nullptr
 
 	u32*  presets;
 	u32   presets_count;
 
+	// TODO: REMOVE THIS
 	// if true, the presets array will be set to exclude mode instead of
 	bool  preset_exclude;
 };

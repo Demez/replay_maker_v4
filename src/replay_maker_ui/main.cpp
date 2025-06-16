@@ -357,6 +357,67 @@ void draw_playback_controls( int size[ 2 ], bool draw_volume )
 }
 
 
+#define MPV_CMD( ... )                                              \
+{                                                               \
+const char* cmd[]   = { __VA_ARGS__, NULL };                \
+int         cmd_ret = p_mpv_command_async( g_mpv, 0, cmd ); \
+if ( cmd_ret != 0 ) \
+printf( "MPV CMD Error: %d", cmd_ret ); \
+}
+
+
+constexpr const char* MONITOR_ZOOM_HACK     = "1.1";
+constexpr const char* NEW_MONITOR_ZOOM_HACK = "1.0";
+
+
+void handle_keybinds()
+{
+	if ( ImGui::IsKeyPressed( ImGuiKey_Tab, false ) )
+	{
+		enable_sidebar( !g_show_sidebar );
+	}
+	else if ( ImGui::IsKeyPressed( ImGuiKey_F, false ) )
+	{
+		sys_mpv_full_window_toggle();
+	}
+
+	// MPV Keybinds
+	else if ( ImGui::IsKeyPressed( ImGuiKey_Space, false ) )
+	{
+		mpv_cmd_toggle_playback();
+	}
+	else if ( ImGui::IsKeyPressed( ImGuiKey_Keypad0, false ) )
+	{
+		MPV_CMD( "set", "video-zoom", "0" );
+		MPV_CMD( "set", "video-pan-x", "0" );
+		MPV_CMD( "set", "video-pan-y", "0" );
+		MPV_CMD( "set", "vf", "crop" );
+	}
+	else if ( ImGui::IsKeyPressed( ImGuiKey_Keypad8, false ) )
+	{
+		// MPV_CMD( "set", "video-zoom", MONITOR_ZOOM_HACK );
+		// MPV_CMD( "set", "video-pan-x", "0.25" );
+		MPV_CMD( "set", "vf", "crop=1920:1080:0:360" );
+	}
+	else if ( ImGui::IsKeyPressed( ImGuiKey_Keypad9, false ) )
+	{
+		// MPV_CMD( "set", "video-zoom", "1.0" );
+		// MPV_CMD( "set", "video-pan-x", "-0.25" );
+		MPV_CMD( "set", "vf", "crop=2560:1440:1920:0" );
+	}
+	else if ( ImGui::IsKeyPressed( ImGuiKey_Keypad2, false ) )
+	{
+		MPV_CMD( "set", "vf", "crop=1920:1080:0:0" );
+	}
+	else if ( ImGui::IsKeyPressed( ImGuiKey_Keypad3, false ) )
+	{
+		//MPV_CMD( "set", "video-zoom", MONITOR_ZOOM_HACK );
+		//MPV_CMD( "set", "video-pan-x", "-0.25" );
+		MPV_CMD( "set", "vf", "crop=1920:1080:1920:0" );
+	}
+}
+
+
 void draw_imgui_window( int window_size[ 2 ] )
 {
 	//ImGui::ShowDemoWindow();

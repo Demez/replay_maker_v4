@@ -32,6 +32,10 @@ bool                               win32_create_windows( int width, int height )
 void                               win32_exit();
 void                               win32_run();
 
+void                               sys_mpv_full_window_enter();
+void                               sys_mpv_full_window_exit();
+void                               sys_mpv_full_window_toggle();
+
 // --------------------------------------------------------------------------------------------------------
 // MPV
 
@@ -56,6 +60,8 @@ extern mpv_render_context*         g_mpv_gl;
 extern bool                        g_wakeup_on_mpv_render_update, g_wakeup_on_mpv_events;
 
 // --------------------------------------------------------------------------------------------------------
+
+void                               handle_keybinds();
 
 void                               calc_imgui_window_size( int index, ivec2& size );
 void                               calc_playback_window_size( ivec2& size );

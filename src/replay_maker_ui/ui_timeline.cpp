@@ -1,14 +1,6 @@
 #include "main.h"
 #include "clip/clip.h"
-
 #include "imgui.h"
-
-// native file dialog
-// https://github.com/btzy/nativefiledialog-extended
-#include "nfd.h"
-
-#include <algorithm>
-#include <unordered_set>
 
 
 constexpr int               TIMELINE_HEIGHT      = 40;
@@ -111,7 +103,7 @@ void timeline_draw()
 		ImGui::BeginDisabled( !( g_clip_current_output && g_clip_current_input != UINT32_MAX ) );
 		// ImGui::SameLine();
 
-		if ( ImGui::Button( "Add Video Entry" ) )
+		if ( ImGui::Button( "Add Video" ) )
 		{
 			u32 i = clip_add_input( g_clip_current_output, mpv_get_current_video() );
 			replay_editor_load_input( g_clip_current_output, i );
@@ -119,7 +111,7 @@ void timeline_draw()
 
 		ImGui::SameLine();
 
-		if ( ImGui::Button( "Delete Video Entry" ) )
+		if ( ImGui::Button( "Delete Video" ) )
 		{
 			clip_remove_input( g_clip_current_output, g_clip_current_input );
 			timeline_reset();
@@ -349,8 +341,6 @@ void timeline_draw()
 	static float section_resize_seek_time = 0.f;
 
 	static bool  just_selected_section = false;
-
-	// static std::unordered_set< u32 > selected_sections;
 
 	if ( draw_tabs_and_sections )
 	{

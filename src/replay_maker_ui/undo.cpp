@@ -1,7 +1,5 @@
 #include "main.h"
 
-#include <vector>
-
 
 constexpr size_t      UNDO_HISTORY_MAX = 64;
 

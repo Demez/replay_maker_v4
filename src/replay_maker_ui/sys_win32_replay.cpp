@@ -41,15 +41,10 @@ bool                          g_main_window_focused = false;
 static bool                   g_pause_window_events = false;
 
 void                          win32_render_imgui();
-void                          win32_render_divider( u32 index );
 int                           win32_mouse_in_divider();  // returns divider index
 void                          win32_update_dividers();
 void                          win32_on_resize();
 void                          win32_render_all();
-
-void                          win32_mpv_full_window_enter();
-void                          win32_mpv_full_window_exit();
-void                          win32_mpv_full_window_toggle();
 
 bool                          win32_register_drag_drop( HWND window );
 void                          win32_remove_drag_drop( HWND window );
@@ -65,90 +60,12 @@ void                          sys_pause_window_events( bool paused )
 }
 
 
-// ----------------------------------------------------
-
-
-#define MPV_CMD( ... )                                              \
-	{                                                               \
-		const char* cmd[]   = { __VA_ARGS__, NULL };                \
-		int         cmd_ret = p_mpv_command_async( g_mpv, 0, cmd ); \
-		if ( cmd_ret != 0 ) \
-			printf( "MPV CMD Error: %d", cmd_ret ); \
-	}
-
-
-constexpr const char* MONITOR_ZOOM_HACK     = "1.1";
-constexpr const char* NEW_MONITOR_ZOOM_HACK = "1.0";
-
-
-// mpv key binds list
-void handle_mpv_keybind( int key )
-{
-	switch ( key )
-	{
-		case ' ':
-		{
-			mpv_cmd_toggle_playback();
-			break;
-		}
-		case '\'':
-		case '\t':
-		//case VK_SUBTRACT: // numpad -
-		case VK_ADD:      // numpad +
-		{
-			enable_sidebar( !g_show_sidebar );
-			break;
-		}
-		case 'F':
-		case VK_NUMPAD4:
-		{
-			win32_mpv_full_window_toggle();
-			break;
-		}
-		case VK_NUMPAD0:
-		{
-			MPV_CMD( "set", "video-zoom", "0" );
-			MPV_CMD( "set", "video-pan-x", "0" );
-			MPV_CMD( "set", "video-pan-y", "0" );
-			MPV_CMD( "set", "vf", "crop" );
-			break;
-		}
-		case VK_NUMPAD8:
-		{
-			// MPV_CMD( "set", "video-zoom", MONITOR_ZOOM_HACK );
-			// MPV_CMD( "set", "video-pan-x", "0.25" );
-			MPV_CMD( "set", "vf", "crop=1920:1080:0:360" );
-			break;
-		}
-		case VK_NUMPAD9:
-		{
-			// MPV_CMD( "set", "video-zoom", "1.0" );
-			// MPV_CMD( "set", "video-pan-x", "-0.25" );
-			MPV_CMD( "set", "vf", "crop=2560:1440:1920:0" );
-			break;
-		}
-		case VK_NUMPAD2:
-		{
-			MPV_CMD( "set", "vf", "crop=1920:1080:0:0" );
-			break;
-		}
-		case VK_NUMPAD3:
-		{
-			//MPV_CMD( "set", "video-zoom", MONITOR_ZOOM_HACK );
-			//MPV_CMD( "set", "video-pan-x", "-0.25" );
-			MPV_CMD( "set", "vf", "crop=1920:1080:1920:0" );
-			break;
-		}
-	}
-}
-
-
 static bool  g_fullscreen   = false;
 static ivec2 g_old_mpv_size;
 static ivec2 g_old_window_size;
 
 
-void win32_mpv_full_window_enter()
+void sys_mpv_full_window_enter()
 {
 	g_fullscreen = true;
 
@@ -171,7 +88,7 @@ void win32_mpv_full_window_enter()
 }
 
 
-void win32_mpv_full_window_exit()
+void sys_mpv_full_window_exit()
 {
 	g_fullscreen = false;
 	
@@ -194,15 +111,15 @@ void win32_mpv_full_window_exit()
 }
 
 
-void win32_mpv_full_window_toggle()
+void sys_mpv_full_window_toggle()
 {
 	if ( !g_fullscreen )
 	{
-		win32_mpv_full_window_enter();
+		sys_mpv_full_window_enter();
 	}
 	else
 	{
-		win32_mpv_full_window_exit();
+		sys_mpv_full_window_exit();
 	}
 }
 
@@ -288,13 +205,13 @@ LRESULT __stdcall win32_window_proc_main( HWND hwnd, UINT uMsg, WPARAM wParam, L
 		{
 			ImGuiIO& io = ImGui::GetIO();
 
-			if ( io.WantCaptureKeyboard || io.WantTextInput )
+			//if ( io.WantCaptureKeyboard || io.WantTextInput )
 			{
-				ImGui_ImplWin32_WndProcHandler( hwnd, uMsg, wParam, lParam );
+				// ImGui_ImplWin32_WndProcHandler( hwnd, uMsg, wParam, lParam );
 			}
-			else if ( uMsg == WM_KEYDOWN )
+			//else if ( uMsg == WM_KEYDOWN )
 			{
-				handle_mpv_keybind( wParam );
+				// handle_mpv_keybind( wParam );
 			}
 
 			break;
@@ -368,7 +285,7 @@ LRESULT __stdcall win32_window_proc_mpv( HWND hwnd, UINT uMsg, WPARAM wParam, LP
 			
 			ImGui::SetWindowFocus( nullptr );
 
-			handle_mpv_keybind( wParam );
+			// handle_mpv_keybind( wParam );
 			break;
 		}
 		case WM_LBUTTONDOWN:
@@ -484,74 +401,8 @@ static bool create_gl_context( HWND window )
 }
 
 
-int g_win32_color_index[ 3 ] = {
-	FOREGROUND_RED,
-	FOREGROUND_GREEN,
-	FOREGROUND_BLUE,
-};
-
-
-int win32_parse_color( int rgb[ 3 ] )
-{
-	int final_color = 0;
-
-	for ( int i = 0; i < 3; i++ )
-	{
-		if ( rgb[ i ] == 0 )
-			continue;
-
-		final_color |= g_win32_color_index[ i ];
-	}
-
-	// check intensity by getting the max value
-	// int max_color = MAX( MAX( rgb[ 0 ], rgb[ 1 ] ), rgb[ 2 ] );
-	int max_color = ( rgb[ 0 ] + rgb[ 1 ] + rgb[ 2 ] ) / 3;
-
-	// if ( max_color > 7 )
-	// 	final_color |= FOREGROUND_INTENSITY;
-
-	int count   = 0;
-	int average_added = 0;
-	
-	// ^for ( int i = 0; i < 3; i++ )
-	// ^{
-	// ^	if ( rgb[ i ] > 0 )
-	// ^	{
-	// ^		average_added += rgb[ i ];
-	// ^	}
-	// ^}
-	// ^
-	// ^int average = average_added / count;
-	// ^
-	// ^if ( average > 7 )
-	// ^	final_color |= FOREGROUND_INTENSITY;
-
-	return final_color;
-}
-
-
 bool win32_create_windows( int width, int height )
 {
-//	HANDLE con_out = GetStdHandle( STD_OUTPUT_HANDLE );
-//
-//	for ( int r = 0; r < 0xF; r++ )
-//	{
-//		for ( int g = 0; g < 0xF; g++ )
-//		{
-//			for ( int b = 0; b < 0xF; b++ )
-//			{
-//				int rgb[ 3 ]          = { r, g, b };
-//				int win32_color_flags = win32_parse_color( rgb );
-//
-//				SetConsoleTextAttribute( con_out, win32_color_flags );
-//				printf( "COLOR TEST - %x %x %x - %d %d %d\n", r, g, b, r, g, b );
-//			}
-//		}
-//	}
-//
-//	SetConsoleTextAttribute( con_out, FOREGROUND_RED | FOREGROUND_GREEN | FOREGROUND_BLUE );
-
-
 	if ( OleInitialize( NULL ) != S_OK )
 	{
 		printf( "Plat_Init(): Failed to Initialize Ole\n" );
@@ -687,26 +538,11 @@ void win32_exit()
 }
 
 
-void win32_render_divider( u32 index )
+void win32_imgui_update_fullscreen()
 {
-//	RECT main_window_rect;
-//	GetClientRect( (HWND)g_main_window, &main_window_rect );
-//
-//	int main_width  = main_window_rect.right - main_window_rect.left;
-//	int main_height = main_window_rect.bottom - main_window_rect.top;
-//
-//	// vertical divider
-//	if ( index == 0 )
-//	{
-//		// video controls divider
-//		SetWindowPos( (HWND)g_imgui_window_dividers[ index ], HWND_TOP, 0, g_mpv_size[ 1 ], main_width, DIVIDER_SIZE, SWP_NOCOPYBITS | SWP_NOSENDCHANGING | SWP_NOZORDER | SWP_NOACTIVATE );
-//	}
-//	// horizontal divider
-//	else if ( index == 1 )
-//	{
-//		// replay info divider
-//		SetWindowPos( (HWND)g_imgui_window_dividers[ index ], HWND_TOP, g_mpv_size[ 0 ], 0, DIVIDER_SIZE, g_mpv_size[ 1 ], SWP_NOCOPYBITS | SWP_NOSENDCHANGING | SWP_NOZORDER | SWP_NOACTIVATE );
-//	}
+	ImGui_ImplWin32_NewFrame();
+	ImGui::NewFrame();
+	ImGui::EndFrame();
 }
 
 
@@ -848,25 +684,6 @@ int win32_mouse_in_divider()
 
 void win32_move_divider( u32 index )
 {
-//	ImGuiIO& io = ImGui::GetIO();
-//
-//	if ( index == 0 )
-//	{
-//		io.ConfigFlags |= ImGuiConfigFlags_NoMouseCursorChange | ImGuiConfigFlags_NoMouse;
-//		SetCursor( g_cursor_resize_v );
-//	}
-//	else if ( index == 1 )
-//	{
-//		io.ConfigFlags |= ImGuiConfigFlags_NoMouseCursorChange | ImGuiConfigFlags_NoMouse;
-//		SetCursor( g_cursor_resize_h );
-//	}
-//	else
-//	{
-//		io.ConfigFlags &= ~( ImGuiConfigFlags_NoMouseCursorChange | ImGuiConfigFlags_NoMouse );
-//		ImGui::SetMouseCursor( ImGuiMouseCursor_Arrow );
-//		SetCursor( g_cursor_default );
-//	}
-
 	// check if we released the key, we could release it outside the window mid drag, as it lags behind
 	if ( ( GetKeyState( VK_LBUTTON ) & 0x8000 ) == 0 )
 	{
@@ -906,31 +723,6 @@ void win32_move_divider( u32 index )
 
 void win32_update_dividers()
 {
-#if 0
-	ImGuiIO& io = ImGui::GetIO();
-
-	if ( g_grabbed_divider_idx != -1 )
-	{
-		win32_move_divider( g_grabbed_divider_idx );
-
-		io.ConfigFlags &= ~( ImGuiConfigFlags_NoMouseCursorChange | ImGuiConfigFlags_NoMouse );
-		ImGui::SetMouseCursor( ImGuiMouseCursor_Arrow );
-		SetCursor( g_cursor_default );
-
-		return;
-	}
-
-	int div_index = win32_mouse_in_divider();
-
-	if ( div_index < 0 )
-	{
-		io.ConfigFlags &= ~( ImGuiConfigFlags_NoMouseCursorChange | ImGuiConfigFlags_NoMouse );
-		ImGui::SetMouseCursor( ImGuiMouseCursor_Arrow );
-		SetCursor( g_cursor_default );
-	}
-
-	win32_move_divider( div_index );
-#else
 	//if ( !g_mouse_in_window )
 	//	return;
 
@@ -993,7 +785,6 @@ void win32_update_dividers()
 	}
 
 	last_frame_left_click = left_click;
-#endif
 }
 
 
@@ -1021,6 +812,7 @@ void win32_run()
 		if ( !g_running )
 			break;
 
+		// called so mpv doesn't get flooded with too many events, and becomes unresponsive
 		mpv_event* event = p_mpv_wait_event( g_mpv, 0.01f );
 
 		// is the window minimized
@@ -1032,18 +824,10 @@ void win32_run()
 
 		if ( !g_fullscreen )
 		{
-			//win32_update_dividers();
-
 			if ( g_grabbed_divider_idx != -1 )
 			{
 				win32_move_divider( g_grabbed_divider_idx );
 			}
-
-			// update window dividers
-			//for ( u32 i = 0; i < g_imgui_window_count; i++ )
-			//{
-			//	win32_render_divider( i );
-			//}
 		}
 		else
 		{
@@ -1051,10 +835,16 @@ void win32_run()
 		}
 
 		// run imgui windows
-		if ( !g_fullscreen )
+		if ( g_fullscreen )
+		{
+			win32_imgui_update_fullscreen();
+		}
+		else
 		{
 			win32_render_imgui();
 		}
+
+		handle_keybinds();
 	}
 }
 
