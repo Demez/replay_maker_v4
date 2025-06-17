@@ -349,15 +349,6 @@ void draw_replay_edit_basic_info( int size[ 2 ] )
 
 	ImGui::SameLine();
 
-	if ( ImGui::Button( "Add Entry" ) )
-	{
-		u32 i = clip_add_input( g_clip_current_output, mpv_get_current_video() );
-
-		replay_editor_load_input( g_clip_current_output, i );
-	}
-
-	ImGui::SameLine();
-
 	ImGuiStyle& style         = ImGui::GetStyle();
 
 	ImVec2      line_remain   = ImGui::GetContentRegionAvail();
@@ -438,8 +429,31 @@ void draw_replay_edit_basic_info( int size[ 2 ] )
 }
 
 
-void draw_replay_list_entry( u64& imgui_id, u32 out_i, char* search_box, u32 prefix_search, bool collapse_all )
+struct clip_reorder_drag_t
 {
+	bool active;
+	bool just_selected;
+	u64  clip_id;
+	u64  target_id;  // inserts it at this position, shifting everything down after it
+};
+
+
+clip_reorder_drag_t g_clip_reorder_drag{};
+
+static ImVec2 mouse_pos_diff{};
+
+void draw_replay_list_entry( u64& imgui_id, u32 out_i, char* search_box, u32 prefix_search, bool collapse_all, bool drag_preview )
+{
+	ImVec2 cursor_screen_pos = ImGui::GetCursorScreenPos();
+	ImVec2 cursor_pos        = ImGui::GetCursorPos();
+	ImVec2 mouse_pos         = ImGui::GetMousePos();
+
+	ImGuiStyle& style        = ImGui::GetStyle();
+
+	ImDrawList* draw_list = ImGui::GetWindowDrawList();
+
+	drag_preview = g_clip_reorder_drag.active && out_i == g_clip_reorder_drag.clip_id;
+
 	clip_output_video_t& output = g_clip_data->output[ out_i ];
 	clip_prefix_t&       prefix = g_clip_data->prefix[ output.prefix ];
 
@@ -450,6 +464,137 @@ void draw_replay_list_entry( u64& imgui_id, u32 out_i, char* search_box, u32 pre
 	if ( search_box[ 0 ] != '\0' )
 		if ( !strcasestr( output.name, search_box ) )
 			return;
+
+	ImVec2 drag_text_size = ImGui::CalcTextSize( "--" );
+
+	float entry_height = drag_text_size.y + ( style.FramePadding.y * 2 );
+	float entry_height_spaced = drag_text_size.y + style.ItemSpacing.y;
+
+
+	#if 0
+	if ( g_clip_reorder_drag.active )
+	{
+		// check if point is in rect here
+		float entry_height_half = ( entry_height + style.ItemSpacing.y ) * 0.5f;
+		// ImVec2 insert_area_min( cursor_screen_pos.x, ( cursor_screen_pos.y - entry_height_half ) + 2 );
+		ImVec2 insert_area_min( cursor_screen_pos.x, cursor_screen_pos.y + 2 );
+		// ImVec2 insert_area_max( cursor_screen_pos.x + drag_text_size.x + ( style.FramePadding.x * 2 ), ( cursor_screen_pos.y + entry_height_half ) - 2 );
+		ImVec2 insert_area_max( cursor_screen_pos.x + drag_text_size.x + ( style.FramePadding.x * 2 ), ( cursor_screen_pos.y + entry_height ) - 2 );
+
+		draw_list->AddRectFilled( insert_area_min, insert_area_max, ImColor( 180, 0, 160 ) );
+
+		char temp_test[ 8 ]{};
+		snprintf( temp_test, 8, "%d", out_i );
+		draw_list->AddText( insert_area_min, ImColor( 255, 255, 255 ),  temp_test );
+
+		if ( point_in_rect( mouse_pos, insert_area_min, insert_area_max ) )
+		{
+			// move the cursor down a bit
+			if ( out_i < g_clip_reorder_drag.clip_id )
+			{
+				cursor_screen_pos = ImGui::GetCursorScreenPos();
+				cursor_pos        = ImGui::GetCursorPos();
+				mouse_pos         = ImGui::GetMousePos();
+
+				ImGui::SetCursorScreenPos( ImVec2( cursor_screen_pos.x, cursor_screen_pos.y + ( entry_height + style.ItemSpacing.y ) ) );
+			}
+			else if ( out_i > g_clip_reorder_drag.clip_id )
+			{
+				ImGui::SetCursorScreenPos( ImVec2( cursor_screen_pos.x, cursor_screen_pos.y + entry_height + style.ItemSpacing.y ) );
+
+				cursor_screen_pos = ImGui::GetCursorScreenPos();
+				cursor_pos        = ImGui::GetCursorPos();
+				mouse_pos         = ImGui::GetMousePos();
+			}
+			// ImGui::SetCursorScreenPos( ImVec2( cursor_screen_pos.x, cursor_screen_pos.y + entry_height_half ) );
+
+
+			g_clip_reorder_drag.target_id = out_i;
+		}
+	}
+	#endif
+
+	if ( g_clip_reorder_drag.active )
+	{
+		// ImGui::SetCursorPos( ImVec2( cursor_pos.x, cursor_pos.y + entry_height + style.ItemSpacing.y ) );
+
+
+		if ( out_i == g_clip_reorder_drag.clip_id )
+		{
+			// ImGui::SetCursorPos( ImVec2( cursor_pos.x, cursor_pos.y + ( 4 * ( entry_height + style.ItemSpacing.y ) ) ) );
+			// ImGui::Separator();
+		}
+		else if ( out_i == g_clip_reorder_drag.target_id )
+		{
+			// ImGui::SetCursorPos( ImVec2( cursor_pos.x, cursor_pos.y + ( 1 * ( entry_height + style.ItemSpacing.y ) ) ) );
+			// ImGui::Separator();
+		}
+
+		// current clip is higher index than the drag clip, but also below the target, don't move this?
+		if ( out_i > g_clip_reorder_drag.clip_id && out_i < g_clip_reorder_drag.target_id )
+		{
+			// ImGui::SetCursorPos( ImVec2( cursor_pos.x, cursor_pos.y + ( 1 * ( entry_height  + style.ItemSpacing.y ) ) ) );
+		}
+
+		if ( out_i > g_clip_reorder_drag.clip_id && out_i < g_clip_reorder_drag.target_id )
+		{
+			// ImGui::SetCursorPos( ImVec2( cursor_pos.x, cursor_pos.y - ( 0 * ( entry_height  + style.ItemSpacing.y ) ) ) );
+		}
+
+		// if ( out_i < g_clip_reorder_drag.target_id )
+		// 	ImGui::SetCursorPos( ImVec2( cursor_pos.x, cursor_pos.y - ( 0 * ( entry_height  + style.ItemSpacing.y ) ) ) );
+		// else if ( out_i > g_clip_reorder_drag.target_id )
+		// 	ImGui::SetCursorPos( ImVec2( cursor_pos.x, cursor_pos.y ) );
+	}
+
+	if ( drag_preview )
+	{
+		//ImGui::BeginDisabled();
+		// ImGui::SetCursorScreenPos( ImVec2( cursor_screen_pos.x, mouse_pos.y + mouse_pos_diff.y ) );
+		// ImGui::SetCursorScreenPos( ImVec2( cursor_screen_pos.x, mouse_pos.y + mouse_pos_diff.y ) );
+	}
+	// else
+	// if ( !drag_preview )
+	{
+		//ImGui::PushID( imgui_id++ );
+		// if ( ImGui::Selectable( "DRAG", g_clip_reorder_drag.active && out_i == g_clip_reorder_drag.clip_id ) )
+		// ImGui::TextUnformatted( "--" );
+
+		if ( !g_clip_reorder_drag.active || out_i == g_clip_reorder_drag.clip_id )
+		{
+			ImVec2 drag_pos_min( cursor_screen_pos.x, cursor_screen_pos.y );
+			ImVec2 drag_pos_max( cursor_screen_pos.x + drag_text_size.x + ( style.FramePadding.x * 2 ), cursor_screen_pos.y + drag_text_size.y + ( style.FramePadding.y * 2 ) );
+
+			if ( ImGui::IsMouseClicked( ImGuiMouseButton_Left ) && point_in_rect( mouse_pos, drag_pos_min, drag_pos_max ) )
+			{
+				draw_list->AddRectFilled( drag_pos_min, drag_pos_max, ImColor( 0, 0, 255 ) );
+				g_clip_reorder_drag.active = true;
+				g_clip_reorder_drag.just_selected = true;
+				g_clip_reorder_drag.clip_id = out_i;
+
+				mouse_pos_diff = ImVec2( cursor_screen_pos.x - mouse_pos.x, cursor_screen_pos.y - mouse_pos.y );
+			}
+			else if ( g_clip_reorder_drag.active && out_i == g_clip_reorder_drag.clip_id )
+			{
+				// draw_list->AddRectFilled( drag_pos_min, drag_pos_max, ImColor( 0, 255, 0 ) );
+			}
+			else
+			{
+				draw_list->AddRectFilled( drag_pos_min, drag_pos_max, ImColor( 64, 64, 64 ) );
+			}
+		}
+
+		{
+			//g_clip_reorder_drag.active = true;
+			//g_clip_reorder_drag.clip_id = out_i;
+		}
+		//ImGui::PopID();
+
+		// ImGui::SameLine();
+
+		// ImGui::SetCursorPosX( ImGui::GetCursorPosX() + style.FramePadding.x );
+		ImGui::SetCursorPosX( ImGui::GetCursorPosX() + drag_text_size.x + ( style.FramePadding.x * 2 ) + style.ItemSpacing.x );
+	}
 
 	ImGui::PushID( imgui_id++ );
 	if ( ImGui::Button( "Load" ) )
@@ -469,7 +614,7 @@ void draw_replay_list_entry( u64& imgui_id, u32 out_i, char* search_box, u32 pre
 	char   header_name[ 512 ] = { 0 };
 	//memset( header_name, 0, sizeof( char ) * 512 );
 
-	snprintf( header_name, 512, "%s - %s - %d Inputs", prefix.name, output.name, output.input_count );
+	snprintf( header_name, 512, "%d %s - %s - %d Inputs", out_i, prefix.name, output.name, output.input_count );
 
 	if ( collapse_all )
 		ImGui::SetNextItemOpen( false );
@@ -488,6 +633,22 @@ void draw_replay_list_entry( u64& imgui_id, u32 out_i, char* search_box, u32 pre
 			ImGui::PopStyleColor();
 
 		ImGui::PopID();
+
+		// if ( drag_preview && out_i == g_clip_reorder_drag.target_id )
+		if ( drag_preview )
+		{
+			// if ( out_i == g_clip_reorder_drag.target_id )
+			// 	ImGui::SetCursorPos( ImVec2( cursor_pos.x, cursor_pos.y + entry_height + style.ItemSpacing.y ) );
+
+			// ImGui::SetCursorPos( ImVec2( cursor_pos.x, cursor_pos.y ) );
+
+			//ImGui::EndDisabled();
+			//if ( out_i < g_clip_reorder_drag.clip_id )
+			//	ImGui::SetCursorPos( ImVec2( cursor_pos.x, cursor_pos.y - ( 1 * ( entry_height  + style.ItemSpacing.y ) ) ) );
+			//else
+			//	ImGui::SetCursorPos( ImVec2( cursor_pos.x, cursor_pos.y + ( entry_height  + style.ItemSpacing.y ) ) );
+		}
+
 		return;
 	}
 
@@ -495,6 +656,13 @@ void draw_replay_list_entry( u64& imgui_id, u32 out_i, char* search_box, u32 pre
 		ImGui::PopStyleColor();
 
 	ImGui::PopID();
+
+//	if ( drag_preview )
+//	{
+//		//ImGui::EndDisabled();
+//		ImGui::SetCursorPos( ImVec2( cursor_pos.x, cursor_pos.y /*+ drag_text_size.y + ( style.FramePadding.y * 2 )*/ ) );
+//		return;
+//	}
 
 	//ImGui::PushID( imgui_id++ );
 	//
@@ -621,7 +789,7 @@ void draw_replay_list( int size[ 2 ] )
 
 	ImGui::SameLine();
 
-	static bool sort_newest_top = true;
+	static bool sort_newest_top = false;
 
 	if ( ImGui::Button( sort_newest_top ? "Sort: Newest First" : "Sort: Oldest First" ) )
 		sort_newest_top = !sort_newest_top;
@@ -635,22 +803,306 @@ void draw_replay_list( int size[ 2 ] )
 		return;
 	}
 
+	{
+		ImGui::Text( "SELECTED ID: %d", g_clip_reorder_drag.clip_id );
+		ImGui::Text( "TARGET ID: %d", g_clip_reorder_drag.target_id );
+	}
+
 	//ImGuiStyle& style = ImGui::GetStyle();
+
+	ImVec2 cursor_screen_pos = ImGui::GetCursorScreenPos();
+	ImVec2 cursor_pos        = ImGui::GetCursorPos();
+	ImVec2 mouse_pos         = ImGui::GetMousePos();
+
+	ImGuiStyle& style        = ImGui::GetStyle();
+	ImDrawList* draw_list    = ImGui::GetWindowDrawList();
+
+	ImVec2 drag_text_size = ImGui::CalcTextSize( "--" );
+
+	float entry_height = drag_text_size.y + ( style.FramePadding.y * 2 );
+
+	if ( g_clip_reorder_drag.active )
+	{
+		#if 1
+		u32 out_i = sort_newest_top ? g_clip_data->output_count - 1 : 0;
+
+		// for ( u32 out_i = g_clip_data->output_count; out_i > 0; --out_i )
+		for ( u32 loop_index = 0; loop_index < g_clip_data->output_count; loop_index++ )
+		{
+			// check if point is in rect here
+			ImVec2 insert_area_min( cursor_screen_pos.x, cursor_screen_pos.y + ( loop_index * ( entry_height + style.ItemSpacing.y ) ) );
+			ImVec2 insert_area_max( cursor_screen_pos.x + drag_text_size.x + ( style.FramePadding.x * 2 ), ( cursor_screen_pos.y + entry_height + ( loop_index * ( entry_height + style.ItemSpacing.y ) ) ) );
+
+			draw_list->AddRectFilled( insert_area_min, insert_area_max, ImColor( 180, 0, 160 ) );
+
+			char temp_test[ 8 ]{};
+			snprintf( temp_test, 8, "%d", out_i );
+			draw_list->AddText( insert_area_min, ImColor( 255, 255, 255 ),  temp_test );
+
+			if ( point_in_rect( mouse_pos, insert_area_min, insert_area_max ) )
+			{
+				g_clip_reorder_drag.target_id = out_i;
+			}
+
+			if ( sort_newest_top )
+				out_i--;
+			else
+				out_i++;
+		}
+		#endif
+
+		#if 0
+		for ( u32 out_i = 0; out_i < g_clip_data->output_count; out_i++ )
+		{
+			// check if point is in rect here
+			float entry_height_half = ( entry_height + style.ItemSpacing.y ) * 0.5f;
+			// ImVec2 insert_area_min( cursor_screen_pos.x, ( cursor_screen_pos.y - entry_height_half ) + 2 );
+			// ImVec2 insert_area_min( cursor_screen_pos.x, cursor_screen_pos.y + 2 + ( out_i *  entry_height + style.ItemSpacing.y + style.ItemSpacing.y ) );
+			ImVec2 insert_area_min( cursor_screen_pos.x, cursor_screen_pos.y + ( out_i * ( entry_height + style.ItemSpacing.y ) ) );
+			// ImVec2 insert_area_max( cursor_screen_pos.x + drag_text_size.x + ( style.FramePadding.x * 2 ), ( cursor_screen_pos.y + entry_height_half ) - 2 );
+			// ImVec2 insert_area_max( cursor_screen_pos.x + drag_text_size.x + ( style.FramePadding.x * 2 ), ( cursor_screen_pos.y + entry_height + ( out_i * entry_height + style.ItemSpacing.y + style.ItemSpacing.y ) ) - 2 );
+			ImVec2 insert_area_max( cursor_screen_pos.x + drag_text_size.x + ( style.FramePadding.x * 2 ), ( cursor_screen_pos.y + entry_height + ( out_i * ( entry_height + style.ItemSpacing.y ) ) ) );
+
+			draw_list->AddRectFilled( insert_area_min, insert_area_max, ImColor( 180, 0, 160 ) );
+
+			char temp_test[ 8 ]{};
+			snprintf( temp_test, 8, "%d", out_i );
+			draw_list->AddText( insert_area_min, ImColor( 255, 255, 255 ),  temp_test );
+
+			if ( point_in_rect( mouse_pos, insert_area_min, insert_area_max ) )
+			{
+				// move the cursor down a bit
+				if ( out_i < g_clip_reorder_drag.clip_id )
+				{
+					//cursor_screen_pos = ImGui::GetCursorScreenPos();
+					//cursor_pos        = ImGui::GetCursorPos();
+					//mouse_pos         = ImGui::GetMousePos();
+
+					//ImGui::SetCursorScreenPos( ImVec2( cursor_screen_pos.x, cursor_screen_pos.y + ( entry_height + style.ItemSpacing.y ) ) );
+				}
+				else if ( out_i > g_clip_reorder_drag.clip_id )
+				{
+					//ImGui::SetCursorScreenPos( ImVec2( cursor_screen_pos.x, cursor_screen_pos.y + entry_height + style.ItemSpacing.y ) );
+
+					//cursor_screen_pos = ImGui::GetCursorScreenPos();
+					//cursor_pos        = ImGui::GetCursorPos();
+					//mouse_pos         = ImGui::GetMousePos();
+				}
+				// ImGui::SetCursorScreenPos( ImVec2( cursor_screen_pos.x, cursor_screen_pos.y + entry_height_half ) );
+
+
+				g_clip_reorder_drag.target_id = out_i;
+			}
+		}
+		#endif
+	}
 
 	u64 imgui_id = 1;
 
+	#if 1
+
+	ImVec2 prev_cursor_pos = ImGui::GetCursorPos();
+
+	u32 out_i = sort_newest_top ? g_clip_data->output_count - 1 : 0;
+
+	// for ( u32 out_i = g_clip_data->output_count; out_i > 0; --out_i )
+	for ( u32 loop_index = 0; loop_index < g_clip_data->output_count; loop_index++ )
+	{
+		if ( g_clip_reorder_drag.active && !g_clip_reorder_drag.just_selected )
+		{
+			if ( out_i == g_clip_reorder_drag.clip_id )
+			{
+				// Follow mouse cursor
+				ImGui::SetCursorScreenPos( ImVec2( cursor_screen_pos.x, mouse_pos.y + mouse_pos_diff.y ) );
+			}
+
+			// if ( !sort_newest_top && out_i == 0 && out_i == g_clip_reorder_drag.target_id )
+			if ( g_clip_reorder_drag.clip_id != out_i && loop_index == 0 && out_i == g_clip_reorder_drag.target_id )
+			{
+				ImGui::SetCursorPos( ImVec2( prev_cursor_pos.x, prev_cursor_pos.y + ( 1 * ( entry_height + style.ItemSpacing.y ) ) ) );
+				// ImGui::SetCursorPos( ImVec2( prev_cursor_pos.x, prev_cursor_pos.y - ( 0 * ( entry_height + style.ItemSpacing.y ) ) ) );
+			}
+		}
+
+		draw_replay_list_entry( imgui_id, out_i, search_box, prefix_search, collapse_all, false );
+
+		if ( g_clip_reorder_drag.active && !g_clip_reorder_drag.just_selected )
+		{
+			if ( out_i == g_clip_reorder_drag.clip_id )
+			{
+				if ( out_i == g_clip_reorder_drag.target_id )
+				{
+					// Reset cursor
+					ImGui::SetCursorPos( ImVec2( prev_cursor_pos.x, prev_cursor_pos.y + entry_height + style.ItemSpacing.y ) );
+				}
+				else
+				{
+					// Reset cursor
+					ImGui::SetCursorPos( ImVec2( prev_cursor_pos.x, prev_cursor_pos.y ) );
+				}
+			}
+
+			// this is stupid lmao
+			if ( sort_newest_top )
+			{
+				// if the next one is the target id, move that one down twice
+				if ( out_i < g_clip_reorder_drag.clip_id && out_i == g_clip_reorder_drag.target_id )
+				{
+					ImGui::SetCursorPos( ImVec2( prev_cursor_pos.x, prev_cursor_pos.y + ( 2 * ( entry_height + style.ItemSpacing.y ) ) ) );
+				}
+				// behavior for moving back on the list
+				else if ( out_i - 1 > g_clip_reorder_drag.clip_id && out_i - 1 == g_clip_reorder_drag.target_id )
+				{
+					ImGui::SetCursorPos( ImVec2( prev_cursor_pos.x, prev_cursor_pos.y + ( 2 * ( entry_height + style.ItemSpacing.y ) ) ) );
+				}
+			}
+			else
+			{
+				// if the next one is the target id, move that one down twice
+				if ( out_i > g_clip_reorder_drag.clip_id && out_i == g_clip_reorder_drag.target_id )
+				{
+					ImGui::SetCursorPos( ImVec2( prev_cursor_pos.x, prev_cursor_pos.y + ( 2 * ( entry_height + style.ItemSpacing.y ) ) ) );
+				}
+				// behavior for moving back on the list
+				else if ( out_i + 1 < g_clip_reorder_drag.clip_id && out_i + 1 == g_clip_reorder_drag.target_id )
+				{
+					ImGui::SetCursorPos( ImVec2( prev_cursor_pos.x, prev_cursor_pos.y + ( 2 * ( entry_height + style.ItemSpacing.y ) ) ) );
+				}
+			}
+		}
+
+		prev_cursor_pos = ImGui::GetCursorPos();
+		out_i += sort_newest_top ? -1 : 1;
+	}
+
+	#else
+
 	if ( sort_newest_top )
 	{
-		for ( u32 out_i = g_clip_data->output_count; out_i > 0; --out_i )
-			draw_replay_list_entry( imgui_id, out_i - 1, search_box, prefix_search, collapse_all );
+		ImVec2 prev_cursor_pos = ImGui::GetCursorPos();
+
+		for ( u32 out_i = g_clip_data->output_count - 1;; out_i-- )
+		{
+			if ( g_clip_reorder_drag.active && !g_clip_reorder_drag.just_selected )
+			{
+				if ( out_i == g_clip_reorder_drag.clip_id )
+				{
+					// Follow mouse cursor
+					ImGui::SetCursorScreenPos( ImVec2( cursor_screen_pos.x, mouse_pos.y + mouse_pos_diff.y ) );
+				}
+
+			//	if ( out_i == 0 && out_i == g_clip_reorder_drag.target_id )
+			//	{
+			//		ImGui::SetCursorPos( ImVec2( prev_cursor_pos.x, prev_cursor_pos.y + ( 1 * ( entry_height + style.ItemSpacing.y ) ) ) );
+			//		// ImGui::SetCursorPos( ImVec2( prev_cursor_pos.x, prev_cursor_pos.y - ( 0 * ( entry_height + style.ItemSpacing.y ) ) ) );
+			//	}
+			}
+
+			draw_replay_list_entry( imgui_id, out_i, search_box, prefix_search, collapse_all, false );
+
+			if ( g_clip_reorder_drag.active && !g_clip_reorder_drag.just_selected )
+			{
+				if ( out_i == g_clip_reorder_drag.clip_id )
+				{
+					if ( out_i == g_clip_reorder_drag.target_id )
+					{
+						// Reset cursor
+						ImGui::SetCursorPos( ImVec2( prev_cursor_pos.x, prev_cursor_pos.y + entry_height + style.ItemSpacing.y ) );
+					}
+					else
+					{
+						// Reset cursor
+						ImGui::SetCursorPos( ImVec2( prev_cursor_pos.x, prev_cursor_pos.y ) );
+					}
+				}
+
+				// if the next one is the target id, move that one down twice
+				if ( out_i < g_clip_reorder_drag.clip_id && out_i == g_clip_reorder_drag.target_id )
+				{
+					ImGui::SetCursorPos( ImVec2( prev_cursor_pos.x, prev_cursor_pos.y + ( 2 * ( entry_height + style.ItemSpacing.y ) ) ) );
+				}
+				// behavior for moving back on the list
+				else if ( out_i - 1 > g_clip_reorder_drag.clip_id && out_i - 1 == g_clip_reorder_drag.target_id )
+				{
+					ImGui::SetCursorPos( ImVec2( prev_cursor_pos.x, prev_cursor_pos.y + ( 2 * ( entry_height + style.ItemSpacing.y ) ) ) );
+				}
+			}
+
+			prev_cursor_pos = ImGui::GetCursorPos();
+
+			if ( out_i == 0 )
+				break;
+		}
 	}
 	else
 	{
+		ImVec2 prev_cursor_pos = ImGui::GetCursorPos();
+
 		for ( u32 out_i = 0; out_i < g_clip_data->output_count; out_i++ )
-			draw_replay_list_entry( imgui_id, out_i, search_box, prefix_search, collapse_all );
+		{
+			if ( g_clip_reorder_drag.active && !g_clip_reorder_drag.just_selected )
+			{
+				if ( out_i == g_clip_reorder_drag.clip_id )
+				{
+					// Follow mouse cursor
+					ImGui::SetCursorScreenPos( ImVec2( cursor_screen_pos.x, mouse_pos.y + mouse_pos_diff.y ) );
+				}
+
+				if ( out_i == 0 && out_i == g_clip_reorder_drag.target_id )
+				{
+					ImGui::SetCursorPos( ImVec2( prev_cursor_pos.x, prev_cursor_pos.y + ( 1 * ( entry_height + style.ItemSpacing.y ) ) ) );
+					// ImGui::SetCursorPos( ImVec2( prev_cursor_pos.x, prev_cursor_pos.y - ( 0 * ( entry_height + style.ItemSpacing.y ) ) ) );
+				}
+			}
+
+			draw_replay_list_entry( imgui_id, out_i, search_box, prefix_search, collapse_all, false );
+
+			if ( g_clip_reorder_drag.active && !g_clip_reorder_drag.just_selected )
+			{
+				if ( out_i == g_clip_reorder_drag.clip_id )
+				{
+					if ( out_i == g_clip_reorder_drag.target_id )
+					{
+						// Reset cursor
+						ImGui::SetCursorPos( ImVec2( prev_cursor_pos.x, prev_cursor_pos.y + entry_height + style.ItemSpacing.y ) );
+					}
+					else
+					{
+						// Reset cursor
+						ImGui::SetCursorPos( ImVec2( prev_cursor_pos.x, prev_cursor_pos.y ) );
+					}
+				}
+
+				// if the next one is the target id, move that one down twice
+				if ( out_i > g_clip_reorder_drag.clip_id && out_i == g_clip_reorder_drag.target_id )
+				{
+					ImGui::SetCursorPos( ImVec2( prev_cursor_pos.x, prev_cursor_pos.y + ( 2 * ( entry_height + style.ItemSpacing.y ) ) ) );
+				}
+				// behavior for moving back on the list
+				else if ( out_i + 1 < g_clip_reorder_drag.clip_id && out_i + 1 == g_clip_reorder_drag.target_id )
+				{
+					ImGui::SetCursorPos( ImVec2( prev_cursor_pos.x, prev_cursor_pos.y + ( 2 * ( entry_height + style.ItemSpacing.y ) ) ) );
+				}
+			}
+
+			prev_cursor_pos = ImGui::GetCursorPos();
+		}
 	}
 
+	#endif
+
 	ImGui::EndChild();
+
+	if ( g_clip_reorder_drag.active && ImGui::IsMouseReleased( ImGuiMouseButton_Left ) )
+	{
+		g_clip_reorder_drag.active = false;
+		clip_move_output( g_clip_data, g_clip_reorder_drag.clip_id, g_clip_reorder_drag.target_id );
+
+		g_clip_reorder_drag.clip_id   = 0;
+		g_clip_reorder_drag.target_id = 0;
+	}
+
+	g_clip_reorder_drag.just_selected = false;
 }
 
 
@@ -676,12 +1128,6 @@ void draw_preset_override( clip_encode_override_t& override, bool edit )
 
 	if ( edit )
 	{
-		// display any overrides
-		if ( ImGui::Button( override.preset_exclude ? "EXCLUDE" : "INCLUDE" ) )
-			override.preset_exclude = !override.preset_exclude;
-
-		ImGui::SameLine();
-
 		ImVec2 text_size  = ImGui::CalcTextSize( "Presets" );
 		float  combo_size = text_size.x + ( ( style.FramePadding.x + style.FramePadding.y + style.ItemSpacing.x ) * 2 );
 		ImGui::SetNextItemWidth( combo_size );
@@ -697,7 +1143,7 @@ void draw_preset_override( clip_encode_override_t& override, bool edit )
 					if ( i == override.presets[ used_preset_i ] )
 					{
 						skip = true;
-						continue;
+						break;
 					}
 				}
 
@@ -1472,13 +1918,13 @@ void draw_replay_editor_window( int window_size[ 2 ] )
 
 	if ( ImGui::BeginTabBar( "##replay_tabs" ) )
 	{
-		if ( ImGui::BeginTabItem( "Replay Editor" /*, nullptr, g_focus_replay_maker ? ImGuiTabItemFlags_SetSelected : 0*/ ) )
-		{
-			draw_replay_edit( element_size );
-			ImGui::EndTabItem();
-
-			g_focus_replay_maker = false;
-		}
+		//if ( ImGui::BeginTabItem( "Replay Editor" /*, nullptr, g_focus_replay_maker ? ImGuiTabItemFlags_SetSelected : 0*/ ) )
+		//{
+		//	draw_replay_edit( element_size );
+		//	ImGui::EndTabItem();
+		//
+		//	g_focus_replay_maker = false;
+		//}
 
 		if ( ImGui::BeginTabItem( "Clip Entries" ) )
 		{
@@ -1503,6 +1949,11 @@ void draw_replay_editor_window( int window_size[ 2 ] )
 	//		draw_folder_view( element_size );
 	//		ImGui::EndTabItem();
 	//	}
+
+		if ( ImGui::BeginTabItem( "Settings" ) )
+		{
+			ImGui::EndTabItem();
+		}
 
 		if ( ImGui::BeginTabItem( "Style Editor" ) )
 		{

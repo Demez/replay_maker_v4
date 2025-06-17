@@ -45,6 +45,16 @@ video_media_info_t  g_video_media_info;
 
 
 
+// ============================================================================================
+
+
+bool point_in_rect( ImVec2 point, ImVec2 min_size, ImVec2 max_size )
+{
+	// return point[ 0 ] >= min_size.left && point[ 0 ] <= rect.right && point[ 1 ] <= rect.bottom && point[ 1 ] >= rect.top;
+	return point[ 0 ] >= min_size[ 0 ] && point[ 0 ] <= max_size[ 0 ] && point[ 1 ] <= max_size[ 1 ] && point[ 1 ] >= min_size[ 1 ];
+}
+
+
 // --------------------------------------------------------------------------------------------------
 
 
@@ -379,6 +389,10 @@ void handle_keybinds()
 	else if ( ImGui::IsKeyPressed( ImGuiKey_F, false ) )
 	{
 		sys_mpv_full_window_toggle();
+	}
+	else if ( ImGui::IsKeyDown( ImGuiKey_LeftCtrl ) && ImGui::IsKeyPressed( ImGuiKey_S, false ) )
+	{
+		save_videos();
 	}
 
 	// MPV Keybinds
@@ -748,7 +762,7 @@ auto main( int argc, char* argv[] ) -> int
 
 	ImGui_ImplOpenGL3_CreateFontsTexture();
 
-	//imgui_set_theme_steam_green();
+	// imgui_set_theme_steam_green();
 
 	// ------------------------------------------
 	// Startup and Load MPV

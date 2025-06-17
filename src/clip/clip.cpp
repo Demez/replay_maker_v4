@@ -585,13 +585,16 @@ static bool clip_save_encode_override( clip_data_t* data, clip_encode_override_t
 }
 
 
-void clip_save_videos( clip_data_t* data, const char* path )
+bool clip_save_videos( clip_data_t* data, const char* path )
 {
 	if ( !data )
-		return;
+		return false;
 
 	if ( !data->output_count )
-		return;
+		return false;
+
+	if ( !path )
+		return false;
 
 	// build json5
 	json_object_t root{};
@@ -600,7 +603,7 @@ void clip_save_videos( clip_data_t* data, const char* path )
 	if ( !json_add_objects( root, 2 ) )
 	{
 		json_free( root );
-		return;
+		return false;
 	}
 
 	root.aObjects.data[ 0 ].aName = json_strn( "version", 7 );
@@ -610,7 +613,7 @@ void clip_save_videos( clip_data_t* data, const char* path )
 	if ( !json_add_array( root.aObjects.data[ 1 ], data->output_count ) )
 	{
 		json_free( root );
-		return;
+		return false;
 	}
 
 	json_object_t& video_root = root.aObjects.data[ 1 ];
@@ -629,7 +632,7 @@ void clip_save_videos( clip_data_t* data, const char* path )
 		if ( !output_json.aObjects.data )
 		{
 			json_free( root );
-			return;
+			return false;
 		}
 
 		// name
@@ -660,7 +663,7 @@ void clip_save_videos( clip_data_t* data, const char* path )
 			if ( !output_json.aObjects.data[ 3 ].aObjects.data )
 			{
 				json_free( root );
-				return;
+				return false;
 			}
 
 			for ( u32 input_i = 0; input_i < output.input_count; input_i++ )
@@ -671,7 +674,7 @@ void clip_save_videos( clip_data_t* data, const char* path )
 				if ( !json_add_objects( input_json, 3 ) )
 				{
 					json_free( root );
-					return;
+					return false;
 				}
 
 				// path
@@ -683,7 +686,7 @@ void clip_save_videos( clip_data_t* data, const char* path )
 				if ( !clip_save_encode_override( data, input.encode_overrides, input_json.aObjects.data[ 1 ] ) )
 				{
 					json_free( root );
-					return;
+					return false;
 				}
 
 				// time_ranges
@@ -692,7 +695,7 @@ void clip_save_videos( clip_data_t* data, const char* path )
 				if ( !json_add_array( input_json.aObjects.data[ 2 ], input.time_range_count ) )
 				{
 					json_free( root );
-					return;
+					return false;
 				}
 
 				for ( u32 time_i = 0; time_i < input.time_range_count; time_i++ )
@@ -702,7 +705,7 @@ void clip_save_videos( clip_data_t* data, const char* path )
 					if ( !json_add_objects( json_time, 3 ) )
 					{
 						json_free( root );
-						return;
+						return false;
 					}
 
 					clip_save_encode_override( data, input.time_range[ time_i ].encode_overrides, json_time.aObjects.data[ 0 ] );
@@ -727,7 +730,7 @@ void clip_save_videos( clip_data_t* data, const char* path )
 	if ( !out_str.data )
 	{
 		printf( "failed to convert json to string to write to file!\n" );
-		return;
+		return false;
 	}
 
 	bool write_ret = fs_save_file( path, out_str.data, out_str.size - 1 );
@@ -735,9 +738,13 @@ void clip_save_videos( clip_data_t* data, const char* path )
 	free( out_str.data );
 
 	if ( !write_ret )
-		printf( "failed to save videos to \"%s\"\n", path );
+	{
+		printf( "Failed to save videos to \"%s\"\n", path );
+		return false;
+	}
 
-	//return write_ret;
+	printf( "Saved videos to \"%s\"\n", path );
+	return true;
 }
 
 
@@ -1140,5 +1147,59 @@ void clip_add_preset_to_encode_override( clip_data_t* data, clip_encode_override
 	}
 
 	printf( "Failed to find preset: %s\n", preset_name );
+}
+
+
+void clip_move_output( clip_data_t* data, u32 output_id, u32 insert_position )
+{
+	if ( !data )
+		return;
+
+	if ( output_id == insert_position )
+		return;
+
+	if ( output_id >= data->output_count )
+		return;
+
+	if ( insert_position >= data->output_count )
+		return;
+
+	clip_output_video_t* temp_data = ch_calloc< clip_output_video_t >( 1 );
+
+	if ( !temp_data )
+	{
+		printf( "Failed to allocate temp data to reorder output video\n" );
+		return;
+	}
+
+	// back up this data
+	memcpy( temp_data, &data->output[ output_id ], sizeof( clip_output_video_t ) );
+
+	if ( output_id > insert_position )
+	{
+		// we want to move this output to an earlier spot in memor
+		// shift everything between the insert position and original output position forward by 1
+		u32 move_count = output_id - insert_position;
+		memmove( data->output + insert_position + 1, data->output + insert_position, sizeof( clip_output_video_t ) * move_count );
+
+		// now copy back the data
+		memcpy( &data->output[ insert_position ], temp_data, sizeof( clip_output_video_t ) );
+	}
+	else
+	{
+		// we want to move this output to a further away spot in memory
+
+		// shift everything between the insert position and original output position back by 1
+		u32 move_count = insert_position - output_id;
+		memmove( data->output + output_id, data->output + output_id + 1, sizeof( clip_output_video_t ) * move_count );
+
+		// now copy back the data
+		memcpy( &data->output[ insert_position ], temp_data, sizeof( clip_output_video_t ) );
+	}
+
+	//u32 move_count = data->output_count - insert_position;
+	//memmove( data->output, data->output + insert_position, sizeof( clip_output_video_t ) * move_count );
+
+	free( temp_data );
 }
 

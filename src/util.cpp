@@ -410,6 +410,7 @@ static bool handle_rename( const char* path, const char* new_path )
 }
 
 
+// TODO: THIS CURRENTLY IGNORES THE READ ONLY ATTRIBUTE, FIX THAT !!!!!!
 bool fs_save_file( const char* path, const char* data, size_t size )
 {
 	// write to a temp file,

@@ -37,6 +37,11 @@ void                               sys_mpv_full_window_exit();
 void                               sys_mpv_full_window_toggle();
 
 // --------------------------------------------------------------------------------------------------------
+// imgui helper functions
+
+bool                               point_in_rect( ImVec2 point, ImVec2 min_size, ImVec2 max_size );
+
+// --------------------------------------------------------------------------------------------------------
 // MPV
 
 bool                               load_mpv_dll();

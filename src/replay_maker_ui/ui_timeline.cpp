@@ -31,13 +31,6 @@ bool                        g_timeline_marker_active[ 2 ]{};
 float                       g_timeline_marker_times[ 2 ]{};
 
 
-static bool                 point_in_rect( ImVec2 point, ImVec2 min_size, ImVec2 max_size )
-{
-	// return point[ 0 ] >= min_size.left && point[ 0 ] <= rect.right && point[ 1 ] <= rect.bottom && point[ 1 ] >= rect.top;
-	return point[ 0 ] >= min_size[ 0 ] && point[ 0 ] <= max_size[ 0 ] && point[ 1 ] <= max_size[ 1 ] && point[ 1 ] >= min_size[ 1 ];
-}
-
-
 void timeline_set_seek_time( float seconds )
 {
 	char time_pos_str[ 16 ];

@@ -127,7 +127,7 @@ void                  clip_parse_settings( clip_data_t* data, const char* path )
 bool                  clip_parse_videos( clip_data_t* data, const char* path );
 
 void                  clip_save_settings( clip_data_t* data, const char* path );
-void                  clip_save_videos( clip_data_t* data, const char* path );
+bool                  clip_save_videos( clip_data_t* data, const char* path );
 
 // clip_data_t* clip_load_from_json5( const char* path );
 
@@ -154,4 +154,6 @@ void                  clip_duplicate_time_range( clip_output_video_t* output, u3
 
 void                  clip_add_preset_to_encode_override( clip_data_t* data, clip_encode_override_t& override, const char* preset_name );
 void                  clip_add_preset_to_encode_override( clip_data_t* data, clip_encode_override_t& override, u32 preset_index );
+
+void                  clip_move_output( clip_data_t* data, u32 output_id, u32 insert_position );
 
