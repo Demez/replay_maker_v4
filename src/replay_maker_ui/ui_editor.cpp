@@ -5,6 +5,7 @@
 
 // native file dialog
 // https://github.com/btzy/nativefiledialog-extended
+#include "imgui_internal.h"
 #include "nfd.h"
 
 char*                          g_recently_opened_path   = nullptr;
@@ -13,6 +14,7 @@ u8                             g_recently_opened_count  = 0;
 
 clip_data_t*                   g_clip_data              = nullptr;
 clip_output_video_t*           g_clip_current_output    = nullptr;
+u32                            g_clip_current_output_index = UINT32_MAX;
 u32                            g_clip_current_input     = 0;
 u32                            g_clip_delete_input      = UINT32_MAX;
 char                           g_output_name_buf[ 512 ] = { 0 };
@@ -242,12 +244,14 @@ void replay_editor_reset()
 }
 
 
-bool replay_editor_set_video( clip_output_video_t* output, u32 input_i )
+bool replay_editor_set_video( u32 output_i, u32 input_i )
 {
-	if ( !output )
+	if ( output_i >= g_clip_data->output_count )
 		return false;
 
-	if ( input_i > output->input_count )
+	clip_output_video_t& output = g_clip_data->output[ output_i ];
+
+	if ( input_i > output.input_count )
 	{
 		printf( "invalid input index\n" );
 		return false;
@@ -255,23 +259,26 @@ bool replay_editor_set_video( clip_output_video_t* output, u32 input_i )
 
 	replay_editor_reset();
 
-	g_clip_current_output = output;
-	g_clip_current_input  = input_i;
+	g_clip_current_output       = &output;
+	g_clip_current_output_index = output_i;
+	g_clip_current_input        = input_i;
 
-	memcpy( g_output_name_buf, output->name, strlen( output->name ) * sizeof( char ) );
+	memcpy( g_output_name_buf, output.name, strlen( output.name ) * sizeof( char ) );
 	g_focus_replay_maker = true;
 	return true;
 }
 
 
-void replay_editor_load_input( clip_output_video_t* output, u32 input_i )
+void replay_editor_load_input( u32 output_i, u32 input_i )
 {
-	float cur_start_time = g_time_range_start;
-
-	if ( !replay_editor_set_video( output, input_i ) )
+	if ( !replay_editor_set_video( output_i, input_i ) )
 		return;
 
-	clip_input_video_t& input = output->input[ input_i ];
+	float cur_start_time = g_time_range_start;
+
+	clip_output_video_t& output = g_clip_data->output[ output_i ];
+
+	clip_input_video_t& input = output.input[ input_i ];
 	g_focus_replay_maker      = true;
 
 	if ( mpv_get_current_video() )
@@ -337,7 +344,7 @@ void draw_replay_edit_basic_info( int size[ 2 ] )
 			{
 				clip_add_input( output, current_video );
 
-				replay_editor_set_video( output, 0 );
+				replay_editor_set_video( g_clip_data->output_count - 1, 0 );
 
 				output->prefix = g_default_prefix;
 			}
@@ -466,140 +473,45 @@ void draw_replay_list_entry( u64& imgui_id, u32 out_i, char* search_box, u32 pre
 			return;
 
 	ImVec2 drag_text_size = ImGui::CalcTextSize( "--" );
+	ImVec2 drag_pos_min( cursor_screen_pos.x, cursor_screen_pos.y );
+	ImVec2 drag_pos_max( cursor_screen_pos.x + drag_text_size.x + ( style.FramePadding.x * 2 ), cursor_screen_pos.y + drag_text_size.y + ( style.FramePadding.y * 2 ) );
 
-	float entry_height = drag_text_size.y + ( style.FramePadding.y * 2 );
-	float entry_height_spaced = drag_text_size.y + style.ItemSpacing.y;
-
-
-	#if 0
-	if ( g_clip_reorder_drag.active )
+	if ( !g_clip_reorder_drag.active || out_i == g_clip_reorder_drag.clip_id )
 	{
-		// check if point is in rect here
-		float entry_height_half = ( entry_height + style.ItemSpacing.y ) * 0.5f;
-		// ImVec2 insert_area_min( cursor_screen_pos.x, ( cursor_screen_pos.y - entry_height_half ) + 2 );
-		ImVec2 insert_area_min( cursor_screen_pos.x, cursor_screen_pos.y + 2 );
-		// ImVec2 insert_area_max( cursor_screen_pos.x + drag_text_size.x + ( style.FramePadding.x * 2 ), ( cursor_screen_pos.y + entry_height_half ) - 2 );
-		ImVec2 insert_area_max( cursor_screen_pos.x + drag_text_size.x + ( style.FramePadding.x * 2 ), ( cursor_screen_pos.y + entry_height ) - 2 );
-
-		draw_list->AddRectFilled( insert_area_min, insert_area_max, ImColor( 180, 0, 160 ) );
-
-		char temp_test[ 8 ]{};
-		snprintf( temp_test, 8, "%d", out_i );
-		draw_list->AddText( insert_area_min, ImColor( 255, 255, 255 ),  temp_test );
-
-		if ( point_in_rect( mouse_pos, insert_area_min, insert_area_max ) )
+		if ( point_in_rect( mouse_pos, drag_pos_min, drag_pos_max ) )
 		{
-			// move the cursor down a bit
-			if ( out_i < g_clip_reorder_drag.clip_id )
-			{
-				cursor_screen_pos = ImGui::GetCursorScreenPos();
-				cursor_pos        = ImGui::GetCursorPos();
-				mouse_pos         = ImGui::GetMousePos();
+			ImGui::SetMouseCursor( ImGuiMouseCursor_ResizeNS );
+		}
 
-				ImGui::SetCursorScreenPos( ImVec2( cursor_screen_pos.x, cursor_screen_pos.y + ( entry_height + style.ItemSpacing.y ) ) );
-			}
-			else if ( out_i > g_clip_reorder_drag.clip_id )
-			{
-				ImGui::SetCursorScreenPos( ImVec2( cursor_screen_pos.x, cursor_screen_pos.y + entry_height + style.ItemSpacing.y ) );
+		if ( ImGui::IsMouseClicked( ImGuiMouseButton_Left ) && point_in_rect( mouse_pos, drag_pos_min, drag_pos_max ) )
+		{
+			g_clip_reorder_drag.active = true;
+			g_clip_reorder_drag.just_selected = true;
+			g_clip_reorder_drag.clip_id = out_i;
 
-				cursor_screen_pos = ImGui::GetCursorScreenPos();
-				cursor_pos        = ImGui::GetCursorPos();
-				mouse_pos         = ImGui::GetMousePos();
-			}
-			// ImGui::SetCursorScreenPos( ImVec2( cursor_screen_pos.x, cursor_screen_pos.y + entry_height_half ) );
-
-
-			g_clip_reorder_drag.target_id = out_i;
+			mouse_pos_diff = ImVec2( cursor_screen_pos.x - mouse_pos.x, cursor_screen_pos.y - mouse_pos.y );
+		}
+		else if ( g_clip_reorder_drag.active && out_i == g_clip_reorder_drag.clip_id )
+		{
+			draw_list->AddRectFilled( drag_pos_min, drag_pos_max, ImColor( 0, 255, 0 ) );
+		}
+		else
+		{
+			draw_list->AddRectFilled( drag_pos_min, drag_pos_max, ImColor( 64, 64, 64 ) );
 		}
 	}
-	#endif
-
-	if ( g_clip_reorder_drag.active )
+	else
 	{
-		// ImGui::SetCursorPos( ImVec2( cursor_pos.x, cursor_pos.y + entry_height + style.ItemSpacing.y ) );
-
-
-		if ( out_i == g_clip_reorder_drag.clip_id )
-		{
-			// ImGui::SetCursorPos( ImVec2( cursor_pos.x, cursor_pos.y + ( 4 * ( entry_height + style.ItemSpacing.y ) ) ) );
-			// ImGui::Separator();
-		}
-		else if ( out_i == g_clip_reorder_drag.target_id )
-		{
-			// ImGui::SetCursorPos( ImVec2( cursor_pos.x, cursor_pos.y + ( 1 * ( entry_height + style.ItemSpacing.y ) ) ) );
-			// ImGui::Separator();
-		}
-
-		// current clip is higher index than the drag clip, but also below the target, don't move this?
-		if ( out_i > g_clip_reorder_drag.clip_id && out_i < g_clip_reorder_drag.target_id )
-		{
-			// ImGui::SetCursorPos( ImVec2( cursor_pos.x, cursor_pos.y + ( 1 * ( entry_height  + style.ItemSpacing.y ) ) ) );
-		}
-
-		if ( out_i > g_clip_reorder_drag.clip_id && out_i < g_clip_reorder_drag.target_id )
-		{
-			// ImGui::SetCursorPos( ImVec2( cursor_pos.x, cursor_pos.y - ( 0 * ( entry_height  + style.ItemSpacing.y ) ) ) );
-		}
-
-		// if ( out_i < g_clip_reorder_drag.target_id )
-		// 	ImGui::SetCursorPos( ImVec2( cursor_pos.x, cursor_pos.y - ( 0 * ( entry_height  + style.ItemSpacing.y ) ) ) );
-		// else if ( out_i > g_clip_reorder_drag.target_id )
-		// 	ImGui::SetCursorPos( ImVec2( cursor_pos.x, cursor_pos.y ) );
+		draw_list->AddRectFilled( drag_pos_min, drag_pos_max, ImColor( 64, 64, 64 ) );
 	}
 
-	if ( drag_preview )
-	{
-		//ImGui::BeginDisabled();
-		// ImGui::SetCursorScreenPos( ImVec2( cursor_screen_pos.x, mouse_pos.y + mouse_pos_diff.y ) );
-		// ImGui::SetCursorScreenPos( ImVec2( cursor_screen_pos.x, mouse_pos.y + mouse_pos_diff.y ) );
-	}
-	// else
-	// if ( !drag_preview )
-	{
-		//ImGui::PushID( imgui_id++ );
-		// if ( ImGui::Selectable( "DRAG", g_clip_reorder_drag.active && out_i == g_clip_reorder_drag.clip_id ) )
-		// ImGui::TextUnformatted( "--" );
-
-		if ( !g_clip_reorder_drag.active || out_i == g_clip_reorder_drag.clip_id )
-		{
-			ImVec2 drag_pos_min( cursor_screen_pos.x, cursor_screen_pos.y );
-			ImVec2 drag_pos_max( cursor_screen_pos.x + drag_text_size.x + ( style.FramePadding.x * 2 ), cursor_screen_pos.y + drag_text_size.y + ( style.FramePadding.y * 2 ) );
-
-			if ( ImGui::IsMouseClicked( ImGuiMouseButton_Left ) && point_in_rect( mouse_pos, drag_pos_min, drag_pos_max ) )
-			{
-				draw_list->AddRectFilled( drag_pos_min, drag_pos_max, ImColor( 0, 0, 255 ) );
-				g_clip_reorder_drag.active = true;
-				g_clip_reorder_drag.just_selected = true;
-				g_clip_reorder_drag.clip_id = out_i;
-
-				mouse_pos_diff = ImVec2( cursor_screen_pos.x - mouse_pos.x, cursor_screen_pos.y - mouse_pos.y );
-			}
-			else if ( g_clip_reorder_drag.active && out_i == g_clip_reorder_drag.clip_id )
-			{
-				// draw_list->AddRectFilled( drag_pos_min, drag_pos_max, ImColor( 0, 255, 0 ) );
-			}
-			else
-			{
-				draw_list->AddRectFilled( drag_pos_min, drag_pos_max, ImColor( 64, 64, 64 ) );
-			}
-		}
-
-		{
-			//g_clip_reorder_drag.active = true;
-			//g_clip_reorder_drag.clip_id = out_i;
-		}
-		//ImGui::PopID();
-
-		// ImGui::SameLine();
-
-		// ImGui::SetCursorPosX( ImGui::GetCursorPosX() + style.FramePadding.x );
-		ImGui::SetCursorPosX( ImGui::GetCursorPosX() + drag_text_size.x + ( style.FramePadding.x * 2 ) + style.ItemSpacing.x );
-	}
+	// offset cursor to draw the rest of this
+	ImGui::SetCursorPosX( ImGui::GetCursorPosX() + drag_text_size.x + ( style.FramePadding.x * 2 ) + style.ItemSpacing.x );
 
 	ImGui::PushID( imgui_id++ );
 	if ( ImGui::Button( "Load" ) )
 	{
-		replay_editor_load_input( &output, 0 );
+		replay_editor_load_input( out_i, 0 );
 	}
 	ImGui::PopID();
 
@@ -609,12 +521,11 @@ void draw_replay_list_entry( u64& imgui_id, u32 out_i, char* search_box, u32 pre
 	//load_text_size.x += style.ItemInnerSpacing.x * 2;
 	//load_text_size.y += style.ItemInnerSpacing.y * 2;
 
-	ImVec2 region_avail = ImGui::GetContentRegionAvail();
-
 	char   header_name[ 512 ] = { 0 };
 	//memset( header_name, 0, sizeof( char ) * 512 );
 
-	snprintf( header_name, 512, "%d %s - %s - %d Inputs", out_i, prefix.name, output.name, output.input_count );
+	// snprintf( header_name, 512, "%d %s - %s - %d Inputs", out_i, prefix.name, output.name, output.input_count );
+	snprintf( header_name, 512, "%s - %s - %d Inputs", prefix.name, output.name, output.input_count );
 
 	if ( collapse_all )
 		ImGui::SetNextItemOpen( false );
@@ -633,22 +544,6 @@ void draw_replay_list_entry( u64& imgui_id, u32 out_i, char* search_box, u32 pre
 			ImGui::PopStyleColor();
 
 		ImGui::PopID();
-
-		// if ( drag_preview && out_i == g_clip_reorder_drag.target_id )
-		if ( drag_preview )
-		{
-			// if ( out_i == g_clip_reorder_drag.target_id )
-			// 	ImGui::SetCursorPos( ImVec2( cursor_pos.x, cursor_pos.y + entry_height + style.ItemSpacing.y ) );
-
-			// ImGui::SetCursorPos( ImVec2( cursor_pos.x, cursor_pos.y ) );
-
-			//ImGui::EndDisabled();
-			//if ( out_i < g_clip_reorder_drag.clip_id )
-			//	ImGui::SetCursorPos( ImVec2( cursor_pos.x, cursor_pos.y - ( 1 * ( entry_height  + style.ItemSpacing.y ) ) ) );
-			//else
-			//	ImGui::SetCursorPos( ImVec2( cursor_pos.x, cursor_pos.y + ( entry_height  + style.ItemSpacing.y ) ) );
-		}
-
 		return;
 	}
 
@@ -656,13 +551,6 @@ void draw_replay_list_entry( u64& imgui_id, u32 out_i, char* search_box, u32 pre
 		ImGui::PopStyleColor();
 
 	ImGui::PopID();
-
-//	if ( drag_preview )
-//	{
-//		//ImGui::EndDisabled();
-//		ImGui::SetCursorPos( ImVec2( cursor_pos.x, cursor_pos.y /*+ drag_text_size.y + ( style.FramePadding.y * 2 )*/ ) );
-//		return;
-//	}
 
 	//ImGui::PushID( imgui_id++ );
 	//
@@ -721,12 +609,9 @@ void draw_replay_list( int size[ 2 ] )
 
 	ImGui::Text( "Clip Entries" );
 
-	static char search_box[ 128 ] = { 0 };
-
 	// Search Box
-	if ( ImGui::InputText( "Search Names", search_box, 128 ) )
-	{
-	}
+	static char search_box[ 128 ] = { 0 };
+	ImGui::InputText( "Search Names", search_box, 128 );
 
 	// Search by Prefixes
 	static u32 prefix_search = UINT32_MAX;
@@ -789,7 +674,7 @@ void draw_replay_list( int size[ 2 ] )
 
 	ImGui::SameLine();
 
-	static bool sort_newest_top = false;
+	static bool sort_newest_top = true;
 
 	if ( ImGui::Button( sort_newest_top ? "Sort: Newest First" : "Sort: Oldest First" ) )
 		sort_newest_top = !sort_newest_top;
@@ -803,106 +688,51 @@ void draw_replay_list( int size[ 2 ] )
 		return;
 	}
 
-	{
-		ImGui::Text( "SELECTED ID: %d", g_clip_reorder_drag.clip_id );
-		ImGui::Text( "TARGET ID: %d", g_clip_reorder_drag.target_id );
-	}
+//	ImGui::Text( "SELECTED ID: %d", g_clip_reorder_drag.clip_id );
+//	ImGui::Text( "TARGET ID: %d", g_clip_reorder_drag.target_id );
 
-	//ImGuiStyle& style = ImGui::GetStyle();
-
+	ImVec2 region_avail      = ImGui::GetContentRegionAvail();
 	ImVec2 cursor_screen_pos = ImGui::GetCursorScreenPos();
 	ImVec2 cursor_pos        = ImGui::GetCursorPos();
 	ImVec2 mouse_pos         = ImGui::GetMousePos();
 
 	ImGuiStyle& style        = ImGui::GetStyle();
-	ImDrawList* draw_list    = ImGui::GetWindowDrawList();
 
 	ImVec2 drag_text_size = ImGui::CalcTextSize( "--" );
-
 	float entry_height = drag_text_size.y + ( style.FramePadding.y * 2 );
 
 	if ( g_clip_reorder_drag.active )
 	{
-		#if 1
+		ImGui::SetMouseCursor( ImGuiMouseCursor_ResizeNS );
+
 		u32 out_i = sort_newest_top ? g_clip_data->output_count - 1 : 0;
+
+		// ImVec2 drag_text_size = ImGui::CalcTextSize( "--" );
+		ImDrawList* draw_list    = ImGui::GetWindowDrawList();
 
 		// for ( u32 out_i = g_clip_data->output_count; out_i > 0; --out_i )
 		for ( u32 loop_index = 0; loop_index < g_clip_data->output_count; loop_index++ )
 		{
 			// check if point is in rect here
 			ImVec2 insert_area_min( cursor_screen_pos.x, cursor_screen_pos.y + ( loop_index * ( entry_height + style.ItemSpacing.y ) ) );
-			ImVec2 insert_area_max( cursor_screen_pos.x + drag_text_size.x + ( style.FramePadding.x * 2 ), ( cursor_screen_pos.y + entry_height + ( loop_index * ( entry_height + style.ItemSpacing.y ) ) ) );
+			// ImVec2 insert_area_max( cursor_screen_pos.x + drag_text_size.x + ( style.FramePadding.x * 2 ), ( cursor_screen_pos.y + entry_height + ( loop_index * ( entry_height + style.ItemSpacing.y ) ) ) );
+			ImVec2 insert_area_max( cursor_screen_pos.x + region_avail.x * ( style.FramePadding.x * 1 ), ( cursor_screen_pos.y + entry_height + ( loop_index * ( entry_height + style.ItemSpacing.y ) ) ) );
 
-			draw_list->AddRectFilled( insert_area_min, insert_area_max, ImColor( 180, 0, 160 ) );
-
-			char temp_test[ 8 ]{};
-			snprintf( temp_test, 8, "%d", out_i );
-			draw_list->AddText( insert_area_min, ImColor( 255, 255, 255 ),  temp_test );
-
-			if ( point_in_rect( mouse_pos, insert_area_min, insert_area_max ) )
-			{
-				g_clip_reorder_drag.target_id = out_i;
-			}
-
-			if ( sort_newest_top )
-				out_i--;
-			else
-				out_i++;
-		}
-		#endif
-
-		#if 0
-		for ( u32 out_i = 0; out_i < g_clip_data->output_count; out_i++ )
-		{
-			// check if point is in rect here
-			float entry_height_half = ( entry_height + style.ItemSpacing.y ) * 0.5f;
-			// ImVec2 insert_area_min( cursor_screen_pos.x, ( cursor_screen_pos.y - entry_height_half ) + 2 );
-			// ImVec2 insert_area_min( cursor_screen_pos.x, cursor_screen_pos.y + 2 + ( out_i *  entry_height + style.ItemSpacing.y + style.ItemSpacing.y ) );
-			ImVec2 insert_area_min( cursor_screen_pos.x, cursor_screen_pos.y + ( out_i * ( entry_height + style.ItemSpacing.y ) ) );
-			// ImVec2 insert_area_max( cursor_screen_pos.x + drag_text_size.x + ( style.FramePadding.x * 2 ), ( cursor_screen_pos.y + entry_height_half ) - 2 );
-			// ImVec2 insert_area_max( cursor_screen_pos.x + drag_text_size.x + ( style.FramePadding.x * 2 ), ( cursor_screen_pos.y + entry_height + ( out_i * entry_height + style.ItemSpacing.y + style.ItemSpacing.y ) ) - 2 );
-			ImVec2 insert_area_max( cursor_screen_pos.x + drag_text_size.x + ( style.FramePadding.x * 2 ), ( cursor_screen_pos.y + entry_height + ( out_i * ( entry_height + style.ItemSpacing.y ) ) ) );
-
-			draw_list->AddRectFilled( insert_area_min, insert_area_max, ImColor( 180, 0, 160 ) );
-
-			char temp_test[ 8 ]{};
-			snprintf( temp_test, 8, "%d", out_i );
-			draw_list->AddText( insert_area_min, ImColor( 255, 255, 255 ),  temp_test );
+//			draw_list->AddRectFilled( insert_area_min, insert_area_max, ImColor( 180, 0, 160 ) );
+//			char temp_test[ 8 ]{};
+//			snprintf( temp_test, 8, "%d", out_i );
+//			draw_list->AddText( insert_area_min, ImColor( 255, 255, 255 ),  temp_test );
 
 			if ( point_in_rect( mouse_pos, insert_area_min, insert_area_max ) )
-			{
-				// move the cursor down a bit
-				if ( out_i < g_clip_reorder_drag.clip_id )
-				{
-					//cursor_screen_pos = ImGui::GetCursorScreenPos();
-					//cursor_pos        = ImGui::GetCursorPos();
-					//mouse_pos         = ImGui::GetMousePos();
-
-					//ImGui::SetCursorScreenPos( ImVec2( cursor_screen_pos.x, cursor_screen_pos.y + ( entry_height + style.ItemSpacing.y ) ) );
-				}
-				else if ( out_i > g_clip_reorder_drag.clip_id )
-				{
-					//ImGui::SetCursorScreenPos( ImVec2( cursor_screen_pos.x, cursor_screen_pos.y + entry_height + style.ItemSpacing.y ) );
-
-					//cursor_screen_pos = ImGui::GetCursorScreenPos();
-					//cursor_pos        = ImGui::GetCursorPos();
-					//mouse_pos         = ImGui::GetMousePos();
-				}
-				// ImGui::SetCursorScreenPos( ImVec2( cursor_screen_pos.x, cursor_screen_pos.y + entry_height_half ) );
-
-
 				g_clip_reorder_drag.target_id = out_i;
-			}
+
+			out_i += sort_newest_top ? -1 : 1;
 		}
-		#endif
 	}
 
 	u64 imgui_id = 1;
 
-	#if 1
-
 	ImVec2 prev_cursor_pos = ImGui::GetCursorPos();
-
 	u32 out_i = sort_newest_top ? g_clip_data->output_count - 1 : 0;
 
 	// for ( u32 out_i = g_clip_data->output_count; out_i > 0; --out_i )
@@ -919,8 +749,7 @@ void draw_replay_list( int size[ 2 ] )
 			// if ( !sort_newest_top && out_i == 0 && out_i == g_clip_reorder_drag.target_id )
 			if ( g_clip_reorder_drag.clip_id != out_i && loop_index == 0 && out_i == g_clip_reorder_drag.target_id )
 			{
-				ImGui::SetCursorPos( ImVec2( prev_cursor_pos.x, prev_cursor_pos.y + ( 1 * ( entry_height + style.ItemSpacing.y ) ) ) );
-				// ImGui::SetCursorPos( ImVec2( prev_cursor_pos.x, prev_cursor_pos.y - ( 0 * ( entry_height + style.ItemSpacing.y ) ) ) );
+				ImGui::SetCursorPos( ImVec2( prev_cursor_pos.x, prev_cursor_pos.y + entry_height + style.ItemSpacing.y ) );
 			}
 		}
 
@@ -975,128 +804,34 @@ void draw_replay_list( int size[ 2 ] )
 		out_i += sort_newest_top ? -1 : 1;
 	}
 
-	#else
-
-	if ( sort_newest_top )
-	{
-		ImVec2 prev_cursor_pos = ImGui::GetCursorPos();
-
-		for ( u32 out_i = g_clip_data->output_count - 1;; out_i-- )
-		{
-			if ( g_clip_reorder_drag.active && !g_clip_reorder_drag.just_selected )
-			{
-				if ( out_i == g_clip_reorder_drag.clip_id )
-				{
-					// Follow mouse cursor
-					ImGui::SetCursorScreenPos( ImVec2( cursor_screen_pos.x, mouse_pos.y + mouse_pos_diff.y ) );
-				}
-
-			//	if ( out_i == 0 && out_i == g_clip_reorder_drag.target_id )
-			//	{
-			//		ImGui::SetCursorPos( ImVec2( prev_cursor_pos.x, prev_cursor_pos.y + ( 1 * ( entry_height + style.ItemSpacing.y ) ) ) );
-			//		// ImGui::SetCursorPos( ImVec2( prev_cursor_pos.x, prev_cursor_pos.y - ( 0 * ( entry_height + style.ItemSpacing.y ) ) ) );
-			//	}
-			}
-
-			draw_replay_list_entry( imgui_id, out_i, search_box, prefix_search, collapse_all, false );
-
-			if ( g_clip_reorder_drag.active && !g_clip_reorder_drag.just_selected )
-			{
-				if ( out_i == g_clip_reorder_drag.clip_id )
-				{
-					if ( out_i == g_clip_reorder_drag.target_id )
-					{
-						// Reset cursor
-						ImGui::SetCursorPos( ImVec2( prev_cursor_pos.x, prev_cursor_pos.y + entry_height + style.ItemSpacing.y ) );
-					}
-					else
-					{
-						// Reset cursor
-						ImGui::SetCursorPos( ImVec2( prev_cursor_pos.x, prev_cursor_pos.y ) );
-					}
-				}
-
-				// if the next one is the target id, move that one down twice
-				if ( out_i < g_clip_reorder_drag.clip_id && out_i == g_clip_reorder_drag.target_id )
-				{
-					ImGui::SetCursorPos( ImVec2( prev_cursor_pos.x, prev_cursor_pos.y + ( 2 * ( entry_height + style.ItemSpacing.y ) ) ) );
-				}
-				// behavior for moving back on the list
-				else if ( out_i - 1 > g_clip_reorder_drag.clip_id && out_i - 1 == g_clip_reorder_drag.target_id )
-				{
-					ImGui::SetCursorPos( ImVec2( prev_cursor_pos.x, prev_cursor_pos.y + ( 2 * ( entry_height + style.ItemSpacing.y ) ) ) );
-				}
-			}
-
-			prev_cursor_pos = ImGui::GetCursorPos();
-
-			if ( out_i == 0 )
-				break;
-		}
-	}
-	else
-	{
-		ImVec2 prev_cursor_pos = ImGui::GetCursorPos();
-
-		for ( u32 out_i = 0; out_i < g_clip_data->output_count; out_i++ )
-		{
-			if ( g_clip_reorder_drag.active && !g_clip_reorder_drag.just_selected )
-			{
-				if ( out_i == g_clip_reorder_drag.clip_id )
-				{
-					// Follow mouse cursor
-					ImGui::SetCursorScreenPos( ImVec2( cursor_screen_pos.x, mouse_pos.y + mouse_pos_diff.y ) );
-				}
-
-				if ( out_i == 0 && out_i == g_clip_reorder_drag.target_id )
-				{
-					ImGui::SetCursorPos( ImVec2( prev_cursor_pos.x, prev_cursor_pos.y + ( 1 * ( entry_height + style.ItemSpacing.y ) ) ) );
-					// ImGui::SetCursorPos( ImVec2( prev_cursor_pos.x, prev_cursor_pos.y - ( 0 * ( entry_height + style.ItemSpacing.y ) ) ) );
-				}
-			}
-
-			draw_replay_list_entry( imgui_id, out_i, search_box, prefix_search, collapse_all, false );
-
-			if ( g_clip_reorder_drag.active && !g_clip_reorder_drag.just_selected )
-			{
-				if ( out_i == g_clip_reorder_drag.clip_id )
-				{
-					if ( out_i == g_clip_reorder_drag.target_id )
-					{
-						// Reset cursor
-						ImGui::SetCursorPos( ImVec2( prev_cursor_pos.x, prev_cursor_pos.y + entry_height + style.ItemSpacing.y ) );
-					}
-					else
-					{
-						// Reset cursor
-						ImGui::SetCursorPos( ImVec2( prev_cursor_pos.x, prev_cursor_pos.y ) );
-					}
-				}
-
-				// if the next one is the target id, move that one down twice
-				if ( out_i > g_clip_reorder_drag.clip_id && out_i == g_clip_reorder_drag.target_id )
-				{
-					ImGui::SetCursorPos( ImVec2( prev_cursor_pos.x, prev_cursor_pos.y + ( 2 * ( entry_height + style.ItemSpacing.y ) ) ) );
-				}
-				// behavior for moving back on the list
-				else if ( out_i + 1 < g_clip_reorder_drag.clip_id && out_i + 1 == g_clip_reorder_drag.target_id )
-				{
-					ImGui::SetCursorPos( ImVec2( prev_cursor_pos.x, prev_cursor_pos.y + ( 2 * ( entry_height + style.ItemSpacing.y ) ) ) );
-				}
-			}
-
-			prev_cursor_pos = ImGui::GetCursorPos();
-		}
-	}
-
-	#endif
-
 	ImGui::EndChild();
 
 	if ( g_clip_reorder_drag.active && ImGui::IsMouseReleased( ImGuiMouseButton_Left ) )
 	{
 		g_clip_reorder_drag.active = false;
 		clip_move_output( g_clip_data, g_clip_reorder_drag.clip_id, g_clip_reorder_drag.target_id );
+
+		// update the current output index and pointer
+		if ( g_clip_current_output_index != UINT32_MAX )
+		{
+			u32 min_i = std::min( g_clip_reorder_drag.clip_id, g_clip_reorder_drag.target_id );
+			u32 max_i = std::max( g_clip_reorder_drag.clip_id, g_clip_reorder_drag.target_id );
+
+			if ( g_clip_current_output_index == g_clip_reorder_drag.clip_id )
+			{
+				g_clip_current_output_index = g_clip_reorder_drag.target_id;
+			}
+			else if ( min_i <= g_clip_current_output_index && max_i >= g_clip_current_output_index )
+			{
+				if ( g_clip_reorder_drag.clip_id < g_clip_reorder_drag.target_id )
+					g_clip_current_output_index--;
+
+				else if ( g_clip_reorder_drag.clip_id > g_clip_reorder_drag.target_id )
+					g_clip_current_output_index++;
+			}
+
+			g_clip_current_output = &g_clip_data->output[ g_clip_current_output_index ];
+		}
 
 		g_clip_reorder_drag.clip_id   = 0;
 		g_clip_reorder_drag.target_id = 0;
@@ -1271,7 +1006,7 @@ void draw_input_video_edit( u32 input_i, clip_input_video_t* input, bool edit )
 
 	if ( !edit && ImGui::Button( "Set Current" ) )
 	{
-		replay_editor_load_input( g_clip_current_output, input_i );
+		replay_editor_load_input( g_clip_current_output_index, input_i );
 	}
 
 	if ( !edit )
@@ -1282,7 +1017,7 @@ void draw_input_video_edit( u32 input_i, clip_input_video_t* input, bool edit )
 		u32 i = clip_duplicate_input( g_clip_current_output, input_i );
 
 		if ( i != UINT32_MAX )
-			replay_editor_load_input( g_clip_current_output, i );
+			replay_editor_load_input( g_clip_current_output_index, i );
 	}
 
 	ImGui::SameLine();

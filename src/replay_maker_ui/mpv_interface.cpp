@@ -283,6 +283,24 @@ void mpv_cmd_toggle_playback()
 }
 
 
+void mpv_cmd_seek_ahead( double seconds )
+{
+	double duration = 0;
+	double time_pos = 0;
+	p_mpv_get_property( g_mpv, "duration", MPV_FORMAT_DOUBLE, &duration );
+	p_mpv_get_property( g_mpv, "time-pos", MPV_FORMAT_DOUBLE, &time_pos );
+
+	double new_time = time_pos + seconds;
+	new_time        = std::max( 0.0, std::min( duration, new_time ) );
+
+	char time_pos_str[ 32 ];
+	gcvt( new_time, 4, time_pos_str );
+
+	const char* cmd[]   = { "seek", time_pos_str, "absolute", NULL };
+	int         cmd_ret = p_mpv_command_async( g_mpv, 0, cmd );
+}
+
+
 void mpv_cmd_hook_window( void* window )
 {
 	int64_t wid = (s64)window;

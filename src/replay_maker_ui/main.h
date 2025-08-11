@@ -54,6 +54,7 @@ char*                              mpv_get_current_video();
 
 void                               mpv_cmd_loadfile( const char* file );
 void                               mpv_cmd_toggle_playback();
+void                               mpv_cmd_seek_ahead( double seconds );
 
 void                               mpv_cmd_hook_window( void* window );
 void                               mpv_cmd_hook_window_mpv();
@@ -78,7 +79,7 @@ void                               draw_imgui_window( int window_size[ 2 ] );
 void                               draw_replay_editor_window( int window_size[ 2 ] );
 void                               draw_playback_controls( int window_size[ 2 ], bool draw_volume );
 
-void                               replay_editor_load_input( clip_output_video_t* output, u32 input_i );
+void                               replay_editor_load_input( u32 output_i, u32 input_i );
 void                               replay_editor_reset();
 
 void                               draw_preset_override( clip_encode_override_t& override, bool edit );

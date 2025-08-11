@@ -395,11 +395,26 @@ void handle_keybinds()
 		save_videos();
 	}
 
+	// ================================================================
 	// MPV Keybinds
+
+	// Pause
 	else if ( ImGui::IsKeyPressed( ImGuiKey_Space, false ) )
 	{
 		mpv_cmd_toggle_playback();
 	}
+	else if ( ImGui::IsKeyPressed( ImGuiKey_LeftArrow, true ) )
+	{
+		mpv_cmd_seek_ahead( -5.0 );
+	}
+	else if ( ImGui::IsKeyPressed( ImGuiKey_RightArrow, true ) )
+	{
+		mpv_cmd_seek_ahead( 5.0 );
+	}
+
+	// Video Cropping/Panning Adjustments
+	
+	// Reset All
 	else if ( ImGui::IsKeyPressed( ImGuiKey_Keypad0, false ) )
 	{
 		MPV_CMD( "set", "video-zoom", "0" );

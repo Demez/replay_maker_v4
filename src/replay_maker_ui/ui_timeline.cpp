@@ -23,6 +23,7 @@ ImVec2                      g_timeline_pos;
 
 extern clip_data_t*         g_clip_data;
 extern clip_output_video_t* g_clip_current_output;
+extern u32                  g_clip_current_output_index;
 extern u32                  g_clip_current_input;
 
 u32                         g_selected_section      = UINT32_MAX;
@@ -99,7 +100,7 @@ void timeline_draw()
 		if ( ImGui::Button( "Add Video" ) )
 		{
 			u32 i = clip_add_input( g_clip_current_output, mpv_get_current_video() );
-			replay_editor_load_input( g_clip_current_output, i );
+			replay_editor_load_input( g_clip_current_output_index, i );
 		}
 
 		ImGui::SameLine();
@@ -166,7 +167,7 @@ void timeline_draw()
 				if ( ImGui::TabItemButton( title ) )
 				{
 					if ( g_clip_current_input != input_i )
-						replay_editor_load_input( g_clip_current_output, input_i );
+						replay_editor_load_input( g_clip_current_output_index, input_i );
 				}
 
 				if ( selected_tab )
