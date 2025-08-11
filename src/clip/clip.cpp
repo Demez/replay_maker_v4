@@ -289,11 +289,84 @@ void clip_parse_encode_override( clip_data_t* data, clip_encode_override_t& over
 }
 
 
+// I was going to use this, but instead, i realize i need this here for when i add the ffmpeg_cmd override option, i do expect to add that at some point
+#if 0
+void clip_parse_encode_override_version_2( clip_data_t* data, clip_encode_override_t& override, json_object_t& root )
+{
+	if ( root.aType != e_json_type_array )
+	{
+		printf( "expected encode_override to be an array of strings!\n" );
+		return;
+	}
+
+	u32* preset_array = ch_calloc< u32 >( root.aObjects.count );
+
+	if ( !preset_array )
+		return;
+
+	override.presets = preset_array;
+
+	for ( size_t preset_name_i = 0; preset_name_i < root.aObjects.count; preset_name_i++ )
+	{
+		json_object_t& json_preset = root.aObjects.data[ preset_name_i ];
+
+		// look for the preset
+		for ( u32 preset_i = 0; preset_i < data->preset_count; preset_i++ )
+		{
+			if ( !util_strncmp( json_preset.aString.data, json_preset.aString.size, data->preset[ preset_i ].name, strlen( data->preset[ preset_i ].name ) ) )
+				continue;
+
+			override.presets[ override.presets_count++ ] = preset_i;
+			break;
+		}
+	}
+
+	for ( size_t root_i = 0; root_i < root.aObjects.count; root_i++ )
+	{
+		json_object_t& object = root.aObjects.data[ root_i ];
+
+		if ( util_strncmp( "presets", 7, object.aName.data, object.aName.size ) )
+		{
+			if ( object.aType != e_json_type_array )
+			{
+				printf( "Expected array of strings for presets value in encode_overrides\n" );
+				continue;
+			}
+
+			u32* preset_array = ch_calloc< u32 >( object.aObjects.count );
+
+		}
+		else if ( util_strncmp( "exclude_mode", 7, object.aName.data, object.aName.size ) )
+		{
+			override.preset_exclude = object.aType == e_json_type_true ? true : false;
+		}
+	}
+}
+
+
+void clip_parse_encode_override( clip_data_t* data, clip_encode_override_t& override, json_object_t& root )
+{
+	if ( root.aType == e_json_type_object )
+	{
+		clip_parse_encode_override_version_1( data, override, root );
+	}
+	else if ( root.aType == e_json_type_array )
+	{
+		clip_parse_encode_override_version_2( data, override, root );
+	}
+	else
+	{
+		printf( "expected encode_override to be an object or an array!\n" );
+	}
+}
+#endif
+
+
 bool clip_parse_input( clip_data_t* data, clip_output_video_t& output, json_object_t& root, u32 input_i )
 {
 	if ( root.aType != e_json_type_object )
 	{
-		printf( "expected encode_override to be an object!\n" );
+		printf( "expected video input to be an object!\n" );
 		return false;
 	}
 
@@ -553,6 +626,27 @@ void clip_save_settings( clip_data_t* data, const char* path )
 // ============================================================================================================================
 
 
+#if 0
+static bool clip_save_encode_override( clip_data_t* data, clip_encode_override_t& encode_override, json_object_t& root )
+{
+	root.aName          = json_strn( "encode_overrides", 16 );
+	root.aType          = e_json_type_array;
+	root.aObjects.count = encode_override.presets_count;
+	root.aObjects.data  = ch_malloc< json_object_t >( encode_override.presets_count );
+
+	if ( !root.aObjects.data )
+		return false;
+
+	for ( u32 i = 0; i < encode_override.presets_count; i++ )
+	{
+		json_object_t& entry = root.aObjects.data[ i ];
+		entry.aType          = e_json_type_string;
+		entry.aString        = json_str( data->preset[ encode_override.presets[ i ] ].name );
+	}
+
+	return true;
+}
+#else
 static bool clip_save_encode_override( clip_data_t* data, clip_encode_override_t& encode_override, json_object_t& root )
 {
 	root.aName          = json_strn( "encode_overrides", 16 );
@@ -578,11 +672,13 @@ static bool clip_save_encode_override( clip_data_t* data, clip_encode_override_t
 		entry.aString        = json_str( data->preset[ encode_override.presets[ i ] ].name );
 	}
 
-	root.aObjects.data[ 1 ].aName = json_strn( "exclude_mode", 12 );
-	root.aObjects.data[ 1 ].aType = encode_override.preset_exclude ? e_json_type_true : e_json_type_false;
+	root.aObjects.data[ 1 ].aName   = json_strn( "ffmpeg_cmd", 10 );
+	root.aObjects.data[ 1 ].aType   = e_json_type_string;
+	root.aObjects.data[ 1 ].aString = {};
 
 	return true;
 }
+#endif
 
 
 bool clip_save_videos( clip_data_t* data, const char* path )
@@ -702,21 +798,19 @@ bool clip_save_videos( clip_data_t* data, const char* path )
 				{
 					json_object_t& json_time = input_json.aObjects.data[ 2 ].aObjects.data[ time_i ];
 
-					if ( !json_add_objects( json_time, 3 ) )
+					if ( !json_add_array( json_time, 2 ) )
 					{
 						json_free( root );
 						return false;
 					}
 
-					clip_save_encode_override( data, input.time_range[ time_i ].encode_overrides, json_time.aObjects.data[ 0 ] );
+					// json_time.aObjects.data[ 0 ].aName   = json_strn( "start", 5 );
+					json_time.aObjects.data[ 0 ].aType   = e_json_type_double;
+					json_time.aObjects.data[ 0 ].aDouble = input.time_range[ time_i ].start;
 
-					json_time.aObjects.data[ 1 ].aName   = json_strn( "start", 5 );
+					// json_time.aObjects.data[ 1 ].aName   = json_strn( "end", 3 );
 					json_time.aObjects.data[ 1 ].aType   = e_json_type_double;
-					json_time.aObjects.data[ 1 ].aDouble = input.time_range[ time_i ].start;
-
-					json_time.aObjects.data[ 2 ].aName   = json_strn( "end", 3 );
-					json_time.aObjects.data[ 2 ].aType   = e_json_type_double;
-					json_time.aObjects.data[ 2 ].aDouble = input.time_range[ time_i ].end;
+					json_time.aObjects.data[ 1 ].aDouble = input.time_range[ time_i ].end;
 				}
 			}
 		}

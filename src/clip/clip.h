@@ -7,7 +7,7 @@
 constexpr size_t MAX_LEN_EXT           = 5;
 constexpr size_t MAX_LEN_PRESET_NAME   = 64;
 
-constexpr u32    CLIP_VIDEO_FORMAT_VER = 2;
+constexpr u32    CLIP_VIDEO_FORMAT_VER = 3;
 constexpr u32    CLIP_SETTINGS_VER     = 1;
 
 
