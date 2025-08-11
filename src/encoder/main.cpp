@@ -208,7 +208,7 @@ bool used_in_preset( clip_encode_override_t& override, u32 preset_i )
 	{
 		if ( override.presets[ i ] == preset_i )
 		{
-			return !override.preset_exclude;
+			return true;
 		}
 	}
 

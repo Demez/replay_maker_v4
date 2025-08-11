@@ -948,15 +948,6 @@ void draw_preset_override( clip_encode_override_t& override, bool edit )
 	ImGui::SetNextItemWidth( combo_size );
 #endif
 
-
-//	ImGui::SameLine();
-//
-//	if ( ImGui::Button( override.preset_exclude ? "EXCLUDE" : "INCLUDE" ) )
-//	{
-//		override.preset_exclude = !override.preset_exclude;
-//	}
-
-
 	//	ImGui::Separator();
 	//
 	//	if ( ImGui::Button( "Enter Custom ffmpeg cmd" ) )

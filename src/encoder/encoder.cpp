@@ -72,26 +72,6 @@ bool run_ffmpeg_check( const char* cmd, const char* path )
 }
 
 
-bool only_uses_encode_preset( clip_encode_override_t& override, u32 preset_i )
-{
-	bool valid_preset = override.presets_count == 0;
-
-	for ( u32 i = 0; i < override.presets_count; i++ )
-	{
-		if ( override.presets[ i ] == preset_i )
-		{
-			if ( override.preset_exclude )
-				valid_preset = false;
-			else
-				return true;
-				// valid_preset = true;
-		}
-	}
-
-	return valid_preset;
-}
-
-
 bool uses_encode_preset( clip_encode_override_t& override, u32 preset_i )
 {
 	bool valid_preset = override.presets_count == 0;
@@ -99,13 +79,7 @@ bool uses_encode_preset( clip_encode_override_t& override, u32 preset_i )
 	for ( u32 i = 0; i < override.presets_count; i++ )
 	{
 		if ( override.presets[ i ] == preset_i )
-		{
-			if ( override.preset_exclude )
-				valid_preset = false;
-			else
-				return true;
-				// valid_preset = true;
-		}
+			return true;
 	}
 
 	return valid_preset;
@@ -117,12 +91,7 @@ u32 get_used_encode_preset_index( clip_encode_override_t& override, u32 preset_i
 	for ( u32 i = 0; i < override.presets_count; i++ )
 	{
 		if ( override.presets[ i ] == preset_i )
-		{
-			if ( override.preset_exclude )
-				return UINT32_MAX;
-			else
-				return i;
-		}
+			return i;
 	}
 
 	return UINT32_MAX;

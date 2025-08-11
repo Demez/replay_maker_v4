@@ -281,10 +281,6 @@ void clip_parse_encode_override( clip_data_t* data, clip_encode_override_t& over
 				}
 			}
 		}
-		else if ( util_strncmp( "exclude_mode", 7, object.aName.data, object.aName.size ) )
-		{
-			override.preset_exclude = object.aType == e_json_type_true ? true : false;
-		}
 	}
 }
 
@@ -335,10 +331,6 @@ void clip_parse_encode_override_version_2( clip_data_t* data, clip_encode_overri
 
 			u32* preset_array = ch_calloc< u32 >( object.aObjects.count );
 
-		}
-		else if ( util_strncmp( "exclude_mode", 7, object.aName.data, object.aName.size ) )
-		{
-			override.preset_exclude = object.aType == e_json_type_true ? true : false;
 		}
 	}
 }
@@ -1021,8 +1013,6 @@ void duplicate_encode_overrides( clip_encode_override_t& src, clip_encode_overri
 
 		memcpy( dst.presets, src.presets, sizeof( u32 ) * src.presets_count );
 	}
-
-	dst.preset_exclude = src.preset_exclude;
 }
 
 
