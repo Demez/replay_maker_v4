@@ -382,6 +382,10 @@ constexpr const char* NEW_MONITOR_ZOOM_HACK = "1.0";
 
 void handle_keybinds()
 {
+	// make sure imgui isn't focused in any text box first
+	if ( ImGui::GetIO().WantTextInput )
+		return;
+
 	if ( ImGui::IsKeyPressed( ImGuiKey_Tab, false ) )
 	{
 		enable_sidebar( !g_show_sidebar );
@@ -405,11 +409,11 @@ void handle_keybinds()
 	}
 	else if ( ImGui::IsKeyPressed( ImGuiKey_LeftArrow, true ) )
 	{
-		mpv_cmd_seek_ahead( -5.0 );
+		mpv_cmd_seek_offset( -5.0 );
 	}
 	else if ( ImGui::IsKeyPressed( ImGuiKey_RightArrow, true ) )
 	{
-		mpv_cmd_seek_ahead( 5.0 );
+		mpv_cmd_seek_offset( 5.0 );
 	}
 
 	// Video Cropping/Panning Adjustments

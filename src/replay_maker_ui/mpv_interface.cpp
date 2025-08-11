@@ -283,7 +283,7 @@ void mpv_cmd_toggle_playback()
 }
 
 
-void mpv_cmd_seek_ahead( double seconds )
+void mpv_cmd_seek_offset( double seconds )
 {
 	double duration = 0;
 	double time_pos = 0;

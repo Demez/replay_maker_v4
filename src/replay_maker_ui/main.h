@@ -54,7 +54,7 @@ char*                              mpv_get_current_video();
 
 void                               mpv_cmd_loadfile( const char* file );
 void                               mpv_cmd_toggle_playback();
-void                               mpv_cmd_seek_ahead( double seconds );
+void                               mpv_cmd_seek_offset( double seconds );
 
 void                               mpv_cmd_hook_window( void* window );
 void                               mpv_cmd_hook_window_mpv();
