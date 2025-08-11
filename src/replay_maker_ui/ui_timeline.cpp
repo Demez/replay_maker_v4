@@ -110,9 +110,11 @@ void timeline_draw()
 			clip_remove_input( g_clip_current_output, g_clip_current_input );
 			timeline_reset();
 			// replay_editor_reset();
-			// return;
 
 			g_clip_current_input = g_clip_current_output->input_count > 0 ? 0 : UINT32_MAX;
+
+			ImGui::EndDisabled();
+			return;
 		}
 
 		ImGui::EndDisabled();
