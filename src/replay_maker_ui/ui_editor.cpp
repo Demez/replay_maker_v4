@@ -867,7 +867,7 @@ void draw_preset_override( clip_encode_override_t& override, bool edit )
 		float  combo_size = text_size.x + ( ( style.FramePadding.x + style.FramePadding.y + style.ItemSpacing.x ) * 2 );
 		ImGui::SetNextItemWidth( combo_size );
 
-		if ( ImGui::BeginCombo( "##presets", "Presets" ) )
+		if ( ImGui::BeginCombo( "##presets", "Presets", ImGuiComboFlags_HeightSmall ) )
 		{
 			for ( u32 i = 0; i < g_clip_data->preset_count; i++ )
 			{
