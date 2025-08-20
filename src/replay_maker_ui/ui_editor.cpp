@@ -869,6 +869,8 @@ void draw_preset_override( clip_encode_override_t& override, bool edit )
 
 		if ( ImGui::BeginCombo( "##presets", "Presets", ImGuiComboFlags_HeightSmall ) )
 		{
+			g_preset_combo_open = true;
+
 			for ( u32 i = 0; i < g_clip_data->preset_count; i++ )
 			{
 				// lmao what the fuck

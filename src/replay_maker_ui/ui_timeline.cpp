@@ -21,6 +21,8 @@ constexpr ImColor           TIMELINE_MARKER_COLOR_B( 255, 150, 11 );
 ImVec2                      g_timeline_size;
 ImVec2                      g_timeline_pos;
 
+bool                        g_preset_combo_open;
+
 extern clip_data_t*         g_clip_data;
 extern clip_output_video_t* g_clip_current_output;
 extern u32                  g_clip_current_output_index;
@@ -91,6 +93,8 @@ void timeline_draw()
 	bool draw_tabs_and_sections = g_clip_current_output && g_clip_current_input != UINT32_MAX &&
 		( mpv_get_current_video() ? strcmp( g_clip_current_output->input[ g_clip_current_input ].path, mpv_get_current_video() ) == 0 : false );
 
+	g_preset_combo_open = false;
+
 	// if ( draw_tabs_and_sections )
 	{
 		// ImGui::BeginDisabled( !draw_tabs_and_sections );
@@ -138,7 +142,7 @@ void timeline_draw()
 
 	// TODO: make sure no inputs get captured if focused in a drop down or typing in a text box
 
-	bool        capture_inputs = !io.WantTextInput;
+	bool        capture_inputs = !io.WantTextInput && !g_preset_combo_open;
 
 	// test WantCaptureMouseUnlessPopupClose?
 

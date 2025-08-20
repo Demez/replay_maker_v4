@@ -112,6 +112,8 @@ extern char*                       g_recently_opened_path;
 extern char**                      g_recently_opened;
 extern u8                          g_recently_opened_count;
 
+extern bool                        g_preset_combo_open;
+
 constexpr u8                       MAX_RECENT_OPEN = 8;
 
 constexpr int                      DIVIDER_SIZE = 5;  // multiplied by 2
