@@ -1,0 +1,110 @@
+{
+    "encode_presets":
+    [
+        {
+            "name": "raw",
+            "ext": "mkv",
+            "out_folder_append": "raw",
+            "out_prefix": "raw_",
+            // "ffmpeg_cmd": "-map 0 -c:a libopus -b:a 160k -c:v libx264 -crf 24 -preset veryfast -pix_fmt yuv444p -colorspace bt709 -color_primaries bt709 -color_trc bt709 -threads 16",
+            // "ffmpeg_cmd": "-map 0 -c:a libopus -b:a 160k -c:v libx265 -crf 14 -preset medium -pix_fmt yuv444p -colorspace bt709 -color_primaries bt709 -color_trc bt709 -threads 16",
+            "ffmpeg_cmd": "-map 0 -c:a libopus -b:a 160k -c:v libx265 -crf 15 -preset medium -pix_fmt yuv444p -colorspace bt709 -color_primaries bt709 -color_trc bt709 -threads 16",
+			
+			// TEMP FAST ENCODE TEST
+            // "ffmpeg_cmd": "-map 0 -c:a libopus -b:a 160k -c:v libx264 -crf 24 -preset ultrafast -pix_fmt yuv444p -colorspace bt709 -color_primaries bt709 -color_trc bt709 -threads 16",
+
+            "target_size":     0,
+            "target_size_max": 0,
+            "target_size_min": 0,
+
+            "audio_bitrate": 0,
+        },
+        {
+            "name": "raw_vrc",
+            "ext": "mkv",
+            "out_folder_append": "raw",
+            "out_prefix": "raw_",
+            // "ffmpeg_cmd": "-map 0 -c:a libopus -b:a 160k -c:v libx264 -crf 24 -preset veryfast -pix_fmt yuv444p -colorspace bt709 -color_primaries bt709 -color_trc bt709 -threads 16",
+            "ffmpeg_cmd": "-map 0 -c:a libopus -b:a 160k -c:v libx265 -crf 16 -preset medium -pix_fmt yuv444p -colorspace bt709 -color_primaries bt709 -color_trc bt709 -threads 16",
+
+            "target_size":     0,
+            "target_size_max": 0,
+            "target_size_min": 0,
+
+            "audio_bitrate": 0,
+        },
+        {
+            "name": "discord",
+            "ext": "webm",
+            // "ffmpeg_cmd": "-threads 16 -pix_fmt yuv420p -row-mt 1 -tile-columns 6 -r 60",
+            "ffmpeg_cmd": "-threads 16 -pix_fmt yuv420p -row-mt 1 -cpu-used 0 -r 60",
+            // https://www.reddit.com/r/AV1/comments/k7colv/encoder_tuning_part_1_tuning_libvpxvp9_be_more/
+            // "ffmpeg_cmd": "-threads 16 -pix_fmt yuv420p -profile:v 2 -row-mt 1 -cpu-used 0 -lag-in-frames 25 -arnr-maxframes 7 -arnr-strength 3 -r 60",
+
+            // -auto-alt-ref 1
+
+            "target_size":     9600,
+            "target_size_max": 10000,
+            "target_size_min": 8750,
+
+            "audio_bitrate": 128,
+        },
+        {
+            // maybe add some inherit parser thing here?
+            "name": "discord_left",
+            "ext": "webm",
+            //"out_prefix": "l1080_",
+            "ffmpeg_cmd": "-vf \"crop=1920:1080:0:0\" -threads 16 -pix_fmt yuv420p -row-mt 1 -frame-parallel 1 -tile-columns 6 -r 60",
+
+            // in kilobytes
+            "target_size":     9600,
+            "target_size_max": 10000,
+            "target_size_min": 8750,
+
+            "audio_bitrate": 128,
+
+            // max_size: 10000
+            // min_size: 8750,
+        },
+        {
+            "name": "discord_right_1080",
+            "ext": "webm",
+            // "out_prefix": "r1080_",  // maybe change to a suffix?
+            //"out_suffix": "__r1080",  // maybe change to a suffix?
+            "ffmpeg_cmd": "-vf \"crop=1920:1080:1920:0\" -threads 16 -pix_fmt yuv420p -row-mt 1 -frame-parallel 1 -tile-columns 6 -r 60",
+
+            "target_size":     9600,
+            "target_size_max": 10000,
+            "target_size_min": 8750,
+
+            "audio_bitrate": 128,
+        },
+        {
+            "name": "discord_right_1440",
+            "ext": "webm",
+            //"out_prefix": "r1440_",
+            "ffmpeg_cmd": "-vf \"crop=2560:1440:1920:0\" -threads 16 -pix_fmt yuv420p -row-mt 1 -frame-parallel 1 -tile-columns 6 -r 60",
+
+            "target_size":     9600,
+            "target_size_max": 10000,
+            "target_size_min": 8750,
+
+            "audio_bitrate": 128,
+        },
+    ],
+
+    "prefixes":
+    [
+        {"General": "general_d_"},  // always the first one 
+        {"VRChat": "vrc_d_"},   
+        {"Left 4 Dead 2": "l4d2_d_"},   
+        {"Team Fortress 2": "tf2_d_"},   
+        {"Deep Rock Galactic": "drg_d_"},   
+        {"Terraria": "terraria_d_"},   
+        {"Garry's Mod": "gmod_d_"},   
+        {"Minecraft": "mc_d_"},   
+        {"Mario Kart: Wii": "mkwii_d_"},   
+        {"FlatOut 2": "flatout2_d_"},   
+        {"Sven-Coop": "svencoop_d_"},   
+    ],
+}
