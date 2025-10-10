@@ -186,7 +186,8 @@ set(
     src/encoder/encoder.h
     src/encoder/main.cpp
     src/encoder/main.h
-
+    src/encoder/logging.cpp
+	
     src/imgui/imgui.cpp
     src/imgui/imgui_demo.cpp
     src/imgui/imgui_draw.cpp

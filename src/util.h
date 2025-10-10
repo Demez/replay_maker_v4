@@ -28,12 +28,18 @@ using module_t = void*;
 
 
 #ifdef _WIN32
+  #define SEP_S "\\"
+  #define SEP '\\'
+
   #define PATH_SEP_STR "\\"
   #define PATH_SEP     '\\'
 
   #define strncasecmp _strnicmp
   #define strcasecmp  _stricmp
 #else
+  #define SEP_S        "/"
+  #define SEP          '/'
+
   #define PATH_SEP_STR "/"
   #define PATH_SEP     '/'
 #endif
@@ -255,6 +261,10 @@ bool        sys_copy_file_times( const char* src_path, const char* out_path, boo
 
 // execute a command and read it's output
 bool        sys_execute_read( const char* command, str_buf_t& output );
+
+// execute a command and read it's output, with a callback function everytime more output is read from the file
+using       f_exec_callback = void( char* buf, size_t len );
+bool        sys_execute_read_callback( const char* command, str_buf_t& output, f_exec_callback* p_exec_callback );
 
 // execute a command and return the commands return value
 int         sys_execute( const char* command );

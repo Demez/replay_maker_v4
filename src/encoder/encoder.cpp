@@ -1,4 +1,5 @@
 #include "encoder.h"
+#include "main.h"
 #include "clip/clip.h"
 #include "util.h"
 
@@ -40,15 +41,31 @@ char* gen_ffmpeg_cmd( clip_encode_preset_t& preset, clip_input_video_t& input, u
 }
 
 
+void ffmpeg_callback_read( char* buf, size_t len )
+{
+	log_printf( log_ffmpeg, buf );
+}
+
+
 bool run_ffmpeg_check( const char* cmd, const char* path )
 {
-	printf( "\nFFMPEG CMD: %s\n\n", cmd );
+	log_printf( "\nFFMPEG CMD: %s\n\n", cmd );
 
+	str_buf_t buf;
+
+#if 1
+	str_buf_t output{};
+	bool      ret = sys_execute_read_callback( cmd, output, ffmpeg_callback_read );
+	free( output.data );
+
+	if ( !ret )
+#else
 	int ret = sys_execute( cmd );
-
 	if ( ret != 0 )
+#endif
+
 	{
-		printf( "ffmpeg returned with error %d\n", ret );
+		log_printf( log_error, "ffmpeg returned with error %d\n", ret );
 		return false;
 	}
 
@@ -58,13 +75,13 @@ bool run_ffmpeg_check( const char* cmd, const char* path )
 
 		if ( size == 0 )
 		{
-			printf( "ffmpeg created an empty video - \"%s\"\n", path );
+			log_printf( log_error, "ffmpeg created an empty video - \"%s\"\n", path );
 			return false;
 		}
 	}
 	else
 	{
-		printf( "ffmpeg did not create a video - \"%s\"\n", path );
+		log_printf( log_error, "ffmpeg did not create a video - \"%s\"\n", path );
 		return false;
 	}
 
@@ -245,7 +262,7 @@ void add_metadata_cmd( clip_output_video_t& output, char* ffmpeg_cmd, bool add_m
 
 	if ( !fs_write_file( metadata_path, metadata_file, strlen( metadata_file ) ) )
 	{
-		printf( "failed to write metadata file - \"%s\"\n", metadata_path );
+		log_printf( log_error, "failed to write metadata file - \"%s\"\n", metadata_path );
 		return;
 	}
 
@@ -308,7 +325,7 @@ void create_output_video( clip_output_video_t& output, char* full_out_path, enc_
 	strcat( ffmpeg_cmd, full_out_path );
 	strcat( ffmpeg_cmd, "\"" );
 
-	printf( "command line: %s\n\n", ffmpeg_cmd );
+	log_printf( "command line: %s\n\n", ffmpeg_cmd );
 
 	if ( !run_ffmpeg_check( ffmpeg_cmd, full_out_path ) )
 		return;
@@ -431,7 +448,7 @@ int run_encode_inputs_target_size_pass( enc_video_data_t& video_data, clip_encod
 	// is this the same file size as before?
 	if ( pass_data.prev_file_size == total_file_size )
 	{
-		printf( "Attempt %d: the video is the exact same file size as the previous attempt, cancelling\n", pass_data.attempt + 1 );
+		log_printf( "Attempt %d: the video is the exact same file size as the previous attempt, cancelling\n", pass_data.attempt + 1 );
 		return -1;
 	}
 
@@ -446,21 +463,21 @@ int run_encode_inputs_target_size_pass( enc_video_data_t& video_data, clip_encod
 	e_target_size_state new_state = smaller ? e_target_size_state_smaller : e_target_size_state_bigger;
 
 	if ( smaller )
-		printf( "Attempt %d: Output video is smaller than target file size\n", pass_data.attempt + 1 );
+		log_printf( "Attempt %d: Output video is smaller than target file size\n", pass_data.attempt + 1 );
 	else
-		printf( "Attempt %d: Output video is larger than target file size\n", pass_data.attempt + 1 );
+		log_printf( "Attempt %d: Output video is larger than target file size\n", pass_data.attempt + 1 );
 
 	bool state_changed = false;
 
 	if ( smaller && pass_data.last_state == e_target_size_state_bigger )
 	{
 		state_changed = true;
-		printf( "  cool we managed to go from being too big to being too small, god ffmpeg why\n" );
+		log_printf( "  cool we managed to go from being too big to being too small, god ffmpeg why\n" );
 	}
 	else if ( !smaller && pass_data.last_state == e_target_size_state_smaller )
 	{
 		state_changed = true;
-		printf( "  cool we managed to go from being too small to being too big, god ffmpeg why\n" );
+		log_printf( "  cool we managed to go from being too small to being too big, god ffmpeg why\n" );
 	}
 
 	// reencode videos at an adjusted bitrate based on what ffmpeg felt like encoding it as
@@ -499,8 +516,8 @@ int run_encode_inputs_target_size_pass( enc_video_data_t& video_data, clip_encod
 		{
 			segment.bitrate = ( pass_data.max_bitrates[ seg_i ] + pass_data.min_bitrates[ seg_i ] ) / 2.f;
 
-			printf( "  SEGMENT %d: Trying new target bitrate of %.4f\n", seg_i, segment.bitrate );
-			printf( "  SEGMENT %d: Current Min/Max Bitrates: %.4f/%.4f\n", seg_i, pass_data.min_bitrates[ seg_i ], pass_data.max_bitrates[ seg_i ] );
+			log_printf( "  SEGMENT %d: Trying new target bitrate of %.4f\n", seg_i, segment.bitrate );
+			log_printf( "  SEGMENT %d: Current Min/Max Bitrates: %.4f/%.4f\n", seg_i, pass_data.min_bitrates[ seg_i ], pass_data.max_bitrates[ seg_i ] );
 		}
 		else
 		{
@@ -509,7 +526,7 @@ int run_encode_inputs_target_size_pass( enc_video_data_t& video_data, clip_encod
 
 			if ( bitrate_mult < 0.2 )
 			{
-				printf( "  SEGMENT %d: wait wtf we just calculated a bitrate multiplier below 0.2, clamping to 0.2\n", seg_i );
+				log_printf( "  SEGMENT %d: wait wtf we just calculated a bitrate multiplier below 0.2, clamping to 0.2\n", seg_i );
 				bitrate_mult = 0.2;
 			}
 
@@ -518,17 +535,17 @@ int run_encode_inputs_target_size_pass( enc_video_data_t& video_data, clip_encod
 
 			if ( bitrate_mult > 4 )
 			{
-				printf( "  SEGMENT %d: Bitrate Multiplier is greater than 3, fuck this, it's probably fine\n", seg_i );
+				log_printf( "  SEGMENT %d: Bitrate Multiplier is greater than 3, fuck this, it's probably fine\n", seg_i );
 				return -1;
 			}
 
 			else if ( segment.bitrate <= 0.01 )
 			{
-				printf( "  SEGMENT %d: wtf we just calculated a bitrate of 0.01 or below, screw this\n", seg_i );
+				log_printf( "  SEGMENT %d: wtf we just calculated a bitrate of 0.01 or below, screw this\n", seg_i );
 				return -1;
 			}
 
-			printf(
+			log_printf(
 			  "  SEGMENT %d: Trying new target bitrate of %.4f\n"
 			  "    %.4f * %.4f  ->  %.4f * (%.4f / %.4f)\n",
 			  seg_i, segment.bitrate,
@@ -752,7 +769,7 @@ enc_video_data_t get_video_segments( enc_output_video_t& enc_output, clip_output
 
 void run_encode_preset( char* out_dir, clip_encode_preset_t& preset, u32 preset_i )
 {
-	printf( "Encoding for %s preset\n", preset.name );
+	log_printf( "Encoding for %s preset\n", preset.name );
 	char full_out_path[ 4096 ] = { 0 };
 
 	for ( u32 out_i = 0; out_i < g_clip_data->output_count; out_i++ )
@@ -763,7 +780,7 @@ void run_encode_preset( char* out_dir, clip_encode_preset_t& preset, u32 preset_
 
 		if ( !enc_output.valid )
 		{
-			printf( "skipping invalid video: \"%s\"\n", output.name );
+			log_printf( log_error, "skipping invalid video: \"%s\"\n", output.name );
 			continue;
 		}
 
@@ -781,7 +798,7 @@ void run_encode_preset( char* out_dir, clip_encode_preset_t& preset, u32 preset_
 		if ( !valid_preset )
 			continue;
 
-		printf( "\n----------------------------------------------------\n\n" );
+		log_printf( "\n----------------------------------------------------\n\n" );
 
 		memset( full_out_path, 0, sizeof( char ) * 4096 );
 		strcat( full_out_path, out_dir );
@@ -794,7 +811,7 @@ void run_encode_preset( char* out_dir, clip_encode_preset_t& preset, u32 preset_
 		strcat( full_out_path, "." );
 		strcat( full_out_path, preset.ext );
 
-		printf( "Output Video \"%s\"\n", full_out_path );
+		log_printf( "Output Video \"%s\"\n", full_out_path );
 
 		// check if the video exists
 		if ( fs_is_file( full_out_path ) )
@@ -802,7 +819,7 @@ void run_encode_preset( char* out_dir, clip_encode_preset_t& preset, u32 preset_
 			// make sure it's not an empty file
 			if ( fs_file_size( full_out_path ) > 0 )
 			{
-				printf( "Output File exists - skipping\n" );
+				log_printf( "Output File exists - skipping\n" );
 				continue;
 			}
 		}

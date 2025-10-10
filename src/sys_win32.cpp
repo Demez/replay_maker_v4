@@ -457,6 +457,87 @@ bool sys_copy_file_times( const char* src_path, const char* out_path, bool creat
 
 
 // https://stackoverflow.com/a/35658917
+bool sys_execute_read_callback( const char* command, str_buf_t& output, f_exec_callback* p_exec_callback )
+{
+	if ( !p_exec_callback )
+		return false;
+
+	HANDLE              hPipeRead, hPipeWrite;
+
+	SECURITY_ATTRIBUTES saAttr  = { sizeof( SECURITY_ATTRIBUTES ) };
+	saAttr.bInheritHandle       = TRUE;  // Pipe handles are inherited by child process.
+	saAttr.lpSecurityDescriptor = NULL;
+
+	// Create a pipe to get results from child's stdout.
+	if ( !CreatePipe( &hPipeRead, &hPipeWrite, &saAttr, 0 ) )
+		return false;
+
+	STARTUPINFOW si              = { sizeof( STARTUPINFOW ) };
+	si.dwFlags                   = STARTF_USESHOWWINDOW | STARTF_USESTDHANDLES;
+	si.hStdOutput                = hPipeWrite;
+	si.hStdError                 = hPipeWrite;
+	si.wShowWindow               = SW_HIDE;  // Prevents cmd window from flashing.
+											 // Requires STARTF_USESHOWWINDOW in dwFlags.
+
+	PROCESS_INFORMATION pi       = { 0 };
+
+	wchar_t*            command_w = sys_to_wchar( command );
+
+	BOOL                fSuccess  = CreateProcessW( NULL, command_w, NULL, NULL, TRUE, CREATE_NEW_CONSOLE, NULL, NULL, &si, &pi );
+
+	free( command_w );
+
+	if ( !fSuccess )
+	{
+		CloseHandle( hPipeWrite );
+		CloseHandle( hPipeRead );
+		return false;
+	}
+
+	memset( &output, 0, sizeof( str_buf_t ) );
+
+	bool bProcessEnded = false;
+	while ( !bProcessEnded )
+	{
+		// Give some timeslice (50 ms), so we won't waste 100% CPU.
+		bProcessEnded = WaitForSingleObject( pi.hProcess, 50 ) == WAIT_OBJECT_0;
+
+		// Even if process exited - we continue reading, if
+		// there is some data available over pipe.
+		for ( ;; )
+		{
+			char  buf[ 1024 ];
+			DWORD dwRead  = 0;
+			DWORD dwAvail = 0;
+
+			if ( !::PeekNamedPipe( hPipeRead, NULL, 0, NULL, &dwAvail, NULL ) )
+				break;
+
+			if ( !dwAvail )  // No data available, return
+				break;
+
+			if ( !::ReadFile( hPipeRead, buf, MIN( sizeof( buf ) - 1, dwAvail ), &dwRead, NULL ) || !dwRead )
+				// Error, the child process might ended
+				break;
+
+			buf[ dwRead ] = 0;
+			size_t buf_len = strlen( buf );
+			p_exec_callback( buf, buf_len );
+			util_append_str( output, buf, buf_len, 2048 );
+		}
+	}
+
+	util_append_str( output, "\0", 1, 1 );
+
+	CloseHandle( hPipeWrite );
+	CloseHandle( hPipeRead );
+	CloseHandle( pi.hProcess );
+	CloseHandle( pi.hThread );
+	return true;
+}
+
+
+// https://stackoverflow.com/a/35658917
 bool sys_execute_read( const char* command, str_buf_t& output )
 {
 	HANDLE              hPipeRead, hPipeWrite;

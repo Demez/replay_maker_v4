@@ -1,3 +1,4 @@
+#include "main.h"
 #include "args.h"
 #include "clip/clip.h"
 #include "encoder/encoder.h"
@@ -7,6 +8,7 @@
 const char*         g_video_files    = nullptr;
 const char*         g_output_dir     = nullptr;
 const char*         g_temp_video_dir = nullptr;
+const char*         g_log_dir        = nullptr;
 
 clip_data_t*        g_clip_data      = nullptr;
 enc_output_video_t* g_output_videos  = nullptr;
@@ -222,12 +224,12 @@ bool collect_video_info()
 
 	if ( !g_output_videos )
 	{
-		printf( "failed to allocate memory for output videos\n" );
+		log_printf( "failed to allocate memory for output videos\n" );
 		return false;
 	}
 
 	// verify each video and determine presets to use for videos
-	printf(
+	log_printf(
 	  "----------------------------------------------------\n"
 	  "Demez Replay Encoder\n"
 	  "\n"
@@ -253,11 +255,11 @@ bool collect_video_info()
 
 		if ( !enc_output.metadata )
 		{
-			printf( "failed to allocate memory for storing video metadata\n" );
+			log_printf( "failed to allocate memory for storing video metadata\n" );
 			return false;
 		}
 
-		printf( "%s%s\n", g_clip_data->prefix[ output.prefix ].prefix, output.name );
+		log_printf( "%s%s\n", g_clip_data->prefix[ output.prefix ].prefix, output.name );
 
 		// ----------------------------------------------------------------------------------------
 		// determine encode presets for this output video
@@ -287,7 +289,7 @@ bool collect_video_info()
 
 				if ( !new_data )
 				{
-					printf( "failed to allocate data for storing output video presets\n" );
+					log_printf( "failed to allocate data for storing output video presets\n" );
 					return false;
 				}
 
@@ -296,14 +298,14 @@ bool collect_video_info()
 			}
 		}
 
-		printf( "%d Encode Presets Used: ", enc_output.presets_count );
+		log_printf( "%d Encode Presets Used: ", enc_output.presets_count );
 
 		for ( u32 preset_i = 0; preset_i < enc_output.presets_count; preset_i++ )
 		{
-			printf( "\"%s\" ", g_clip_data->preset[ enc_output.presets[ preset_i ] ].name );
+			log_printf( "\"%s\" ", g_clip_data->preset[ enc_output.presets[ preset_i ] ].name );
 		}
 
-		printf( "\n" );
+		log_printf( "\n" );
 
 		// ----------------------------------------------------------------------------------------
 		// get input video metadata
@@ -350,7 +352,7 @@ bool collect_video_info()
 
 			if ( !get_video_metadata( input.path, enc_output.metadata[ in_i ] ) )
 			{
-				printf( "Failed to get video metadata - \"%s\"", input.path );
+				log_printf( "Failed to get video metadata - \"%s\"", input.path );
 				all_valid              = false;
 				missing_videos[ in_i ] = true;
 			}
@@ -362,9 +364,9 @@ bool collect_video_info()
 		for ( u32 preset_i = 0; preset_i < enc_output.presets_count; preset_i++ )
 		{
 			clip_encode_preset_t& preset = g_clip_data->preset[ enc_output.presets[ preset_i ] ];
-			printf( "\nEncode Preset: %s\n", preset.name );
+			log_printf( "\nEncode Preset: %s\n", preset.name );
 
-			printf(
+			log_printf(
 			  "    Output:   %s/%s%s%s.%s\n",
 			  preset.out_folder_append ? preset.out_folder_append : "",
 			  preset.out_prefix ? preset.out_prefix : "",
@@ -390,7 +392,7 @@ bool collect_video_info()
 				}
 			}
 
-			printf( "    Duration: %.4f%s\n\n", duration, duration_invalid ? " [INVALID]" : "" );
+			log_printf( "    Duration: %.4f%s\n\n", duration, duration_invalid ? " [INVALID]" : "" );
 
 			// print input videos for this preset and their time ranges
 			for ( u32 in_i = 0; in_i < output.input_count; in_i++ )
@@ -401,7 +403,7 @@ bool collect_video_info()
 				if ( !used_in_preset( input.encode_overrides, preset_i ) )
 					continue;
 
-				printf( "    %s%s\n", input.path, missing_videos[ in_i ] ? " [INVALID]" : "" );
+				log_printf( "    %s%s\n", input.path, missing_videos[ in_i ] ? " [INVALID]" : "" );
 
 				if ( missing_videos[ in_i ] )
 					continue;
@@ -411,13 +413,13 @@ bool collect_video_info()
 					bool  valid          = valid_time_range( input.time_range[ time_i ], enc_output.metadata[ in_i ] );
 					float range_duration = input.time_range[ time_i ].end - input.time_range[ time_i ].start;
 
-					printf( "        %.4f - %.4f (%.4f)%s\n", input.time_range[ time_i ].start, input.time_range[ time_i ].end, range_duration, valid ? "" : " [INVALID]" );
+					log_printf( "        %.4f - %.4f (%.4f)%s\n", input.time_range[ time_i ].start, input.time_range[ time_i ].end, range_duration, valid ? "" : " [INVALID]" );
 				}
 			}
 		}
 
 		enc_output.valid = true;
-		printf( "----------------------------------------------------\n" );
+		log_printf( "----------------------------------------------------\n" );
 	}
 
 	return true;
@@ -437,6 +439,7 @@ auto main( int argc, char* argv[] ) -> int
 	g_video_files      = args_register_str( "", "File containing all the videos to encode", "--videos" );
 	g_output_dir       = args_register_str( "output4", "Output Directory", "--output" );
 	g_temp_video_dir   = args_register_str( "temp4", "Temp Video Directory", "--temp" );
+	g_log_dir          = args_register_str( "replay_logs", "Log File Directory", "--log" );
 
 	bool show_help     = args_register_bool( "Show help message", "--help" );
 	show_help |= args_register_bool( "Show help message", "-h" );
@@ -462,6 +465,20 @@ auto main( int argc, char* argv[] ) -> int
 		free( exe_dir );
 		args_free();
 		return 1;
+	}
+
+	if ( !fs_make_dir_check( g_log_dir ) )
+	{
+		free( exe_dir );
+		args_free();
+		return 1;
+	}
+
+	if ( !log_init() )
+	{
+		free( exe_dir );
+		args_free();
+		return 2;
 	}
 
 	g_clip_data = clip_create();
@@ -492,6 +509,7 @@ auto main( int argc, char* argv[] ) -> int
 	run_encoding();
 
 	clip_free( g_clip_data );
+	log_shutdown();
 	args_free();
 	return 0;
 }
