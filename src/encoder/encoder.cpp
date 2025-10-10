@@ -329,11 +329,11 @@ void create_output_video( clip_output_video_t& output, char* full_out_path, enc_
 
 	if ( !run_ffmpeg_check( ffmpeg_cmd, full_out_path ) )
 	{
-		log_printf( log_result, "[FAIL] %s\n" );
+		log_printf( log_result, "[FAIL] %s\n", full_out_path );
 		return;
 	}
 
-	log_printf( log_result, "[PASS] %s\n" );
+	log_printf( log_result, "[PASS] %s\n", full_out_path );
 
 	// TODO: delete concat.txt
 	// TODO: write date created and modified
