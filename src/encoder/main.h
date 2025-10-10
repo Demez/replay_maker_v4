@@ -11,7 +11,8 @@ enum log_channel
 	log_general,
 	log_warning,
 	log_error,
-	log_ffmpeg
+	log_ffmpeg,
+	log_result,
 };
 
 
@@ -46,6 +47,9 @@ enum e_log_color_ : e_log_color
 
 bool log_init();
 void log_shutdown();
+
+char* log_build_name( const char* name );
+bool  log_set_file( const char* name );
 
 void log_printf( const char* format, ... );
 void log_printf( log_channel channel, const char* format, ... );

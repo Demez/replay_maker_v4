@@ -5,11 +5,14 @@
 #include <time.h>
 
 
-extern const char* g_log_dir;
-extern const char* g_video_files;
+extern const char*    g_log_dir;
+extern const char*    g_video_files;
 
+char                  g_date_str[ 32 ]{};
+char*                 g_file_name        = nullptr;
 
-FILE* g_log_file = nullptr;
+FILE*                 g_log_file         = nullptr;
+FILE*                 g_log_file_results = nullptr;
 
 
 constexpr const char* g_log_color_ansi[] = {
@@ -113,19 +116,57 @@ bool log_init()
 	time( &time_raw );
 	time_info       = localtime( &time_raw );
 
-	char  date_str[ 32 ]{};
-	strftime( date_str, 32, "%F_%H-%M-%S", time_info );
+	strftime( g_date_str, 32, "%F_%H-%M-%S", time_info );
 
-	char* file_name = fs_get_filename_no_ext( g_video_files );
+	g_file_name = fs_get_filename_no_ext( g_video_files );
 
 	// Format filename:
 	// Example - replay_encoder__2025-10-09_20-54-08__filename.log
 	char file_path[ 2048 ]{};
-	snprintf( file_path, 2048, "%s" SEP_S "replay_encoder__%s__%s.log", g_log_dir, date_str, file_name );
+	snprintf( file_path, 2048, "%s" SEP_S "replay_encoder__%s__%s__results.log", g_log_dir, g_date_str, g_file_name );
+
+	g_log_file_results = fopen( file_path, "w" );
+
+	if ( !g_log_file_results )
+	{
+		printf( "FAILED TO OPEN RESULTS LOG FILE FOR WRITING\n" );
+		return false;
+	}
+
+	if ( !log_set_file( "init" ) )
+		return false;
+
+	return true;
+}
+
+
+char* log_build_name( const char* name )
+{
+	// Format filename:
+	// Example - replay_encoder__2025-10-09_20-54-08__filename__custom_name.log
+	size_t len = snprintf( nullptr, 0, "%s" SEP_S "replay_encoder__%s__%s__%s.log", g_log_dir, g_date_str, g_file_name, name );
+	char* file_name = ch_calloc< char >( len );
+	snprintf( file_name, len, "%s" SEP_S "replay_encoder__%s__%s__%s.log", g_log_dir, g_date_str, g_file_name, name );
+
+	return file_name;
+}
+
+
+bool log_set_file( const char* name )
+{
+	if ( g_log_file )
+	{
+		fflush( g_log_file );
+		fclose( g_log_file );
+		g_log_file = nullptr;
+	}
+	
+	// Format filename:
+	// Example - replay_encoder__2025-10-09_20-54-08__filename__custom_name.log
+	char  file_path[ 2048 ]{};
+	snprintf( file_path, 2048, "%s" SEP_S "replay_encoder__%s__%s__%s.log", g_log_dir, g_date_str, g_file_name, name );
 
 	g_log_file = fopen( file_path, "w" );
-
-	free( file_name );
 
 	if ( !g_log_file )
 	{
@@ -139,13 +180,22 @@ bool log_init()
 
 void log_shutdown()
 {
-	if ( !g_log_file )
-		return;
+	free( g_file_name );
 
-	fflush( g_log_file );
-	fclose( g_log_file );
+	if ( g_log_file )
+	{
+		fflush( g_log_file );
+		fclose( g_log_file );
+	}
 
-	g_log_file = nullptr;
+	if ( g_log_file_results )
+	{
+		fflush( g_log_file_results );
+		fclose( g_log_file_results );
+	}
+
+	g_log_file         = nullptr;
+	g_log_file_results = nullptr;
 }
 
 
@@ -259,6 +309,13 @@ void log_print_v( log_channel channel, const char* format, va_list args )
 			log_write( result, len );
 
 			log_set_con_color( e_log_color_default );
+			break; 
+		}
+		case log_result:
+		{
+			printf( result );
+			fwrite( result, sizeof( char ), len, g_log_file_results );
+			fflush( g_log_file_results );
 			break; 
 		}
 	}

@@ -187,17 +187,17 @@ static void clip_parse_prefixes( clip_data_t* data, json_object_t& json )
 }
 
 
-void clip_parse_settings( clip_data_t* data, const char* path )
+bool clip_parse_settings( clip_data_t* data, const char* path )
 {
 	if ( !data )
-		return;
+		return false;
 
 	char* file = fs_read_file( path );
 
 	if ( !file )
 	{
 		printf( "failed to read file for settings\n" );
-		return;
+		return false;
 	}
 
 	json_object_t root{};
@@ -206,13 +206,13 @@ void clip_parse_settings( clip_data_t* data, const char* path )
 	if ( err != EJsonError_None )
 	{
 		printf( "Error Parsing Json - %s\n", json_error_to_str( err ) );
-		return;
+		return false;
 	}
 
 	if ( root.aType != e_json_type_object )
 	{
 		printf( "%s - Root Type is not an Object\n", path );
-		return;
+		return false;
 	}
 
 	for ( size_t root_i = 0; root_i < root.aObjects.count; root_i++ )
@@ -232,7 +232,7 @@ void clip_parse_settings( clip_data_t* data, const char* path )
 	json_free( root );
 	free( file );
 
-	printf( "parsed settings\n" );
+	return true;
 }
 
 

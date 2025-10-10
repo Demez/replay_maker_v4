@@ -229,8 +229,8 @@ bool collect_video_info()
 	}
 
 	// verify each video and determine presets to use for videos
-	log_printf(
-	  "----------------------------------------------------\n"
+	log_printf( 
+	  "====================================================================\n"
 	  "Demez Replay Encoder\n"
 	  "\n"
 	  "Videos File:      \"%s\"\n"
@@ -240,8 +240,7 @@ bool collect_video_info()
 	  "%d Video Prefixes\n"
 	  "\n"
 	  "%d Output Videos\n"
-	  "\n"
-	  "----------------------------------------------------\n",
+	  "====================================================================\n",
 	  g_video_files, g_output_dir,
 	  g_clip_data->preset_count, g_clip_data->prefix_count, g_clip_data->output_count );
 
@@ -490,7 +489,8 @@ auto main( int argc, char* argv[] ) -> int
 		memcpy( settings_path, exe_dir, exe_dir_len * sizeof( char ) );
 		strcat( settings_path, PATH_SEP_STR "replay_maker_config.json5" );
 
-		clip_parse_settings( g_clip_data, settings_path );
+		if ( !clip_parse_settings( g_clip_data, settings_path ) )
+			return 3;
 	}
 
 	free( exe_dir );
@@ -499,7 +499,7 @@ auto main( int argc, char* argv[] ) -> int
 
 	if ( g_clip_data->output_count == 0 )
 	{
-		printf( "no output videos found!\n" );
+		log_printf( log_error, "no output videos found!\n" );
 		return 0;
 	}
 
