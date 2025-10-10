@@ -314,8 +314,12 @@ void log_print_v( log_channel channel, const char* format, va_list args )
 		case log_result:
 		{
 			printf( result );
+			log_write( result, len );
+
+			// also write to separate file
 			fwrite( result, sizeof( char ), len, g_log_file_results );
 			fflush( g_log_file_results );
+
 			break; 
 		}
 	}
