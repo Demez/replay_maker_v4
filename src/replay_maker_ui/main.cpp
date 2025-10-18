@@ -783,7 +783,7 @@ auto main( int argc, char* argv[] ) -> int
 	// ImGui::GetIO().Fonts->AddFontFromFileTTF( "D:\\projects\\replay_maker_v4\\out\\SourceSans3-Regular.ttf", 16, nullptr );
 	// ImGui::GetIO().Fonts->AddFontFromFileTTF( "D:\\projects\\replay_maker_v4\\out\\CascadiaCode.ttf", 15, nullptr );
 
-	ImGui_ImplOpenGL3_CreateFontsTexture();
+	ImGui_ImplOpenGL3_CreateDeviceObjects();
 
 	// imgui_set_theme_steam_green();
 

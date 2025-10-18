@@ -34,12 +34,6 @@ set( CMAKE_CXX_STANDARD 20 )
 # Compiler/Platform specifc options
 if ( MSVC )
 
-	message( "test" )
-
-	link_libraries(
-		Opengl32
-	)
-
 	add_compile_definitions(
 		_AMD64_ __x86_64 __amd64
 		NOMINMAX
@@ -135,6 +129,14 @@ if ( MSVC )
 	add_link_options(
 		"/INCREMENTAL"
 	)
+
+	link_libraries( Opengl32 )
+	
+	message( "Copying SDL3" )
+	configure_file( "thirdparty/SDL3/lib/x64/SDL3.dll" "${PROJ_OUT}/SDL3.dll" COPYONLY )
+	
+	message( "Copying MPV" )
+	configure_file( "thirdparty/mpv/libmpv-2.dll" "${PROJ_OUT}/libmpv-2.dll" COPYONLY )
 	
 else()  # linux
 endif()
@@ -146,7 +148,6 @@ set(
     SRC_FILES_SHARED
     src/util.cpp
     src/util.h
-    src/sys_win32.cpp
     src/args.cpp
     src/args.h
 	
@@ -161,20 +162,25 @@ set(
     src/replay_maker_ui/main.cpp
     src/replay_maker_ui/main.h
     src/replay_maker_ui/mpv_interface.cpp
-    src/replay_maker_ui/sys_win32_drag_drop.cpp
-    src/replay_maker_ui/sys_win32_replay.cpp
     src/replay_maker_ui/ui_editor.cpp
     src/replay_maker_ui/ui_timeline.cpp
     src/replay_maker_ui/undo.cpp
     src/replay_maker_ui/key_bind.cpp
 
+    src/imgui/imconfig.h
     src/imgui/imgui.cpp
     src/imgui/imgui_demo.cpp
     src/imgui/imgui_draw.cpp
     src/imgui/imgui_impl_opengl3.cpp
-    src/imgui/imgui_impl_win32.cpp
+    src/imgui/imgui_impl_sdl3.cpp
     src/imgui/imgui_tables.cpp
     src/imgui/imgui_widgets.cpp
+	src/imgui/imgui_freetype.cpp
+	src/imgui/imgui_freetype.h
+
+	src/glad/glad.c
+	src/glad/glad.h
+	src/glad/khrplatform.h
 )
 
 set(
@@ -184,15 +190,28 @@ set(
     src/encoder/main.cpp
     src/encoder/main.h
     src/encoder/logging.cpp
-
-    src/imgui/imgui.cpp
-    src/imgui/imgui_demo.cpp
-    src/imgui/imgui_draw.cpp
-    src/imgui/imgui_impl_opengl3.cpp
-    src/imgui/imgui_impl_win32.cpp
-    src/imgui/imgui_tables.cpp
-    src/imgui/imgui_widgets.cpp
 )
+
+if ( WIN32 )
+	set(
+		SRC_FILES_SHARED
+		${SRC_FILES_SHARED}
+		src/sys_win32.cpp
+	)
+
+	set(
+		SRC_FILES_UI
+		${SRC_FILES_UI}
+		src/replay_maker_ui/sys_win32_drag_drop.cpp
+		src/replay_maker_ui/sys_win32_replay.cpp
+		src/imgui/imgui_impl_win32.cpp
+	)
+else()
+endif()
+
+
+# ========================================================================================================
+
 
 add_executable( replay_maker ${SRC_FILES_UI} ${SRC_FILES_SHARED} )
 
@@ -203,11 +222,19 @@ source_group(
 )
 
 # native file dialog
-target_link_libraries( replay_maker PRIVATE nfd )
-target_link_directories( replay_maker PRIVATE "nativefiledialog/build/src" )
+target_link_libraries( replay_maker PRIVATE "nfd" "freetype" "SDL3" )
+target_link_directories( replay_maker PRIVATE "thirdparty/nativefiledialog/build/src" )
+
+if ( WIN32 )
+	target_link_directories( replay_maker PRIVATE "thirdparty/SDL3/lib/x64" )
+endif()
 
 foreach( OUTPUT_CONFIG ${CMAKE_CONFIGURATION_TYPES} )
-	target_link_directories( replay_maker PRIVATE "nativefiledialog/build/src/${OUTPUT_CONFIG}" )
+	target_link_directories(
+		replay_maker PRIVATE
+		"thirdparty/nativefiledialog/build/src/${OUTPUT_CONFIG}"
+		"thirdparty/freetype/objs/x64/${OUTPUT_CONFIG} Static"
+	)
 endforeach( OUTPUT_CONFIG ${CMAKE_CONFIGURATION_TYPES} )
 
 target_include_directories(
@@ -215,8 +242,11 @@ target_include_directories(
 	"src"
 	"src/replay_maker_ui"
 	"src/imgui"
-	"mpv/include"
-	"nativefiledialog/src/include"
+	"src/glad"
+	"thirdparty/SDL3/include"
+	"thirdparty/mpv/include"
+	"thirdparty/nativefiledialog/src/include"
+	"thirdparty/freetype/include"
 )
 
 set_target_properties(
@@ -226,6 +256,10 @@ set_target_properties(
 	
 	VS_DEBUGGER_WORKING_DIRECTORY ${PROJ_OBJ}
 )
+
+
+# ========================================================================================================
+
 
 add_executable( replay_encoder ${SRC_FILES_ENCODER} ${SRC_FILES_SHARED} )
 

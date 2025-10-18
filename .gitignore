@@ -13,4 +13,5 @@ cmake-build-debug-visual-studio/*
 cmake-build-release-visual-studio/*
 cmake-build-relwithdebinfo-visual-studio/*
 
+thirdparty/*
 zipped_builds/*
