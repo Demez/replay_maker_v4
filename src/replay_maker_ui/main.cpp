@@ -367,6 +367,8 @@ void draw_playback_controls( int size[ 2 ], bool draw_volume )
 }
 
 
+#if 0
+
 #define MPV_CMD( ... )                                              \
 {                                                               \
 const char* cmd[]   = { __VA_ARGS__, NULL };                \
@@ -449,6 +451,8 @@ void handle_keybinds()
 		MPV_CMD( "set", "vf", "crop=1920:1080:1920:0" );
 	}
 }
+
+#endif
 
 
 void draw_imgui_window( int window_size[ 2 ] )

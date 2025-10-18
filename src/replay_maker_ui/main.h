@@ -21,6 +21,35 @@ struct video_media_info_t
 extern video_media_info_t g_video_media_info;
 
 
+// editor commands
+enum e_cmd : u8
+{
+	e_cmd_mpv,  // an mpv command
+	e_cmd_toggle_sidebar,
+	e_cmd_toggle_fullscreen,
+	e_cmd_save_file,
+
+	// timeline controls
+	e_cmd_timeline_marker_set_a,
+	e_cmd_timeline_marker_set_b,
+	e_cmd_timeline_marker_clear_a,
+	e_cmd_timeline_marker_clear_b,
+	e_cmd_timeline_marker_snap_a,
+	e_cmd_timeline_marker_snap_b,
+	e_cmd_timeline_section_create,
+	e_cmd_timeline_section_delete,
+	e_cmd_timeline_section_snap_left,
+	e_cmd_timeline_section_snap_right,
+};
+
+
+enum e_mpv_cmd
+{
+	e_mpv_cmd_normal,
+	e_mpv_cmd_seek,
+};
+
+
 // --------------------------------------------------------------------------------------------------------
 // win32 stuff
 
@@ -66,8 +95,30 @@ extern mpv_render_context*         g_mpv_gl;
 extern bool                        g_wakeup_on_mpv_render_update, g_wakeup_on_mpv_events;
 
 // --------------------------------------------------------------------------------------------------------
+// Keybindings
+
+
+using e_mod_mask = u8;
+enum : e_mod_mask
+{
+	e_mod_mask_none    = 0,
+	e_mod_mask_ctrl_l  = ( 1 << 0 ),
+	e_mod_mask_ctrl_r  = ( 1 << 1 ),
+	e_mod_mask_shift_l = ( 1 << 2 ),
+	e_mod_mask_shift_r = ( 1 << 3 ),
+	e_mod_mask_alt_l   = ( 1 << 4 ),
+	e_mod_mask_alt_r   = ( 1 << 5 ),
+	e_mod_mask_gui_l   = ( 1 << 6 ),
+	e_mod_mask_gui_r   = ( 1 << 7 ),
+};
+
+
+constexpr e_mod_mask               e_mod_mask_count = 8;
+
 
 void                               handle_keybinds();
+
+// --------------------------------------------------------------------------------------------------------
 
 void                               calc_imgui_window_size( int index, ivec2& size );
 void                               calc_playback_window_size( ivec2& size );

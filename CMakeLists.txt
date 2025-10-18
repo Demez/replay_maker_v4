@@ -41,16 +41,12 @@ if ( MSVC )
 	)
 
 	add_compile_definitions(
+		_AMD64_ __x86_64 __amd64
 		NOMINMAX
 		_CRT_SECURE_NO_WARNINGS
 		_ALLOW_RUNTIME_LIBRARY_MISMATCH _ALLOW_ITERATOR_DEBUG_LEVEL_MISMATCH _ALLOW_MSC_VER_MISMATCH
-		CH_USE_MIMALLOC=0
 		_UNICODE=1
 		UNICODE=1
-	)
-
-	add_compile_definitions(
-		_AMD64_ __x86_64 __amd64
 	)
 	
 	# Use these runtime libraries for both so it doesn't crash smh my head
@@ -170,6 +166,7 @@ set(
     src/replay_maker_ui/ui_editor.cpp
     src/replay_maker_ui/ui_timeline.cpp
     src/replay_maker_ui/undo.cpp
+    src/replay_maker_ui/key_bind.cpp
 
     src/imgui/imgui.cpp
     src/imgui/imgui_demo.cpp
@@ -187,7 +184,7 @@ set(
     src/encoder/main.cpp
     src/encoder/main.h
     src/encoder/logging.cpp
-	
+
     src/imgui/imgui.cpp
     src/imgui/imgui_demo.cpp
     src/imgui/imgui_draw.cpp
