@@ -145,6 +145,11 @@ void* get_proc(const char *namez) {
     return result;
 }
 
+void* fucking_hack_for_gl( const char* name )
+{
+	return get_proc( name );
+}
+
 int gladLoadGL(void) {
     int status = 0;
 

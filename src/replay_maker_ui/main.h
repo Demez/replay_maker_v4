@@ -2,7 +2,10 @@
 
 #include "util.h"
 #include "imgui.h"
+#include "glad.h"
 #include "clip/clip.h"
+
+#include "SDL3/SDL.h"
 
 #include "mpv/client.h"
 #include "mpv/render.h"
@@ -57,9 +60,13 @@ struct ImGuiContext;
 
 void                               sys_pause_window_events( bool paused );
 
+void*                              sys_get_gl_proc( const char* name );
+void                               sys_get_window_size( void* window, int* width, int* height );
+
 bool                               win32_create_windows( int width, int height );
 void                               win32_exit();
 void                               win32_run();
+void                               win32_update();
 
 void                               sys_mpv_full_window_enter();
 void                               sys_mpv_full_window_exit();
@@ -69,6 +76,7 @@ void                               sys_mpv_full_window_toggle();
 // imgui helper functions
 
 bool                               point_in_rect( ImVec2 point, ImVec2 min_size, ImVec2 max_size );
+bool                               mouse_in_rect( ImVec2 min_size, ImVec2 max_size );
 
 // --------------------------------------------------------------------------------------------------------
 // MPV
@@ -80,6 +88,8 @@ bool                               start_mpv();
 void                               stop_mpv();
 
 char*                              mpv_get_current_video();
+void                               mpv_draw_frame();
+void                               mpv_window_resize();
 
 void                               mpv_cmd_loadfile( const char* file );
 void                               mpv_cmd_toggle_playback();
@@ -136,6 +146,8 @@ void                               replay_editor_reset();
 void                               draw_preset_override( clip_encode_override_t& override, bool edit );
 
 void                               enable_sidebar( bool enabled );
+void                               window_on_resize();
+void                               window_render_all();
 
 // save encode presets and video prefixes
 void                               save_settings();
@@ -149,9 +161,13 @@ void                               load_recently_opened();
 void                               update_recently_opened( const char* clips_file );
 
 extern bool                        g_running;
+extern bool                        g_fullscreen;
 
+extern SDL_Window*                 g_main_window_sdl;
 extern void*                       g_main_window;
-extern void*                       g_mpv_window;
+
+extern ivec2                       g_mouse_pos;
+extern ivec2                       g_mouse_delta;
 
 extern ivec2                       g_mpv_size;
 extern ivec2                       g_window_size;

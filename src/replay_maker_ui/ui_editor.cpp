@@ -36,6 +36,7 @@ static bool                    g_focus_replay_maker = false;
 
 static int                     g_draw_built_in_menu = 0;
 
+
 void on_file_dialog_open()
 {
 	// pause mpv
@@ -867,7 +868,7 @@ void draw_preset_override( clip_encode_override_t& override, bool edit )
 		float  combo_size = text_size.x + ( ( style.FramePadding.x + style.FramePadding.y + style.ItemSpacing.x ) * 2 );
 		ImGui::SetNextItemWidth( combo_size );
 
-		if ( ImGui::BeginCombo( "##presets", "Presets", ImGuiComboFlags_HeightSmall ) )
+		if ( ImGui::BeginCombo( "##presets", "Presets" ) )
 		{
 			g_preset_combo_open = true;
 

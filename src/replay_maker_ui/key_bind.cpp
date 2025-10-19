@@ -4,6 +4,10 @@
 #include <unordered_map>
 
 
+extern int  g_grabbed_divider_idx;
+extern bool g_hovered_divider;
+
+
 enum e_key_state : s8
 {
 	e_key_state_just_released = -1,
@@ -135,6 +139,11 @@ void handle_keybinds()
 	{
 		mpv_cmd_toggle_playback();
 	}
+	else if ( ImGui::IsKeyPressed( ImGuiKey_MouseLeft, false ) )
+	{
+		if ( !g_preset_combo_open && !g_hovered_divider && mouse_in_rect( { 0.f, 0.f }, { (float)g_mpv_size[ 0 ], (float)g_mpv_size[ 1 ] } ) )
+			mpv_cmd_toggle_playback();
+	}
 	else if ( ImGui::IsKeyPressed( ImGuiKey_LeftArrow, true ) )
 	{
 		mpv_cmd_seek_offset( -5.0 );
@@ -171,7 +180,4 @@ void handle_keybinds()
 		MPV_CMD( "set", "vf", "crop=1920:1080:1920:0" );
 	}
 }
-
-
-
 

@@ -4,7 +4,7 @@
 
 #include "imgui.h"
 #include "imgui_internal.h"
-#include "imgui_impl_win32.h"
+#include "imgui_impl_sdl3.h"
 #include "imgui_impl_opengl3_loader.h"
 #include "imgui_impl_opengl3.h"
 
@@ -19,11 +19,21 @@
 #include <time.h>
 
 
-bool                g_running      = true;
+SDL_Window*         g_main_window_sdl     = nullptr;
+SDL_GLContext       g_gl_context          = nullptr;
 
-ivec2               g_mpv_size     = { 0, 0 };
-ivec2               g_window_size  = { 0, 0 };
-bool                g_show_sidebar = true;
+bool                g_running             = true;
+bool                g_fullscreen          = false;
+
+ivec2               g_mouse_pos           = { 0, 0 };
+ivec2               g_mouse_delta         = { 0, 0 };
+
+ivec2               g_mpv_size            = { 0, 0 };
+ivec2               g_window_size         = { 0, 0 };
+bool                g_show_sidebar        = true;
+
+int                 g_grabbed_divider_idx = -1;
+bool                g_hovered_divider     = false;
 
 extern clip_data_t* g_clip_data;
 
@@ -52,6 +62,12 @@ bool point_in_rect( ImVec2 point, ImVec2 min_size, ImVec2 max_size )
 {
 	// return point[ 0 ] >= min_size.left && point[ 0 ] <= rect.right && point[ 1 ] <= rect.bottom && point[ 1 ] >= rect.top;
 	return point[ 0 ] >= min_size[ 0 ] && point[ 0 ] <= max_size[ 0 ] && point[ 1 ] <= max_size[ 1 ] && point[ 1 ] >= min_size[ 1 ];
+}
+
+
+bool mouse_in_rect( ImVec2 min_size, ImVec2 max_size )
+{
+	return point_in_rect( ImVec2( g_mouse_pos[ 0 ], g_mouse_pos[ 1 ] ), min_size, max_size );
 }
 
 
@@ -699,6 +715,386 @@ void imgui_set_theme_steam_green()
 }
 
 
+static ivec2 g_old_mpv_size;
+static ivec2 g_old_window_size;
+
+
+void render_imgui();
+
+
+void window_render_all()
+{
+	render_imgui();
+	mpv_draw_frame();
+}
+
+
+void sys_mpv_full_window_enter()
+{
+	g_fullscreen           = true;
+
+	// save old mpv window size
+	g_old_mpv_size[ 0 ]    = g_mpv_size[ 0 ];
+	g_old_mpv_size[ 1 ]    = g_mpv_size[ 1 ];
+
+	g_old_window_size[ 0 ] = g_window_size[ 0 ];
+	g_old_window_size[ 1 ] = g_window_size[ 1 ];
+
+	// set mpv window size
+	g_mpv_size[ 0 ]        = g_window_size[ 0 ];
+	g_mpv_size[ 1 ]        = g_window_size[ 1 ];
+}
+
+
+void window_on_resize()
+{
+	// calc new window size
+	ivec2 old_window_size = { g_window_size[ 0 ], g_window_size[ 1 ] };
+	ivec2 new_window_size = { 0, 0 };
+
+	SDL_GetWindowSize( g_main_window_sdl, &new_window_size[ 0 ], &new_window_size[ 1 ] );
+
+	ivec2 size_diff{};
+	size_diff[ 0 ] = new_window_size[ 0 ] - old_window_size[ 0 ];
+	size_diff[ 1 ] = new_window_size[ 1 ] - old_window_size[ 1 ];
+
+	// calc new mpv window size
+	g_mpv_size[ 0 ] += size_diff[ 0 ];
+	g_mpv_size[ 1 ] += size_diff[ 1 ];
+
+	g_window_size[ 0 ] = new_window_size[ 0 ];
+	g_window_size[ 1 ] = new_window_size[ 1 ];
+
+	mpv_window_resize();
+}
+
+
+void sys_mpv_full_window_exit()
+{
+	g_fullscreen = false;
+
+	int width, height;
+	SDL_GetWindowSize( g_main_window_sdl, &width, &height );
+
+	// scale the mpv window size based on
+	int diff_x      = width - g_old_window_size[ 0 ];
+	int diff_y      = height - g_old_window_size[ 1 ];
+
+	// restore mpv window size
+	g_mpv_size[ 0 ] = g_old_mpv_size[ 0 ] + diff_x;
+	g_mpv_size[ 1 ] = g_old_mpv_size[ 1 ] + diff_y;
+
+	window_on_resize();
+	window_render_all();
+}
+
+
+void sys_mpv_full_window_toggle()
+{
+	if ( !g_fullscreen )
+	{
+		sys_mpv_full_window_enter();
+	}
+	else
+	{
+		sys_mpv_full_window_exit();
+	}
+}
+
+
+void enable_sidebar( bool enabled )
+{
+	g_show_sidebar           = enabled;
+
+	static int old_mpv_width = g_mpv_size[ 0 ];
+
+	int        width, height;
+	SDL_GetWindowSize( g_main_window_sdl, &width, &height );
+
+	if ( !enabled )
+	{
+		old_mpv_width   = g_mpv_size[ 0 ];
+		g_mpv_size[ 0 ] = width;
+	}
+	else
+	{
+		g_mpv_size[ 0 ] = old_mpv_width;
+	}
+
+	mpv_window_resize();
+}
+
+
+void render_imgui()
+{
+	int width, height;
+	SDL_GetWindowSize( g_main_window_sdl, &width, &height );
+
+	int    window_size[ 2 ] = { width, height };
+
+	ImVec4 clear_color      = ImVec4( 0.1f, 0.1f, 0.1f, 1.00f );
+
+	ImGui_ImplOpenGL3_NewFrame();
+	ImGui_ImplSDL3_NewFrame();
+	ImGui::NewFrame();
+
+	draw_imgui_window( window_size );
+
+	// Rendering
+	ImGui::Render();
+
+	glViewport( 0, 0, width, height );
+	glClearColor( clear_color.x, clear_color.y, clear_color.z, clear_color.w );
+	glClear( GL_COLOR_BUFFER_BIT );
+	
+	mpv_draw_frame();
+
+	ImGui_ImplOpenGL3_RenderDrawData( ImGui::GetDrawData() );
+
+	// Present
+	SDL_GL_SwapWindow( g_main_window_sdl );
+}
+
+
+void imgui_update_fullscreen()
+{
+	ImGui_ImplSDL3_NewFrame();
+	ImGui::NewFrame();
+	ImGui::EndFrame();
+}
+
+
+#if 0
+int mouse_in_divider()
+{
+	// calc divider rectangle
+	int width, height;
+	SDL_GetWindowSize( g_main_window_sdl, &width, &height );
+
+	// rectangle 0 - playback controls divider
+	ImVec2   div_0_min{ 0.f, (float)g_mpv_size[ 1 ] - DIVIDER_SIZE };
+	ImVec2   div_0_max{ (float)g_mpv_size[ 0 ], (float)g_mpv_size[ 1 ] + DIVIDER_SIZE };
+
+	// rectangle 1 - replay info
+	ImVec2   div_1_min{ (float)g_mpv_size[ 0 ] - DIVIDER_SIZE, 0.f };
+	ImVec2   div_1_max{ (float)g_mpv_size[ 0 ] + DIVIDER_SIZE, (float)height };
+
+	ImGuiIO& io = ImGui::GetIO();
+
+	if ( mouse_in_rect( div_0_min, div_0_max ) )
+	{
+		io.ConfigFlags |= ImGuiConfigFlags_NoMouseCursorChange | ImGuiConfigFlags_NoMouse;
+		//SetCursor( g_cursor_resize_v );
+		return 0;
+	}
+	else if ( g_show_sidebar && mouse_in_rect( div_1_min, div_1_max ) )
+	{
+		io.ConfigFlags |= ImGuiConfigFlags_NoMouseCursorChange | ImGuiConfigFlags_NoMouse;
+		//SetCursor( g_cursor_resize_h );
+		return 1;
+	}
+
+	io.ConfigFlags &= ~( ImGuiConfigFlags_NoMouseCursorChange | ImGuiConfigFlags_NoMouse );
+	ImGui::SetMouseCursor( ImGuiMouseCursor_Arrow );
+	//SetCursor( g_cursor_default );
+	return -1;
+
+	//if ( point_in_rect( g_mouse_pos, rect_0 ) )
+	//{
+	//	return 0;
+	//}
+	//else if ( point_in_rect( g_mouse_pos, rect_1 ) )
+	//{
+	//	return 1;
+	//}
+	//
+	//return -1;
+}
+#endif
+
+
+void move_divider( u32 index )
+{
+	// check if we released the key, we could release it outside the window mid drag, as it lags behind
+	if ( !ImGui::IsMouseDown( ImGuiMouseButton_Left ) )
+	{
+		g_grabbed_divider_idx = -1;
+		return;
+	}
+
+	g_grabbed_divider_idx = index;
+
+	int width, height;
+	SDL_GetWindowSize( g_main_window_sdl, &width, &height );
+
+	if ( index == 0 )
+	{
+		// vertical divider
+		//cursor_main.y -= g_grab_cursor_offset[ 1 ];
+		g_mpv_size[ 1 ] = CLAMP( g_mouse_pos[ 1 ], 0, height );
+		ImGui::SetMouseCursor( ImGuiMouseCursor_ResizeNS );
+	}
+	else if ( index == 1 )
+	{
+		// horizontal divider
+		//cursor_main.x -= g_grab_cursor_offset[ 0 ];
+		g_mpv_size[ 0 ] = CLAMP( g_mouse_pos[ 0 ], 0, width );
+		ImGui::SetMouseCursor( ImGuiMouseCursor_ResizeEW );
+	}
+
+	// update mpv window size
+	mpv_window_resize();
+
+	window_render_all();
+}
+
+
+void update_dividers()
+{
+	//if ( !g_mouse_in_window )
+	//	return;
+
+	// calc divider rectangle
+	int width, height;
+	SDL_GetWindowSize( g_main_window_sdl, &width, &height );
+	
+	// rectangle 0 - playback controls divider
+	ImVec2      div_0_min{ 0.f, (float)g_mpv_size[ 1 ] - DIVIDER_SIZE };
+	ImVec2      div_0_max{ (float)g_mpv_size[ 0 ], (float)g_mpv_size[ 1 ] + DIVIDER_SIZE };
+
+	// rectangle 1 - replay info
+	ImVec2      div_1_min{ (float)g_mpv_size[ 0 ] - DIVIDER_SIZE, 0.f };
+	ImVec2      div_1_max{ (float)g_mpv_size[ 0 ] + DIVIDER_SIZE, (float)height };
+
+	ImGuiIO&    io                    = ImGui::GetIO();
+
+	g_hovered_divider                 = false;
+	static bool last_frame_left_click = false;
+	// bool        left_click            = ImGui::IsMouseClicked( ImGuiMouseButton_Left, false ) || ImGui::IsMouseDown( ImGuiMouseButton_Left );
+	bool        left_click            = ImGui::IsKeyPressed( ImGuiKey_MouseLeft, false );
+
+	if ( g_grabbed_divider_idx != -1 )
+	{
+		g_hovered_divider = true;
+		move_divider( g_grabbed_divider_idx );
+		last_frame_left_click = left_click;
+		return;
+	}
+
+	// NOTE: not perfect, windows keeps setting the cursor back to default even though im not using a cursor in a window class, hmm
+	if ( g_grabbed_divider_idx == 0 || mouse_in_rect( div_0_min, div_0_max ) )
+	{
+		g_hovered_divider = true;
+
+		//io.ConfigFlags |= ImGuiConfigFlags_NoMouseCursorChange | ImGuiConfigFlags_NoMouse;
+		ImGui::SetMouseCursor( ImGuiMouseCursor_ResizeNS );
+
+		if ( !last_frame_left_click && left_click )
+			move_divider( 0 );
+	}
+	else if ( g_show_sidebar && ( g_grabbed_divider_idx == 1 || mouse_in_rect( div_1_min, div_1_max ) ) )
+	{
+		g_hovered_divider = true;
+
+		//io.ConfigFlags |= ImGuiConfigFlags_NoMouseCursorChange | ImGuiConfigFlags_NoMouse;
+		ImGui::SetMouseCursor( ImGuiMouseCursor_ResizeEW );
+		//SetCursor( g_cursor_resize_h );
+
+		if ( !last_frame_left_click && left_click )
+			move_divider( 1 );
+	}
+	else if ( io.ConfigFlags & ( ImGuiConfigFlags_NoMouseCursorChange | ImGuiConfigFlags_NoMouse ) )
+	{
+		//io.ConfigFlags &= ~( ImGuiConfigFlags_NoMouseCursorChange | ImGuiConfigFlags_NoMouse );
+		ImGui::SetMouseCursor( ImGuiMouseCursor_Arrow );
+		//SetCursor( g_cursor_default );
+		g_grabbed_divider_idx = -1;
+	}
+
+	last_frame_left_click = left_click;
+}
+
+
+void main_loop()
+{
+	ImGuiIO& io = ImGui::GetIO();
+
+	while ( g_running )
+	{
+		// Handle Events
+		SDL_Event event;
+		while ( SDL_PollEvent( &event ) )
+		{
+			ImGui_ImplSDL3_ProcessEvent( &event );
+
+			switch ( event.type )
+			{
+				case SDL_EVENT_MOUSE_MOTION:
+					g_mouse_pos[ 0 ] = event.motion.x;
+					g_mouse_pos[ 1 ] = event.motion.y;
+					g_mouse_delta[ 0 ] += event.motion.xrel;
+					g_mouse_delta[ 1 ] += event.motion.yrel;
+					break;
+
+#if !_WIN32
+				case SDL_EVENT_WINDOW_RESIZED:
+					int width, height;
+					SDL_GetWindowSize( g_main_window_sdl, &width, &height );
+					io.DisplaySize.x = width;
+					io.DisplaySize.y = height;
+
+					window_on_resize();
+					break;
+#endif
+
+				case SDL_EVENT_QUIT:
+				case SDL_EVENT_WINDOW_CLOSE_REQUESTED:
+					g_running = false;
+					break;
+			}
+		}
+
+		if ( !g_running )
+			break;
+
+		// called so mpv doesn't get flooded with too many events, and becomes unresponsive
+		mpv_event* video_event = p_mpv_wait_event( g_mpv, 0.01f );
+
+		// is the window minimized
+		if ( SDL_GetWindowFlags( g_main_window_sdl ) & SDL_WINDOW_MINIMIZED )
+		{
+			SDL_Delay( 10 );
+			continue;
+		}
+
+		if ( !g_fullscreen )
+		{
+			update_dividers();
+			//if ( g_grabbed_divider_idx != -1 )
+			//{
+			//	move_divider( g_grabbed_divider_idx );
+			//}
+		}
+		else
+		{
+			mpv_draw_frame();
+		}
+
+		// run imgui windows
+		if ( g_fullscreen )
+		{
+			imgui_update_fullscreen();
+		}
+		else
+		{
+			render_imgui();
+		}
+
+		handle_keybinds();
+	}
+}
+
+
 auto main( int argc, char* argv[] ) -> int
 {
 	// https://learn.microsoft.com/en-us/cpp/c-runtime-library/reference/setlocale-wsetlocale?view=msvc-170#utf-8-support
@@ -759,12 +1155,51 @@ auto main( int argc, char* argv[] ) -> int
 	}
 
 	// ------------------------------------------
-	// init imgui, make an sdl window, make the sdl renderer, and hook up imgui to it
+
+	if ( !SDL_Init( SDL_INIT_EVENTS | SDL_INIT_VIDEO ) )
+	{
+		printf( "Failed to init SDL\n" );
+		return 1;
+	}
+
+	{
+		SDL_PropertiesID props = SDL_CreateProperties();
+
+		SDL_SetPointerProperty( props, SDL_PROP_WINDOW_CREATE_WIN32_HWND_POINTER, g_main_window );
+		SDL_SetBooleanProperty( props, SDL_PROP_WINDOW_CREATE_OPENGL_BOOLEAN, true );
+
+		g_main_window_sdl = SDL_CreateWindowWithProperties( props );
+	}
+
+	if ( !g_main_window_sdl )
+	{
+		printf( "Failed to create SDL window\n" );
+		return 1;
+	}
+
+	g_gl_context = SDL_GL_CreateContext( g_main_window_sdl );
+
+	if ( !g_gl_context )
+	{
+		printf( "Failed to create GL Context\n" );
+		return 1;
+	}
+
+	SDL_GL_MakeCurrent( g_main_window_sdl, g_gl_context );
+
+	if ( !gladLoadGL() )
+	{
+		printf( "Failed to load GL\n" );
+		return 1;
+	}
+	
+	// ------------------------------------------
+	// init imgui
 
 	const char* glsl_version    = nullptr;
 	// const char* glsl_version    = "#version 130";
 
-	ImGui_ImplWin32_InitForOpenGL( g_main_window );
+	ImGui_ImplSDL3_InitForOpenGL( g_main_window_sdl, g_gl_context );
 	ImGui_ImplOpenGL3_Init();
 
 	size_t exe_dir_len = 0;
@@ -858,14 +1293,19 @@ auto main( int argc, char* argv[] ) -> int
 	
 	// Play this file.
 	//mpv_cmd_loadfile( TEST_VIDEO_ANSI );
+	
+	// do one render to get everything set up
+	window_render_all();
 
 	win32_run();
+
+	main_loop();
 
 	// ------------------------------------------
 	// exit
 
 	ImGui_ImplOpenGL3_Shutdown();
-	ImGui_ImplWin32_Shutdown();
+	ImGui_ImplSDL3_Shutdown();
 
 	ImGui::DestroyContext();
 

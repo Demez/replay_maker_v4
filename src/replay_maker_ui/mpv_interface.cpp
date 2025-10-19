@@ -3,13 +3,18 @@
 // some reference here
 // https://github.com/mpv-player/mpv-examples/blob/master/libmpv/sdl/main.c
 
-void*               g_mpv_module = nullptr;
-mpv_handle*         g_mpv        = nullptr;
-mpv_render_context* g_mpv_gl     = nullptr;
+void*               g_mpv_module  = nullptr;
+mpv_handle*         g_mpv         = nullptr;
+mpv_render_context* g_mpv_gl      = nullptr;
+GLuint              g_mpv_fbo     = 0;
+GLuint              g_mpv_fbo_tex = 0;
+GLuint              g_mpv_rbo     = 0;
 
 bool                g_wakeup_on_mpv_render_update, g_wakeup_on_mpv_events;
 
 static char*        g_current_video = nullptr;
+
+s64                 g_video_width = 0, g_video_height = 0;
 
 #define FUNC_PTR( func ) func##_t p_##func = nullptr
 
@@ -173,9 +178,149 @@ static void on_mpv_events( void* ctx )
 }
 
 
+void mpv_draw_frame()
+{
+	p_mpv_get_property( g_mpv, "dwidth", MPV_FORMAT_INT64, &g_video_width );
+	p_mpv_get_property( g_mpv, "dheight", MPV_FORMAT_INT64, &g_video_height );
+
+	s64   window_scale;
+	//	p_mpv_get_property( g_mpv, "current-window-scale", MPV_FORMAT_INT64, &window_scale );
+
+	// Fit image in window size
+	float factor[ 2 ] = { 1.f, 1.f };
+
+	factor[ 0 ]       = (float)g_mpv_size[ 0 ] / (float)g_video_width;
+	factor[ 1 ]       = (float)g_mpv_size[ 1 ] / (float)g_video_height;
+
+	float zoom_level = std::min( factor[ 0 ], factor[ 1 ] );
+
+	int   new_width  = g_video_width * zoom_level;
+	int   new_height = g_video_height * zoom_level;
+
+	int   pos_x       = g_mpv_size[ 0 ] / 2 - ( new_width / 2 );
+	int   pos_y       = g_mpv_size[ 1 ] / 2 - ( new_height / 2 );
+
+	int   offset_x    = g_mpv_size[ 0 ] - new_width;
+	int   offset_y    = g_mpv_size[ 1 ] - new_height;
+
+	glBindFramebuffer( GL_FRAMEBUFFER, g_mpv_fbo );
+	////glBindRenderbuffer( GL_RENDERBUFFER, g_mpv_rbo );
+	//
+	glViewport( 0, 0, g_mpv_size[ 0 ], g_mpv_size[ 1 ] );
+	// glClearColor( 0.15, 0.15, 0.15, 1.0 );
+	// glClear( GL_COLOR_BUFFER_BIT );
+
+	mpv_opengl_fbo   fbo{ g_mpv_fbo, g_mpv_size[ 0 ], g_mpv_size[ 1 ], GL_RGB };
+	// mpv_opengl_fbo   fbo{ g_mpv_fbo, g_window_size[ 0 ], g_window_size[ 1 ], GL_RGB };
+	int              yes  = 1;
+
+	mpv_render_param rp[] = {
+		{ MPV_RENDER_PARAM_OPENGL_FBO, &fbo },
+		{ MPV_RENDER_PARAM_FLIP_Y, &yes },
+		{ MPV_RENDER_PARAM_INVALID, NULL },
+	};
+
+	p_mpv_render_context_render( g_mpv_gl, rp );
+
+	// glFramebufferRenderbuffer( GL_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT, GL_RENDERBUFFER, g_mpv_rbo );
+
+	//glBindFramebuffer( GL_FRAMEBUFFER, 0 );
+	//glBindFramebuffer( GL_READ_BUFFER, g_mpv_fbo );
+	//
+	//glBlitFramebuffer( 0, 0, width, height, 0, 0, width, height, GL_COLOR_BUFFER_BIT, GL_LINEAR );
+
+	glBindFramebuffer( GL_FRAMEBUFFER, 0 );
+	//glBindRenderbuffer( GL_RENDERBUFFER, 0 );
+
+	glViewport( 0, g_window_size[ 1 ] - g_mpv_size[ 1 ], g_mpv_size[ 0 ], g_mpv_size[ 1 ] );
+	// glViewport( 0, 0, g_window_size[ 0 ], g_window_size[ 1 ] );
+
+	//glEnable( GL_SCISSOR_TEST );
+	//glScissor( pos_x, pos_y, new_width, new_height );
+
+	glClearColor( 0.15, 0.15, 0.15, 1.0 );
+	glClear( GL_COLOR_BUFFER_BIT );
+
+	glEnable( GL_TEXTURE_2D );
+	glBindTexture( GL_TEXTURE_2D, g_mpv_fbo_tex );
+
+	glMatrixMode( GL_PROJECTION );
+	glLoadIdentity();
+	glOrtho( 0, 1, 0, 1, -1, 1 );
+	glMatrixMode( GL_MODELVIEW );
+	glLoadIdentity();
+
+	glBegin( GL_QUADS );
+
+	glTexCoord2f( 0, 0 );
+	glVertex2f( 0, 0 );
+	glTexCoord2f( 1, 0 );
+	glVertex2f( 1, 0 );
+	glTexCoord2f( 1, 1 );
+	glVertex2f( 1, 1 );
+	glTexCoord2f( 0, 1 );
+	glVertex2f( 0, 1 );
+
+	glEnd();
+
+	//glDisable( GL_SCISSOR_TEST );
+	glDisable( GL_TEXTURE_2D );
+}
+
+
+void mpv_update_texture()
+{
+	glBindTexture( GL_TEXTURE_2D, g_mpv_fbo_tex );
+	glTexImage2D( GL_TEXTURE_2D, 0, GL_RGB, g_mpv_size[ 0 ], g_mpv_size[ 1 ], 0, GL_RGB, GL_UNSIGNED_BYTE, nullptr );
+	// glTexImage2D( GL_TEXTURE_2D, 0, GL_RGB, g_window_size[ 0 ], g_window_size[ 1 ], 0, GL_RGB, GL_UNSIGNED_BYTE, nullptr );
+
+	glTexParameteri( GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR );
+	glTexParameteri( GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR );
+	glFramebufferTexture2D( GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, g_mpv_fbo_tex, 0 );
+
+	if ( glCheckFramebufferStatus( GL_FRAMEBUFFER ) != GL_FRAMEBUFFER_COMPLETE )
+		printf( "FBO incomplete!\n" );
+
+	glBindTexture( GL_TEXTURE_2D, 0 );
+	glBindFramebuffer( GL_FRAMEBUFFER, 0 );
+}
+
+
+void mpv_create_texture()
+{
+	//glDeleteTextures( 1, &g_mpv_fbo_tex );
+	//g_mpv_fbo_tex = 0;
+
+	int width, height;
+	sys_get_window_size( g_main_window, &width, &height );
+
+	//glGenRenderbuffers( 1, &g_mpv_rbo );
+	glGenTextures( 1, &g_mpv_fbo_tex );
+	glBindTexture( GL_TEXTURE_2D, g_mpv_fbo_tex );
+
+	glTexImage2D( GL_TEXTURE_2D, 0, GL_RGB, width, height, 0, GL_RGB, GL_UNSIGNED_BYTE, nullptr );
+
+	glTexParameteri( GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR );
+	glTexParameteri( GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR );
+	glFramebufferTexture2D( GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, g_mpv_fbo_tex, 0 );
+
+	if ( glCheckFramebufferStatus( GL_FRAMEBUFFER ) != GL_FRAMEBUFFER_COMPLETE )
+		printf( "FBO incomplete!\n" );
+
+	glBindTexture( GL_TEXTURE_2D, 0 );
+	glBindFramebuffer( GL_FRAMEBUFFER, 0 );
+}
+
+
 static void on_mpv_render_update( void* ctx )
 {
 	g_wakeup_on_mpv_render_update = true;
+}
+
+
+static void* mpv_get_proc( void* ctx, const char* name )
+{
+	return SDL_GL_GetProcAddress( name );
 }
 
 
@@ -193,8 +338,8 @@ bool start_mpv()
 		return false;
 	}
 
-	// idk what this does, but calling this embeds mpv into the main window
-	//p_mpv_set_option_string( g_mpv, "vo", "libmpv" );
+	// Disable VO
+	p_mpv_set_option_string( g_mpv, "vo", "libmpv" );
 
 	if ( p_mpv_initialize( g_mpv ) < 0 )
 	{
@@ -202,21 +347,33 @@ bool start_mpv()
 		return false;
 	}
 
-	// When normal mpv events are available.
-	p_mpv_set_wakeup_callback( g_mpv, on_mpv_events, NULL );
+	// create render context
+	mpv_opengl_init_params gl_init = {
+		.get_proc_address = mpv_get_proc,  // e.g. SDL_GL_GetProcAddress
+	};
+
+	mpv_render_param params[] = {
+		{ MPV_RENDER_PARAM_API_TYPE, (void*)MPV_RENDER_API_TYPE_OPENGL },
+		{ MPV_RENDER_PARAM_OPENGL_INIT_PARAMS, &gl_init },
+		{ MPV_RENDER_PARAM_INVALID, NULL },
+	};
+
+	p_mpv_render_context_create( &g_mpv_gl, g_mpv, params );
 
 	// When there is a need to call mpv_render_context_update(), which can
 	// request a new frame to be rendered.
 	// (Separate from the normal event handling mechanism for the sake of
 	//  users which run OpenGL on a different thread.)
-	// p_mpv_render_context_set_update_callback( g_mpv_gl, on_mpv_render_update, NULL );
+	p_mpv_render_context_set_update_callback( g_mpv_gl, on_mpv_render_update, nullptr );
 
-	int64_t wid = (s64)g_mpv_window;
-	bool    yes = true;
+	// When normal mpv events are available.
+	p_mpv_set_wakeup_callback( g_mpv, on_mpv_events, NULL );
 
-	// attach to main window
-	p_mpv_set_property( g_mpv, "wid", MPV_FORMAT_INT64, &wid );
-	p_mpv_set_property( g_mpv, "keep-open", MPV_FORMAT_FLAG, &yes );
+	// Create Framebuffer to draw on
+	glGenFramebuffers( 1, &g_mpv_fbo );
+	glBindFramebuffer( GL_FRAMEBUFFER, g_mpv_fbo );
+
+	mpv_create_texture();
 
 	return true;
 }
@@ -224,6 +381,12 @@ bool start_mpv()
 
 void stop_mpv()
 {
+}
+
+
+void mpv_window_resize()
+{
+	mpv_update_texture();
 }
 
 
@@ -303,18 +466,11 @@ void mpv_cmd_seek_offset( double seconds )
 
 void mpv_cmd_hook_window( void* window )
 {
-	int64_t wid = (s64)window;
-	int ret = p_mpv_set_property( g_mpv, "wid", MPV_FORMAT_INT64, &wid );
-
-	printf( "hooked window idk\n" );
 }
 
 
 void mpv_cmd_hook_window_mpv()
 {
-	int64_t wid = (s64)g_mpv_window;
-	int     ret = p_mpv_set_property( g_mpv, "wid", MPV_FORMAT_INT64, &wid );
-	printf( "hooked mpv window idk\n" );
 }
 
 
