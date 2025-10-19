@@ -60,13 +60,9 @@ struct ImGuiContext;
 
 void                               sys_pause_window_events( bool paused );
 
-void*                              sys_get_gl_proc( const char* name );
-void                               sys_get_window_size( void* window, int* width, int* height );
-
 bool                               win32_create_windows( int width, int height );
 void                               win32_exit();
-void                               win32_run();
-void                               win32_update();
+void                               sys_finish_init();
 
 void                               sys_mpv_full_window_enter();
 void                               sys_mpv_full_window_exit();

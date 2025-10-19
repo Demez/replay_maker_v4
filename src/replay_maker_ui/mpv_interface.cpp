@@ -270,6 +270,9 @@ void mpv_draw_frame()
 
 void mpv_update_texture()
 {
+	if ( !g_mpv_fbo_tex )
+		return;
+
 	glBindTexture( GL_TEXTURE_2D, g_mpv_fbo_tex );
 	glTexImage2D( GL_TEXTURE_2D, 0, GL_RGB, g_mpv_size[ 0 ], g_mpv_size[ 1 ], 0, GL_RGB, GL_UNSIGNED_BYTE, nullptr );
 	// glTexImage2D( GL_TEXTURE_2D, 0, GL_RGB, g_window_size[ 0 ], g_window_size[ 1 ], 0, GL_RGB, GL_UNSIGNED_BYTE, nullptr );
@@ -292,7 +295,7 @@ void mpv_create_texture()
 	//g_mpv_fbo_tex = 0;
 
 	int width, height;
-	sys_get_window_size( g_main_window, &width, &height );
+	SDL_GetWindowSize( g_main_window_sdl, &width, &height );
 
 	//glGenRenderbuffers( 1, &g_mpv_rbo );
 	glGenTextures( 1, &g_mpv_fbo_tex );

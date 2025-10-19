@@ -194,20 +194,7 @@ void win32_exit()
 }
 
 
-void win32_update()
-{
-	MSG msg;
-	while ( ::PeekMessageA( &msg, nullptr, 0U, 0U, PM_REMOVE ) )
-	{
-		::TranslateMessage( &msg );
-		::DispatchMessage( &msg );
-		if ( msg.message == WM_QUIT )
-			g_running = false;
-	}
-}
-
-
-void win32_run()
+void sys_finish_init()
 {
 	// now we can show the main window
 	ShowWindow( (HWND)g_main_window, SW_SHOWNORMAL );

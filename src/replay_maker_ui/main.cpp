@@ -1297,7 +1297,7 @@ auto main( int argc, char* argv[] ) -> int
 	// do one render to get everything set up
 	window_render_all();
 
-	win32_run();
+	sys_finish_init();
 
 	main_loop();
 
