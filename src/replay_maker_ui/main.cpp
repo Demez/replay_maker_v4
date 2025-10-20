@@ -197,6 +197,8 @@ void draw_playback_controls( int size[ 2 ], bool draw_volume )
 	ImGui::SameLine();
 	ImGui::Text( "| Audio: %s", audio_track_name );
 
+	ImGui::Separator();
+
 	// can offset the seek bar to the right depending on the current playback time
 	// ImGui::SameLine();
 
@@ -325,8 +327,8 @@ void draw_playback_controls( int size[ 2 ], bool draw_volume )
 	snprintf( temp_test, 16, "Audio: auto/%d", g_video_media_info.track_count_audio );
 	ImVec2 audio_btn_text = ImGui::CalcTextSize( temp_test );
 
-	audio_btn_text.x += style.ItemInnerSpacing.x * 2;
-	audio_btn_text.y += style.ItemInnerSpacing.y * 2;
+	audio_btn_text.x += style.FramePadding.x * 2;
+	audio_btn_text.y += style.FramePadding.y * 2;
 
 	if ( ImGui::Button( audio_btn, audio_btn_text ) )
 	{
@@ -1095,6 +1097,25 @@ void main_loop()
 }
 
 
+void style_imgui()
+{
+	ImGuiStyle& style = ImGui::GetStyle();
+
+	style.WindowPadding.x    = 6;
+	style.WindowPadding.y    = 6;
+	style.ItemSpacing.x      = 6;
+	style.ItemSpacing.y      = 6;
+	style.ItemInnerSpacing.x = 6;
+	style.ItemInnerSpacing.y = 6;
+
+	style.ChildRounding      = 3;
+	style.FrameRounding      = 3;
+	style.GrabRounding       = 3;
+	style.PopupRounding      = 3;
+	// style.ScrollbarRounding = 3;
+}
+
+
 auto main( int argc, char* argv[] ) -> int
 {
 	// https://learn.microsoft.com/en-us/cpp/c-runtime-library/reference/setlocale-wsetlocale?view=msvc-170#utf-8-support
@@ -1145,7 +1166,7 @@ auto main( int argc, char* argv[] ) -> int
 
 	// calculate the size of the mpv window (what about DPI Scale here later?)
 	g_mpv_size[ 0 ] = g_window_size[ 0 ] - 600;  // replay editor/sidebar
-	g_mpv_size[ 1 ] = g_window_size[ 1 ] - 180;   // playback controls
+	g_mpv_size[ 1 ] = g_window_size[ 1 ] - 200;   // playback controls
 
 	// 2 imgui windows
 	if ( !win32_create_windows( g_window_size[ 0 ], g_window_size[ 1 ] ) )
@@ -1206,12 +1227,16 @@ auto main( int argc, char* argv[] ) -> int
 	char*  exe_dir     = sys_get_exe_folder( &exe_dir_len );
 
 	{
+#if _WIN32 && 1
+		const char* font_path = "C:\\Windows\\Fonts\\segoeui.ttf";
+		ImGui::GetIO().Fonts->AddFontFromFileTTF( font_path, 17, nullptr );
+#else
 		char font_path[ 260 ] = { 0 };
 
 		memcpy( font_path, exe_dir, exe_dir_len * sizeof( char ) );
 		strcat( font_path, PATH_SEP_STR "CascadiaCode.ttf" );
-
 		ImGui::GetIO().Fonts->AddFontFromFileTTF( font_path, 15, nullptr );
+#endif
 	}
 
 	// load fonts
@@ -1220,10 +1245,12 @@ auto main( int argc, char* argv[] ) -> int
 
 	ImGui_ImplOpenGL3_CreateDeviceObjects();
 
+	style_imgui();
+
 	// imgui_set_theme_steam_green();
 
 	// ------------------------------------------
-	// Startup and Load MPV
+	// Startup and Load MPV^
 
 	if ( !start_mpv() )
 	{

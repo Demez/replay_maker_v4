@@ -109,6 +109,10 @@ void timeline_draw()
 
 		ImGui::SameLine();
 
+		ImGui::PushStyleColor( ImGuiCol_ButtonActive, COLOR_BTN_RED_ACTIVE );
+		ImGui::PushStyleColor( ImGuiCol_ButtonHovered, COLOR_BTN_RED_HOVER );
+		ImGui::PushStyleColor( ImGuiCol_Button, COLOR_BTN_RED );
+
 		if ( ImGui::Button( "Delete Video" ) )
 		{
 			clip_remove_input( g_clip_current_output, g_clip_current_input );
@@ -118,8 +122,17 @@ void timeline_draw()
 			g_clip_current_input = g_clip_current_output->input_count > 0 ? 0 : UINT32_MAX;
 
 			ImGui::EndDisabled();
+
+			ImGui::PopStyleColor();
+			ImGui::PopStyleColor();
+			ImGui::PopStyleColor();
+
 			return;
 		}
+
+		ImGui::PopStyleColor();
+		ImGui::PopStyleColor();
+		ImGui::PopStyleColor();
 
 		ImGui::EndDisabled();
 
@@ -148,7 +161,7 @@ void timeline_draw()
 
 	// ------------------------------------------------------------------------------------------
 	// Draw tabs on top for which encode preset currently in use and current input video?
-	float       text_height  = ImGui::CalcTextSize( "TEMP" ).y;
+	float       text_height    = ImGui::CalcTextSize( "TEMP" ).y;
 
 	if ( ImGui::BeginTabBar( "##timeline_tabs" ) )
 	{
@@ -314,8 +327,8 @@ void timeline_draw()
 	// main_bg_color.Value.w *= style.DisabledAlpha;
 
 	// draw border and background on top
-	draw_list->AddRectFilled( window_cursor_pos, timeline_size, main_border_color );
-	draw_list->AddRectFilled( window_area_min, window_area_max, main_bg_color );
+	draw_list->AddRectFilled( window_cursor_pos, timeline_size, main_border_color, style.FrameRounding, ImDrawFlags_RoundCornersAll );
+	draw_list->AddRectFilled( window_area_min, window_area_max, main_bg_color, style.FrameRounding, ImDrawFlags_RoundCornersAll );
 
 	// draw_list->AddText( window_cursor_pos, ImColor( 0, 255, 0 ), "TEST" );
 
@@ -356,8 +369,8 @@ void timeline_draw()
 			bool               is_selected       = g_selected_section == time_i;
 			ImColor            border_color      = is_selected ? SECTION_COLOR_SELECT_BORDER : SECTION_COLOR_BORDER;
 
-			draw_list->AddRectFilled( ImVec2( section_pos_left, window_area_min.y ), ImVec2( section_pos_right, window_area_max.y ), border_color );
-			draw_list->AddRectFilled( ImVec2( section_pos_left + 1, window_area_min.y + 1 ), ImVec2( section_pos_right - 1, window_area_max.y - 1 ), SECTION_COLOR_BASE );
+			draw_list->AddRectFilled( ImVec2( section_pos_left, window_area_min.y ), ImVec2( section_pos_right, window_area_max.y ), border_color, style.FrameRounding, ImDrawFlags_RoundCornersAll );
+			draw_list->AddRectFilled( ImVec2( section_pos_left + 1, window_area_min.y + 1 ), ImVec2( section_pos_right - 1, window_area_max.y - 1 ), SECTION_COLOR_BASE, style.FrameRounding, ImDrawFlags_RoundCornersAll );
 
 			char title[ 16 ]{};
 			snprintf( title, 16, "%d", time_i );
@@ -371,7 +384,7 @@ void timeline_draw()
 			ImVec2 title_pos( section_pos_left + style.FramePadding.x, window_area_min.y + style.FramePadding.y );
 
 			// draw titlebar
-			draw_list->AddRectFilled( ImVec2( section_pos_left, window_area_min.y ), ImVec2( section_pos_right, window_area_min.y + title_size.y ), border_color );
+			draw_list->AddRectFilled( ImVec2( section_pos_left, window_area_min.y ), ImVec2( section_pos_right, window_area_min.y + title_size.y ), border_color, style.FrameRounding, ImDrawFlags_RoundCornersAll );
 			draw_list->AddText( title_pos, ImColor( 0, 0, 0 ), title );
 
 			// draw grab points
@@ -572,7 +585,7 @@ void timeline_draw()
 		draw_list->AddRectFilled(
 		  ImVec2( marker_pos_final - ( box_padding_x - 1 ), window_cursor_pos.y + 1 ),
 		  ImVec2( marker_pos_final + box_padding_x, window_cursor_pos.y + 1 + box_padding_y ),
-		  marker_color );
+		  marker_color, style.FrameRounding, ImDrawFlags_RoundCornersAll );
 
 		draw_list->AddText( ImVec2( marker_pos_final - ( style.FramePadding.x - 1 ), window_cursor_pos.y + style.FramePadding.y ), ImColor( 0, 0, 0 ), marker_i == 0 ? "A" : "B" );
 	}
@@ -610,6 +623,7 @@ void timeline_draw()
 	// ------------------------------------------------------------------------------------------
 	// Set new cursor pos for normal imgui widget drawing
 
-	ImGui::SetCursorPos( ImVec2( cursor_pos.x, cursor_pos.y + g_timeline_size.y + ( style.ItemSpacing.y * 1.5 ) ) );
+	// ImGui::SetCursorPos( ImVec2( cursor_pos.x, cursor_pos.y + g_timeline_size.y + ( style.ItemSpacing.y * 1.5 ) ) );
+	ImGui::SetCursorPos( ImVec2( cursor_pos.x, cursor_pos.y + g_timeline_size.y + style.ItemSpacing.y ) );
 }
 

@@ -53,6 +53,11 @@ enum e_mpv_cmd
 };
 
 
+constexpr ImVec4 COLOR_BTN_RED_ACTIVE{ 0.9f, 0.1f, 0.1f, 1.0f };
+constexpr ImVec4 COLOR_BTN_RED_HOVER{ 0.7f, 0.2f, 0.2f, 1.0f };
+constexpr ImVec4 COLOR_BTN_RED{ 0.5f, 0.1f, 0.1f, 1.0f };
+
+
 // --------------------------------------------------------------------------------------------------------
 // win32 stuff
 

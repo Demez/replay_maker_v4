@@ -477,6 +477,14 @@ void draw_replay_list_entry( u64& imgui_id, u32 out_i, char* search_box, u32 pre
 	ImVec2 drag_pos_min( cursor_screen_pos.x, cursor_screen_pos.y );
 	ImVec2 drag_pos_max( cursor_screen_pos.x + drag_text_size.x + ( style.FramePadding.x * 2 ), cursor_screen_pos.y + drag_text_size.y + ( style.FramePadding.y * 2 ) );
 
+	ImVec2 drag_pos_size( drag_pos_max - drag_pos_min );
+
+	ImVec2 line_pos_0_min( drag_pos_min.x, drag_pos_min.y + ( drag_pos_size.y * 0.4 ) );
+	ImVec2 line_pos_0_max( drag_pos_max.x, line_pos_0_min.y );
+
+	ImVec2 line_pos_1_min( drag_pos_min.x, drag_pos_min.y + ( drag_pos_size.y * 0.6 ) );
+	ImVec2 line_pos_1_max( drag_pos_max.x, line_pos_1_min.y );
+
 	if ( !g_clip_reorder_drag.active || out_i == g_clip_reorder_drag.clip_id )
 	{
 		if ( point_in_rect( mouse_pos, drag_pos_min, drag_pos_max ) )
@@ -494,16 +502,21 @@ void draw_replay_list_entry( u64& imgui_id, u32 out_i, char* search_box, u32 pre
 		}
 		else if ( g_clip_reorder_drag.active && out_i == g_clip_reorder_drag.clip_id )
 		{
-			draw_list->AddRectFilled( drag_pos_min, drag_pos_max, ImColor( 0, 255, 0 ) );
+			//draw_list->AddRectFilled( drag_pos_min, drag_pos_max, ImColor( 0, 255, 0 ) );
+			draw_list->AddLine( line_pos_0_min, line_pos_0_max, ImColor( 128, 128, 128 ), 2.f );
+			draw_list->AddLine( line_pos_1_min, line_pos_1_max, ImColor( 128, 128, 128 ), 2.f );
 		}
 		else
 		{
-			draw_list->AddRectFilled( drag_pos_min, drag_pos_max, ImColor( 64, 64, 64 ) );
+			// draw_list->AddRectFilled( drag_pos_min, drag_pos_max, ImColor( 64, 64, 64 ) );
+			draw_list->AddLine( line_pos_0_min, line_pos_0_max, ImColor( 64, 64, 64 ), 2.f );
+			draw_list->AddLine( line_pos_1_min, line_pos_1_max, ImColor( 64, 64, 64 ), 2.f );
 		}
 	}
 	else
 	{
-		draw_list->AddRectFilled( drag_pos_min, drag_pos_max, ImColor( 64, 64, 64 ) );
+		draw_list->AddLine( line_pos_0_min, line_pos_0_max, ImColor( 64, 64, 64 ), 2.f );
+		draw_list->AddLine( line_pos_1_min, line_pos_1_max, ImColor( 64, 64, 64 ), 2.f );
 	}
 
 	// offset cursor to draw the rest of this
@@ -864,11 +877,7 @@ void draw_preset_override( clip_encode_override_t& override, bool edit )
 
 	if ( edit )
 	{
-		ImVec2 text_size  = ImGui::CalcTextSize( "Presets" );
-		float  combo_size = text_size.x + ( ( style.FramePadding.x + style.FramePadding.y + style.ItemSpacing.x ) * 2 );
-		ImGui::SetNextItemWidth( combo_size );
-
-		if ( ImGui::BeginCombo( "##presets", "Presets" ) )
+		if ( ImGui::BeginCombo( "##presets", "Presets", ImGuiComboFlags_HeightLargest | ImGuiComboFlags_WidthFitPreview ) )
 		{
 			g_preset_combo_open = true;
 
@@ -906,16 +915,20 @@ void draw_preset_override( clip_encode_override_t& override, bool edit )
 		if ( edit || i > 0 )
 			ImGui::SameLine();
 
-		char                  button_name[ MAX_LEN_PRESET_NAME + 4 ] = { "(X) " };
-
 		clip_encode_preset_t& encode                                 = g_clip_data->preset[ override.presets[ i ] ];
 
-		memcpy( &button_name[ 4 ], encode.name, MAX_LEN_PRESET_NAME );
+		ImGui::PushStyleColor( ImGuiCol_ButtonActive, COLOR_BTN_RED_ACTIVE );
+		ImGui::PushStyleColor( ImGuiCol_ButtonHovered, COLOR_BTN_RED_HOVER );
+		ImGui::PushStyleColor( ImGuiCol_Button, COLOR_BTN_RED );
 
-		if ( ImGui::Button( button_name ) )
+		if ( ImGui::Button( encode.name ) )
 		{
 			preset_remove = i;
 		}
+
+		ImGui::PopStyleColor();
+		ImGui::PopStyleColor();
+		ImGui::PopStyleColor();
 	}
 
 	if ( preset_remove != UINT32_MAX )
@@ -1039,10 +1052,18 @@ void draw_input_video_edit( u32 input_i, clip_input_video_t* input, bool edit )
 	ImGui::Dummy( { spacing_width, 0.f } );
 	ImGui::SameLine();
 
+	ImGui::PushStyleColor( ImGuiCol_ButtonActive, COLOR_BTN_RED_ACTIVE );
+	ImGui::PushStyleColor( ImGuiCol_ButtonHovered, COLOR_BTN_RED_HOVER );
+	ImGui::PushStyleColor( ImGuiCol_Button, COLOR_BTN_RED );
+
 	if ( ImGui::Button( "Delete" ) )
 	{
 		g_clip_delete_input = input_i;
 	}
+
+	ImGui::PopStyleColor();
+	ImGui::PopStyleColor();
+	ImGui::PopStyleColor();
 
 	//ImGui::SameLine();
 	//draw_preset_override_button( &input->encode_overrides, "Edit Input Presets" );
