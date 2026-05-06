@@ -28,20 +28,14 @@ using module_t = void*;
 
 
 #ifdef _WIN32
-  #define SEP_S "\\"
-  #define SEP '\\'
-
-  #define PATH_SEP_STR "\\"
-  #define PATH_SEP     '\\'
+  #define SEP_S       "\\"
+  #define SEP         '\\'
 
   #define strncasecmp _strnicmp
   #define strcasecmp  _stricmp
 #else
   #define SEP_S        "/"
   #define SEP          '/'
-
-  #define PATH_SEP_STR "/"
-  #define PATH_SEP     '/'
 #endif
 
 
@@ -240,10 +234,10 @@ char*       sys_to_utf8( const wchar_t* spStr, int sSize );
 char*       sys_to_utf8( const wchar_t* spStr );
 
 // get folder exe is stored in
-char*       sys_get_exe_folder( size_t* len = nullptr );
+const char* sys_get_exe_folder( size_t* len = nullptr );
 
 // get the full path of the exe
-char*       sys_get_exe_path( size_t* len = nullptr );
+const char* sys_get_exe_path( size_t* len = nullptr );
 
 // get current working directory
 char*       sys_get_cwd();
@@ -262,8 +256,18 @@ bool        sys_copy_file_times( const char* src_path, const char* out_path, boo
 // execute a command and read it's output
 bool        sys_execute_read( const char* command, str_buf_t& output );
 
+enum e_exec_state_
+{
+	e_exec_state_ok,
+	e_exec_state_close,
+	e_exec_state_pause,  // when paused, it checks this constantly every few ms to wait for a different state to resume the process
+	e_exec_state_count,
+};
+
+using e_exec_state = u8;
+
 // execute a command and read it's output, with a callback function everytime more output is read from the file
-using       f_exec_callback = void( char* buf, size_t len );
+using       f_exec_callback = e_exec_state( char* buf, size_t len );
 bool        sys_execute_read_callback( const char* command, str_buf_t& output, f_exec_callback* p_exec_callback );
 
 // execute a command and return the commands return value
@@ -271,6 +275,9 @@ int         sys_execute( const char* command );
 
 // NOTE: path cannot be over MAX_PATH (260 characters), thanks windows shell
 void        sys_browse_to_file( const char* path );
+
+// Open a Folder
+void        sys_open_folder( const char* path );
 
 // print color with \aFFF escape codes for color values
 //void        sys_print_color( const char* string );

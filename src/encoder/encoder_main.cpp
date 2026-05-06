@@ -4,14 +4,74 @@
 #include "encoder/encoder.h"
 #include "util.h"
 
+#include <thread>
 
-const char*         g_video_files    = nullptr;
-const char*         g_output_dir     = nullptr;
-const char*         g_temp_video_dir = nullptr;
-const char*         g_log_dir        = nullptr;
+char                g_output_dir[ 512 ];
+char                g_temp_video_dir[ 512 ];
 
-clip_data_t*        g_clip_data      = nullptr;
 enc_output_video_t* g_output_videos  = nullptr;
+
+std::atomic< bool > g_encode_started = false;
+bool                g_encode_running = false;
+bool                g_encode_pause   = false;
+
+encoder_t           g_encoder_data{};
+
+// Encode Thread
+std::thread*        g_encode_thread  = nullptr;
+
+
+static void         encode_worker()
+{
+	g_encode_running = true;
+	encode_videos();
+}
+
+
+void encode_thread_start()
+{
+	if ( g_encode_thread )
+	{
+		log_printf( log_error, "Encode thread already started, user should not be able to reach this!\n" );
+		return;
+	}
+
+	g_encoder_data.scan_index = 0;
+	g_encode_started          = false;
+	g_fullscreen              = false;
+
+	const char* cmd[]         = { "set", "pause", "yes", NULL };
+	int         cmd_ret       = p_mpv_command_async( g_mpv, 0, cmd );
+
+	g_encode_thread = new std::thread( encode_worker );
+}
+
+
+void encode_thread_stop()
+{
+	g_encode_running = false;
+	g_encode_started = false;
+
+	if ( g_encode_thread )
+	{
+		g_encode_thread->join();
+		g_encode_thread = nullptr;
+	}
+}
+
+
+bool encode_check_state()
+{
+	if ( !g_encode_running || !g_running )
+		return false;
+	
+	while ( g_encode_pause )
+	{
+		SDL_Delay( 500 );
+	}
+
+	return true;
+}
 
 
 static bool         parse_ffprobe_int( bool& failed, char*& line_start, const char* name, size_t name_len, int& out_value )
@@ -214,7 +274,8 @@ bool used_in_preset( clip_encode_override_t& override, u32 preset_i )
 		}
 	}
 
-	return !override.presets_count;
+	// return !override.presets_count;
+	return false;
 }
 
 
@@ -233,7 +294,6 @@ bool collect_video_info()
 	  "====================================================================\n"
 	  "Demez Replay Encoder\n"
 	  "\n"
-	  "Videos File:      \"%s\"\n"
 	  "Output Directory: \"%s\"\n"
 	  "\n"
 	  "%d Encode Presets\n"
@@ -241,7 +301,7 @@ bool collect_video_info()
 	  "\n"
 	  "%d Output Videos\n"
 	  "====================================================================\n",
-	  g_video_files, g_output_dir,
+	  g_output_dir,
 	  g_clip_data->preset_count, g_clip_data->prefix_count, g_clip_data->output_count );
 
 	// check this for each encode preset
@@ -251,6 +311,8 @@ bool collect_video_info()
 		enc_output_video_t&  enc_output = g_output_videos[ out_i ];
 		enc_output.output               = &output;
 		enc_output.metadata             = ch_calloc< video_metadata_t >( output.input_count );
+
+		g_encoder_data.scan_index       = out_i;
 
 		if ( !enc_output.metadata )
 		{
@@ -309,11 +371,11 @@ bool collect_video_info()
 		// ----------------------------------------------------------------------------------------
 		// get input video metadata
 
-		bool  all_valid      = true;
+		bool all_valid            = true;
 
 		// find all unique input videos, there will be duplicates for different encode presets
 		// this way we don't need get metadata for the same video multiple times
-		bool* missing_videos = ch_calloc< bool >( output.input_count );
+		enc_output.missing_inputs = ch_calloc< bool >( output.input_count );
 
 		for ( u32 in_i = 0; in_i < output.input_count; in_i++ )
 		{
@@ -344,16 +406,16 @@ bool collect_video_info()
 			// we have not encountered this video yet, so check if it actually exists, and then parse it
 			if ( !fs_exists( input.path ) )
 			{
-				all_valid              = false;
-				missing_videos[ in_i ] = true;
+				all_valid                         = false;
+				enc_output.missing_inputs[ in_i ] = true;
 				break;
 			}
 
 			if ( !get_video_metadata( input.path, enc_output.metadata[ in_i ] ) )
 			{
 				log_printf( "Failed to get video metadata - \"%s\"", input.path );
-				all_valid              = false;
-				missing_videos[ in_i ] = true;
+				all_valid                         = false;
+				enc_output.missing_inputs[ in_i ] = true;
 			}
 		}
 
@@ -402,9 +464,9 @@ bool collect_video_info()
 				if ( !used_in_preset( input.encode_overrides, preset_i ) )
 					continue;
 
-				log_printf( "    %s%s\n", input.path, missing_videos[ in_i ] ? " [INVALID]" : "" );
+				log_printf( "    %s%s\n", input.path, enc_output.missing_inputs[ in_i ] ? " [INVALID]" : "" );
 
-				if ( missing_videos[ in_i ] )
+				if ( enc_output.missing_inputs[ in_i ] )
 					continue;
 
 				for ( u32 time_i = 0; time_i < input.time_range_count; time_i++ )
@@ -425,91 +487,49 @@ bool collect_video_info()
 }
 
 
-// funny
-auto main( int argc, char* argv[] ) -> int
+void encode_videos()
 {
-	args_init( argc, argv );
-
-	sys_init();
-
-	size_t exe_dir_len = 0;
-	char*  exe_dir     = sys_get_exe_folder( &exe_dir_len );
-
-	g_video_files      = args_register_str( "", "File containing all the videos to encode", "--videos" );
-	g_output_dir       = args_register_str( "output4", "Output Directory", "--output" );
-	g_temp_video_dir   = args_register_str( "temp4", "Temp Video Directory", "--temp" );
-	g_log_dir          = args_register_str( "replay_logs", "Log File Directory", "--log" );
-
-	bool show_help     = args_register_bool( "Show help message", "--help" );
-	show_help |= args_register_bool( "Show help message", "-h" );
-	show_help |= args_register_bool( "Show help message", "-?" );
-
-	if ( show_help )
-	{
-		free( exe_dir );
-		args_print_help();
-		args_free();
-		return 0;
-	}
-
 	if ( !fs_make_dir_check( g_temp_video_dir ) )
 	{
-		free( exe_dir );
-		args_free();
-		return 1;
+		return;
 	}
 
 	if ( !fs_make_dir_check( g_output_dir ) )
 	{
-		free( exe_dir );
-		args_free();
-		return 1;
+		return;
 	}
-
-	if ( !fs_make_dir_check( g_log_dir ) )
-	{
-		free( exe_dir );
-		args_free();
-		return 1;
-	}
-
-	if ( !log_init() )
-	{
-		free( exe_dir );
-		args_free();
-		return 2;
-	}
-
-	g_clip_data = clip_create();
-
-	// load files
-	{
-		char settings_path[ 4096 ] = { 0 };
-
-		memcpy( settings_path, exe_dir, exe_dir_len * sizeof( char ) );
-		strcat( settings_path, PATH_SEP_STR "replay_maker_config.json5" );
-
-		if ( !clip_parse_settings( g_clip_data, settings_path ) )
-			return 3;
-	}
-
-	free( exe_dir );
-
-	clip_parse_videos( g_clip_data, g_video_files );
 
 	if ( g_clip_data->output_count == 0 )
 	{
 		log_printf( log_error, "no output videos found!\n" );
-		return 0;
+		return;
 	}
 
 	if ( !collect_video_info() )
-		return 1;
+		return;
+
+	g_encode_started.store( true );
 
 	run_encoding();
-
-	clip_free( g_clip_data );
-	log_shutdown();
-	args_free();
-	return 0;
 }
+
+
+bool encode_init()
+{
+	// TODO: store in config and video json file for overrides
+	// move temp to settings and don't allow override for that?
+	const char* exe_dir = sys_get_exe_folder();
+
+	if ( strlen( g_output_dir ) == 0 )
+	{
+		snprintf( g_output_dir, 512, "%s" SEP_S "output", exe_dir );
+	}
+
+	if ( strlen( g_temp_video_dir ) == 0 )
+	{
+		snprintf( g_temp_video_dir, 512, "%s" SEP_S "temp", exe_dir );
+	}
+
+	return true;
+}
+

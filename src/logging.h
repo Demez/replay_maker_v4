@@ -2,13 +2,19 @@
 
 #include "util.h"
 
-// ===============================================
+#include <string>
+
+
+// --------------------------------------------------------------------------------------------------------
 // Logging System
+
+extern std::string g_log_dir;
 
 
 enum log_channel
 {
 	log_general,
+	log_logging,
 	log_warning,
 	log_error,
 	log_ffmpeg,
@@ -45,12 +51,12 @@ enum e_log_color_ : e_log_color
 };
 
 
-bool log_init();
-void log_shutdown();
+bool        log_init();
+void        log_shutdown();
 
-char* log_build_name( const char* name );
-bool  log_set_file( const char* name );
+std::string log_build_name( const char* name );
+bool        log_set_file( const char* name );
 
-void log_printf( const char* format, ... );
-void log_printf( log_channel channel, const char* format, ... );
+void        log_printf( const char* format, ... );
+void        log_printf( log_channel channel, const char* format, ... );
 

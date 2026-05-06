@@ -161,7 +161,7 @@ void timeline_draw()
 
 	// ------------------------------------------------------------------------------------------
 	// Draw tabs on top for which encode preset currently in use and current input video?
-	float       text_height    = ImGui::CalcTextSize( "TEMP" ).y;
+	float       text_height    = ImGui::GetFontSize();
 
 	if ( ImGui::BeginTabBar( "##timeline_tabs" ) )
 	{

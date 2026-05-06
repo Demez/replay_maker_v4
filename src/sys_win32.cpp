@@ -1,5 +1,7 @@
 #include "util.h"
 
+#include "SDL3/SDL.h"
+
 #ifndef WIN32_LEAN_AND_MEAN
 #define WIN32_LEAN_AND_MEAN
 #endif
@@ -13,12 +15,21 @@
 #include <shlwapi.h> 
 #include <shlobj_core.h> 
 #include <time.h>
+#include <TlHelp32.h>
 
 
 // ----------------------------------------------------
 
 
-HANDLE g_con_out = INVALID_HANDLE_VALUE;
+HANDLE        g_con_out        = INVALID_HANDLE_VALUE;
+static HANDLE g_job            = INVALID_HANDLE_VALUE;
+
+static char*  g_exe_path       = nullptr;
+static size_t g_exe_path_len   = 0;
+
+static char*  g_exe_folder     = nullptr;
+static size_t g_exe_folder_len = 0;
+
 
 
 module_t sys_load_library( const wchar_t* path )
@@ -208,37 +219,21 @@ char* sys_to_utf8( const wchar_t* spStr, int sSize )
 }
 
 
-char* sys_get_exe_path( size_t* len )
+const char* sys_get_exe_path( size_t* len )
 {
-	wchar_t output_w[ 4096 ];
-	GetModuleFileName( NULL, output_w, 4096 );
-
-	size_t len_w = wcslen( output_w );
-
-	char* output = sys_to_utf8( output_w, len_w );
-
 	if ( len )
-		*len = len_w;
+		*len = g_exe_path_len;
 
-	return output;
+	return g_exe_path;
 }
 
 
-char* sys_get_exe_folder( size_t* len )
+const char* sys_get_exe_folder( size_t* len )
 {
-	wchar_t output_w[ 4096 ];
-	GetModuleFileName( NULL, output_w, 4096 );
-
-	// find index of last path separator
-	wchar_t* sep    = wcsrchr( output_w, '\\' );
-	size_t   path_i = sep - output_w;
-
-	char*    output = sys_to_utf8( output_w, path_i );
-
 	if ( len )
-		*len = path_i;
+		*len = g_exe_folder_len;
 
-	return output;
+	return g_exe_folder;
 }
 
 
@@ -494,12 +489,90 @@ bool sys_execute_read_callback( const char* command, str_buf_t& output, f_exec_c
 		return false;
 	}
 
+	// if ( !AssignProcessToJobObject( g_job, pi.hProcess ) )
+	// {
+	// 	printf( "Failed to assign ffmpeg to job object!\n" );
+	// 	sys_print_last_error();
+	// 	TerminateProcess( pi.hProcess, 1 );
+	// 
+	// 	CloseHandle( hPipeWrite );
+	// 	CloseHandle( hPipeRead );
+	// 	CloseHandle( pi.hProcess );
+	// 	CloseHandle( pi.hThread );
+	// 	return false;
+	// }
+
 	memset( &output, 0, sizeof( str_buf_t ) );
 
-	bool bProcessEnded = false;
+	bool   bProcessEnded = false;
+	bool   paused        = false;
+
+	bool   ret           = true;
+
 	while ( !bProcessEnded )
 	{
+		if ( paused )
+		{
+			SDL_Delay( 500 );
+
+			e_exec_state state = p_exec_callback( nullptr, 0 );
+			
+			if ( state == e_exec_state_ok )
+			{
+				paused      = false;
+
+				HANDLE snap = CreateToolhelp32Snapshot( TH32CS_SNAPTHREAD, pi.dwProcessId );
+				if ( snap == INVALID_HANDLE_VALUE )
+				{
+					printf( "Failed to setup process pausing!\n" );
+					sys_print_last_error();
+					TerminateProcess( pi.hProcess, 1 );
+					ret = false;
+					goto close;
+				}
+
+				THREADENTRY32 te = { 0 };
+				te.dwSize        = sizeof( THREADENTRY32 );
+
+				if ( Thread32First( snap, &te ) )
+				{
+					do
+					{
+						if ( te.th32OwnerProcessID == pi.dwProcessId )
+						{
+							HANDLE thread = OpenThread( THREAD_SUSPEND_RESUME, FALSE, te.th32ThreadID );
+
+							if ( thread != INVALID_HANDLE_VALUE )
+							{
+								DWORD test = ResumeThread( thread );
+							}
+						}
+
+					} while ( Thread32Next( snap, &te ) );
+				}
+				else
+				{
+					sys_print_last_error();
+				}
+
+				CloseHandle( snap );
+			}
+			else if ( state == e_exec_state_pause )
+			{
+				paused = true;
+				// continue;
+			}
+			else if ( state == e_exec_state_close )
+			{
+				// Cancel and close program
+				TerminateProcess( pi.hProcess, 1 );
+				bProcessEnded = true;
+				break;
+			}
+		}
+
 		// Give some timeslice (50 ms), so we won't waste 100% CPU.
+		// MsgWaitForMultipleObjects
 		bProcessEnded = WaitForSingleObject( pi.hProcess, 50 ) == WAIT_OBJECT_0;
 
 		// Even if process exited - we continue reading, if
@@ -522,18 +595,77 @@ bool sys_execute_read_callback( const char* command, str_buf_t& output, f_exec_c
 
 			buf[ dwRead ] = 0;
 			size_t buf_len = strlen( buf );
-			p_exec_callback( buf, buf_len );
 			util_append_str( output, buf, buf_len, 2048 );
+
+			e_exec_state state = p_exec_callback( buf, buf_len );
+
+			if ( state == e_exec_state_ok )
+			{
+				if ( paused )
+				{
+					paused = false;
+					ResumeThread( pi.hThread );
+				}
+
+				continue;
+			}
+			else if ( !paused && state == e_exec_state_pause )
+			{
+				HANDLE snap = CreateToolhelp32Snapshot( TH32CS_SNAPTHREAD, pi.dwProcessId );
+				if ( snap == INVALID_HANDLE_VALUE )
+				{
+					printf( "Failed to setup process pausing!\n" );
+					sys_print_last_error();
+					TerminateProcess( pi.hProcess, 1 );
+					ret = false;
+					goto close;
+				}
+
+				THREADENTRY32 te = { 0 };
+				te.dwSize = sizeof( THREADENTRY32 );
+
+				if ( Thread32First( snap, &te ) )
+				{
+					do
+					{
+						if ( te.th32OwnerProcessID == pi.dwProcessId )
+						{
+							HANDLE thread = OpenThread( THREAD_SUSPEND_RESUME, FALSE, te.th32ThreadID );
+
+							if ( thread != INVALID_HANDLE_VALUE )
+								SuspendThread( thread );
+						}
+
+					} while ( Thread32Next( snap, &te ) );
+				}
+				else
+				{
+					sys_print_last_error();
+				}
+
+				CloseHandle( snap );
+
+				paused = true;
+				break;
+			}
+			else if ( state == e_exec_state_close )
+			{
+				// Cancel and close program
+				TerminateProcess( pi.hProcess, 1 );
+				bProcessEnded = true;
+				break;
+			}
 		}
 	}
 
 	util_append_str( output, "\0", 1, 1 );
-
+	
+close:
 	CloseHandle( hPipeWrite );
 	CloseHandle( hPipeRead );
 	CloseHandle( pi.hProcess );
 	CloseHandle( pi.hThread );
-	return true;
+	return ret;
 }
 
 
@@ -656,12 +788,68 @@ void sys_browse_to_file( const char* path )
 }
 
 
+void sys_open_folder( const char* path )
+{
+	wchar_t* path_w = sys_to_wchar( path );
+	ShellExecute( NULL, L"open", path_w, NULL, NULL, SW_SHOWNORMAL );
+	free( path_w );
+}
+
+
 int sys_init()
 {
 	g_con_out = GetStdHandle( STD_OUTPUT_HANDLE );
 
 	if ( g_con_out == INVALID_HANDLE_VALUE )
 	{
+		sys_print_last_error();
+		return 1;
+	}
+
+	// Set EXE path and folder
+	wchar_t output_w[ 4096 ];
+	GetModuleFileName( NULL, output_w, 4096 );
+
+	size_t   len_w    = wcslen( output_w );
+
+	// find index of last path separator
+	wchar_t* path_sep = wcsrchr( output_w, '\\' );
+	size_t   path_i   = path_sep - output_w;
+
+	g_exe_path        = sys_to_utf8( output_w, len_w );
+	g_exe_folder      = sys_to_utf8( output_w, path_i );
+
+	g_exe_path_len    = len_w;
+	g_exe_folder_len  = path_i;
+
+	// https://stackoverflow.com/questions/6259055/createprocess-such-that-child-process-is-killed-when-parent-is-killed
+	// Create Job Object for ffmpeg
+	SECURITY_ATTRIBUTES attrib  = { sizeof( SECURITY_ATTRIBUTES ) };
+	attrib.bInheritHandle       = TRUE;  // Pipe handles are inherited by child process.
+	attrib.lpSecurityDescriptor = NULL;
+
+	g_job = CreateJobObjectW( &attrib, L"replay_maker" );
+
+	if ( !g_job )
+	{
+		printf( "Failed to create job object!\n" );
+		sys_print_last_error();
+		return 1;
+	}
+
+	if ( !AssignProcessToJobObject( g_job, GetCurrentProcess() ) )
+	{
+		printf( "Failed to assign self to job object!\n" );
+		sys_print_last_error();
+		return 1;
+	}
+
+	JOBOBJECT_EXTENDED_LIMIT_INFORMATION job_info{};
+	job_info.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
+
+	if ( !SetInformationJobObject( g_job, JobObjectExtendedLimitInformation, &job_info, sizeof( job_info ) ) )
+	{
+		printf( "Failed to set job info!\n" );
 		sys_print_last_error();
 		return 1;
 	}

@@ -1,4 +1,5 @@
 #include "clip.h"
+#include "logging.h"
 
 
 // --------------------------------------------------------------------------------------------------------
@@ -54,7 +55,7 @@ static void clip_parse_encode_presets( clip_data_t* data, json_object_t& json )
 {
 	if ( json.aType != e_json_type_array )
 	{
-		printf( "encode_presets is not an array!\n" );
+		log_printf( "encode_presets is not an array!\n" );
 		return;
 	}
 
@@ -64,7 +65,7 @@ static void clip_parse_encode_presets( clip_data_t* data, json_object_t& json )
 
 		if ( object.aType != e_json_type_object )
 		{
-			printf( "encode preset entry is not an object!\n" );
+			log_printf( "encode preset entry is not an object!\n" );
 			continue;
 		}
 
@@ -72,7 +73,7 @@ static void clip_parse_encode_presets( clip_data_t* data, json_object_t& json )
 
 		if ( !encode )
 		{
-			printf( "failed to create encode preset?\n" );
+			log_printf( "failed to create encode preset?\n" );
 			return;
 		}
 
@@ -84,11 +85,11 @@ static void clip_parse_encode_presets( clip_data_t* data, json_object_t& json )
 			{
 				if ( util_strncmp( "name", 4, field.aName.data, field.aName.size ) )
 				{
-					memcpy( encode->name, field.aString.data, MAX( MAX_LEN_PRESET_NAME, field.aString.size ) * sizeof( char ) );
+					memcpy( encode->name, field.aString.data, MIN( MAX_LEN_PRESET_NAME, field.aString.size ) * sizeof( char ) );
 				}
 				else if ( util_strncmp( "ext", 3, field.aName.data, field.aName.size ) )
 				{
-					memcpy( encode->ext, field.aString.data, MAX( MAX_LEN_EXT, field.aString.size ) * sizeof( char ) );
+					memcpy( encode->ext, field.aString.data, MIN( MAX_LEN_EXT, field.aString.size ) * sizeof( char ) );
 				}
 				else if ( util_strncmp( "ffmpeg_cmd", 10, field.aName.data, field.aName.size ) )
 				{
@@ -104,7 +105,7 @@ static void clip_parse_encode_presets( clip_data_t* data, json_object_t& json )
 				}
 				else
 				{
-					printf( "unknown encode preset string field: \"%s\"\n", field.aName.data );
+					log_printf( "unknown encode preset string field: \"%s\"\n", field.aName.data );
 				}
 			}
 			else if ( field.aType == e_json_type_int )
@@ -127,17 +128,15 @@ static void clip_parse_encode_presets( clip_data_t* data, json_object_t& json )
 				}
 				else
 				{
-					printf( "unknown encode preset int field: \"%s\"\n", field.aName.data );
+					log_printf( "unknown encode preset int field: \"%s\"\n", field.aName.data );
 				}
 			}
 			else
 			{
-				printf( "unknown encode preset field: \"%s\"\n", field.aName.data );
+				log_printf( "unknown encode preset field: \"%s\"\n", field.aName.data );
 			}
 		}
 	}
-
-	printf( "cool\n" );
 }
 
 
@@ -145,7 +144,7 @@ static void clip_parse_prefixes( clip_data_t* data, json_object_t& json )
 {
 	if ( json.aType != e_json_type_array )
 	{
-		printf( "encode_presets is not an array!\n" );
+		log_printf( "encode_presets is not an array!\n" );
 		return;
 	}
 
@@ -155,13 +154,13 @@ static void clip_parse_prefixes( clip_data_t* data, json_object_t& json )
 
 		if ( object.aType != e_json_type_object )
 		{
-			printf( "encode preset entry is not an object!\n" );
+			log_printf( "encode preset entry is not an object!\n" );
 			continue;
 		}
 
 		if ( object.aObjects.count > 1 )
 		{
-			printf( "extra data in preset entry?\n" );
+			log_printf( "extra data in preset entry?\n" );
 			continue;
 		}
 
@@ -169,7 +168,7 @@ static void clip_parse_prefixes( clip_data_t* data, json_object_t& json )
 
 		if ( field.aType != e_json_type_string )
 		{
-			printf( "invalid encode preset field type - expected string: \"%s\"\n", field.aName.data );
+			log_printf( "invalid encode preset field type - expected string: \"%s\"\n", field.aName.data );
 			continue;
 		}
 
@@ -177,11 +176,11 @@ static void clip_parse_prefixes( clip_data_t* data, json_object_t& json )
 
 		if ( !prefix )
 		{
-			printf( "failed to create prefix?\n" );
+			log_printf( "failed to create prefix?\n" );
 			return;
 		}
 
-		memcpy( prefix->name, field.aName.data, MAX( MAX_LEN_PRESET_NAME, field.aName.size ) * sizeof( char ) );
+		memcpy( prefix->name, field.aName.data, MIN( MAX_LEN_PRESET_NAME, field.aName.size ) * sizeof( char ) );
 		prefix->prefix = strdup( field.aString.data );
 	}
 }
@@ -196,7 +195,7 @@ bool clip_parse_settings( clip_data_t* data, const char* path )
 
 	if ( !file )
 	{
-		printf( "failed to read file for settings\n" );
+		log_printf( "failed to read file for settings\n" );
 		return false;
 	}
 
@@ -205,13 +204,13 @@ bool clip_parse_settings( clip_data_t* data, const char* path )
 
 	if ( err != EJsonError_None )
 	{
-		printf( "Error Parsing Json - %s\n", json_error_to_str( err ) );
+		log_printf( "Error Parsing Json - %s\n", json_error_to_str( err ) );
 		return false;
 	}
 
 	if ( root.aType != e_json_type_object )
 	{
-		printf( "%s - Root Type is not an Object\n", path );
+		log_printf( "%s - Root Type is not an Object\n", path );
 		return false;
 	}
 
@@ -243,7 +242,7 @@ void clip_parse_encode_override( clip_data_t* data, clip_encode_override_t& over
 {
 	if ( root.aType != e_json_type_object )
 	{
-		printf( "expected encode_override to be an object!\n" );
+		log_printf( "expected encode_override to be an object!\n" );
 		return;
 	}
 
@@ -255,7 +254,7 @@ void clip_parse_encode_override( clip_data_t* data, clip_encode_override_t& over
 		{
 			if ( object.aType != e_json_type_array )
 			{
-				printf( "Expected array of strings for presets value in encode_overrides\n" );
+				log_printf( "Expected array of strings for presets value in encode_overrides\n" );
 				continue;
 			}
 
@@ -291,7 +290,7 @@ void clip_parse_encode_override_version_2( clip_data_t* data, clip_encode_overri
 {
 	if ( root.aType != e_json_type_array )
 	{
-		printf( "expected encode_override to be an array of strings!\n" );
+		log_printf( "expected encode_override to be an array of strings!\n" );
 		return;
 	}
 
@@ -325,7 +324,7 @@ void clip_parse_encode_override_version_2( clip_data_t* data, clip_encode_overri
 		{
 			if ( object.aType != e_json_type_array )
 			{
-				printf( "Expected array of strings for presets value in encode_overrides\n" );
+				log_printf( "Expected array of strings for presets value in encode_overrides\n" );
 				continue;
 			}
 
@@ -348,7 +347,7 @@ void clip_parse_encode_override( clip_data_t* data, clip_encode_override_t& over
 	}
 	else
 	{
-		printf( "expected encode_override to be an object or an array!\n" );
+		log_printf( "expected encode_override to be an object or an array!\n" );
 	}
 }
 #endif
@@ -358,7 +357,7 @@ bool clip_parse_input( clip_data_t* data, clip_output_video_t& output, json_obje
 {
 	if ( root.aType != e_json_type_object )
 	{
-		printf( "expected video input to be an object!\n" );
+		log_printf( "expected video input to be an object!\n" );
 		return false;
 	}
 
@@ -380,7 +379,7 @@ bool clip_parse_input( clip_data_t* data, clip_output_video_t& output, json_obje
 		{
 			if ( object.aType != e_json_type_array )
 			{
-				printf( "expected time_ranges to be an array!\n" );
+				log_printf( "expected time_ranges to be an array!\n" );
 				continue;
 			}
 
@@ -421,7 +420,7 @@ bool clip_parse_input( clip_data_t* data, clip_output_video_t& output, json_obje
 				{
 					if ( range_json.aObjects.count != 2 )
 					{
-						printf( "time_ranges entry does not have only 2 entires\n" );
+						log_printf( "time_ranges entry does not have only 2 entires\n" );
 						continue;
 					}
 
@@ -433,7 +432,7 @@ bool clip_parse_input( clip_data_t* data, clip_output_video_t& output, json_obje
 		}
 		else
 		{
-			printf( "unknown input video property: \"%s\"\n", object.aName.data );
+			log_printf( "unknown input video property: \"%s\"\n", object.aName.data );
 		}
 	}
 
@@ -474,7 +473,7 @@ void clip_parse_video( clip_data_t* data, json_object_t& root, u32 output_i )
 		{
 			if ( object.aType != e_json_type_array )
 			{
-				printf( "Expected array of objects for input videos\n" );
+				log_printf( "Expected array of objects for input videos\n" );
 				continue;
 			}
 
@@ -494,7 +493,7 @@ void clip_parse_video( clip_data_t* data, json_object_t& root, u32 output_i )
 		}
 		else
 		{
-			printf( "unknown video property: \"%s\"\n", object.aName.data );
+			log_printf( "unknown video property: \"%s\"\n", object.aName.data );
 		}
 	}
 }
@@ -507,14 +506,14 @@ bool clip_parse_videos( clip_data_t* data, const char* path )
 
 	if ( data->output_count )
 	{
-		printf( "TODO: CLEAR OLD OUTPUT VIDEOS" );
+		log_printf( "TODO: CLEAR OLD OUTPUT VIDEOS" );
 	}
 
 	char* file = fs_read_file( path );
 
 	if ( !file )
 	{
-		printf( "failed to read file for videos\n" );
+		log_printf( "failed to read file for videos\n" );
 		return false;
 	}
 
@@ -526,25 +525,25 @@ bool clip_parse_videos( clip_data_t* data, const char* path )
 
 	if ( err != EJsonError_None )
 	{
-		printf( "Error Parsing Json - %s\n", json_error_to_str( err ) );
+		log_printf( "Error Parsing Json - %s\n", json_error_to_str( err ) );
 		goto fail;
 	}
 
 	if ( root.aType != e_json_type_object )
 	{
-		printf( "%s - Root Type is not an Object\n", path );
+		log_printf( "%s - Root Type is not an Object\n", path );
 		goto fail;
 	}
 
 	if ( root.aObjects.count != 2 )
 	{
-		printf( "Root object count is not 2 entries (version, videos)\n" );
+		log_printf( "Root object count is not 2 entries (version, videos)\n" );
 		goto fail;
 	}
 
 	if ( !root.aObjects.data[ 0 ].aName.size )
 	{
-		printf( "First object name is empty?\n" );
+		log_printf( "First object name is empty?\n" );
 		goto fail;
 	}
 
@@ -553,24 +552,24 @@ bool clip_parse_videos( clip_data_t* data, const char* path )
 		json_object_t& version = root.aObjects.data[ 0 ];
 		if ( version.aType != e_json_type_int )
 		{
-			printf( "Version entry is not an integer type!\n" );
+			log_printf( "Version entry is not an integer type!\n" );
 			goto fail;
 		}
 		else if ( version.aInt < CLIP_VIDEO_FORMAT_VER )
 		{
-			printf( "File is older video format version (got version %d, expected version %d)\n", version.aInt, CLIP_VIDEO_FORMAT_VER );
+			log_printf( "File is older video format version (got version %d, expected version %d)\n", version.aInt, CLIP_VIDEO_FORMAT_VER );
 			goto fail;
 		}
 	}
 	else
 	{
-		printf( "First entry is not \"version\"\n" );
+		log_printf( "First entry is not \"version\"\n" );
 		goto fail;
 	}
 
 	if ( !util_strncmp( "videos", 6, root.aObjects.data[ 1 ].aName.data, root.aObjects.data[ 1 ].aName.size ) )
 	{
-		printf( "Second entry is not \"videos\"\n" );
+		log_printf( "Second entry is not \"videos\"\n" );
 		goto fail;
 	}
 
@@ -815,7 +814,7 @@ bool clip_save_videos( clip_data_t* data, const char* path )
 
 	if ( !out_str.data )
 	{
-		printf( "failed to convert json to string to write to file!\n" );
+		log_printf( "failed to convert json to string to write to file!\n" );
 		return false;
 	}
 
@@ -825,11 +824,11 @@ bool clip_save_videos( clip_data_t* data, const char* path )
 
 	if ( !write_ret )
 	{
-		printf( "Failed to save videos to \"%s\"\n", path );
+		log_printf( "Failed to save videos to \"%s\"\n", path );
 		return false;
 	}
 
-	printf( "Saved videos to \"%s\"\n", path );
+	log_printf( "Saved videos to \"%s\"\n", path );
 	return true;
 }
 
@@ -851,7 +850,7 @@ u32 clip_add_prefix( clip_data_t* data, const char* name, const char* prefix )
 	memset( &data->prefix[ data->prefix_count ], 0, sizeof( clip_prefix_t ) );
 
 	size_t name_len = strlen( name );
-	memcpy( data->prefix[ data->prefix_count ].name, name, std::max( name_len, MAX_LEN_PRESET_NAME ) );
+	memcpy( data->prefix[ data->prefix_count ].name, name, std::min( name_len, MAX_LEN_PRESET_NAME ) );
 
 	data->prefix[ data->prefix_count ].prefix = strdup( prefix );
 
@@ -868,10 +867,10 @@ clip_encode_preset_t* clip_add_encode_preset( clip_data_t* data, const char* nam
 		return nullptr;
 
 	size_t name_len = strlen( name );
-	memcpy( data->preset[ data->preset_count ].name, name, std::max( name_len, MAX_LEN_PRESET_NAME ) );
+	memcpy( data->preset[ data->preset_count ].name, name, std::min( name_len, MAX_LEN_PRESET_NAME ) );
 
 	size_t ext_len = strlen( name );
-	memcpy( data->preset[ data->preset_count ].ext, ext, std::max( ext_len, MAX_LEN_EXT ) );
+	memcpy( data->preset[ data->preset_count ].ext, ext, std::min( ext_len, MAX_LEN_EXT ) );
 
 	return &data->preset[ data->preset_count++ ];
 }
@@ -1023,7 +1022,7 @@ u32 clip_duplicate_input( clip_output_video_t* output, u32 input_i )
 
 	if ( input_i >= output->input_count )
 	{
-		printf( "invalid input index\n" );
+		log_printf( "invalid input index\n" );
 		return UINT32_MAX;
 	}
 
@@ -1070,7 +1069,7 @@ void clip_remove_output( clip_data_t* data, clip_output_video_t* output )
 
 	if ( output_i == data->output_count )
 	{
-		printf( "invalid output\n" );
+		log_printf( "invalid output\n" );
 		return;
 	}
 
@@ -1085,7 +1084,7 @@ void clip_remove_output( clip_data_t* data, u32 output_i )
 
 	if ( output_i > data->output_count )
 	{
-		printf( "invalid output index\n" );
+		log_printf( "invalid output index\n" );
 		return;
 	}
 
@@ -1112,7 +1111,7 @@ void clip_remove_input( clip_output_video_t* output, u32 input_i )
 
 	if ( input_i > output->input_count )
 	{
-		printf( "invalid input index\n" );
+		log_printf( "invalid input index\n" );
 		return;
 	}
 
@@ -1133,7 +1132,7 @@ void clip_add_time_range( clip_output_video_t* output, u32 input_i, float start_
 
 	if ( input_i > output->input_count )
 	{
-		printf( "invalid input index\n" );
+		log_printf( "invalid input index\n" );
 		return;
 	}
 
@@ -1162,7 +1161,7 @@ void clip_remove_time_range( clip_output_video_t* output, u32 input_i, u32 time_
 
 	if ( input_i > output->input_count )
 	{
-		printf( "invalid input index\n" );
+		log_printf( "invalid input index\n" );
 		return;
 	}
 
@@ -1178,7 +1177,7 @@ void clip_duplicate_time_range( clip_output_video_t* output, u32 input_i, u32 sr
 
 	if ( input_i > output->input_count )
 	{
-		printf( "invalid input index\n" );
+		log_printf( "invalid input index\n" );
 		return;
 	}
 
@@ -1186,7 +1185,7 @@ void clip_duplicate_time_range( clip_output_video_t* output, u32 input_i, u32 sr
 
 	if ( src_time_range_i > input.time_range_count )
 	{
-		printf( "invalid time range to duplicate\n" );
+		log_printf( "invalid time range to duplicate\n" );
 		return;
 	}
 
@@ -1230,7 +1229,7 @@ void clip_add_preset_to_encode_override( clip_data_t* data, clip_encode_override
 		}
 	}
 
-	printf( "Failed to find preset: %s\n", preset_name );
+	log_printf( "Failed to find preset: %s\n", preset_name );
 }
 
 
@@ -1252,7 +1251,7 @@ void clip_move_output( clip_data_t* data, u32 output_id, u32 insert_position )
 
 	if ( !temp_data )
 	{
-		printf( "Failed to allocate temp data to reorder output video\n" );
+		log_printf( "Failed to allocate temp data to reorder output video\n" );
 		return;
 	}
 

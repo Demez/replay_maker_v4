@@ -118,6 +118,9 @@ void handle_keybinds()
 	if ( ImGui::GetIO().WantTextInput )
 		return;
 
+	if ( g_encode_running )
+		return;
+
 	if ( ImGui::IsKeyPressed( ImGuiKey_Tab, false ) )
 	{
 		enable_sidebar( !g_show_sidebar );

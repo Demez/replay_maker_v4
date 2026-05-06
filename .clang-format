@@ -93,7 +93,7 @@ IndentWrappedFunctionNames: false
 
 KeepEmptyLinesAtTheStartOfBlocks: false
 LambdaBodyIndentation: Signature
-NamespaceIndentation: None
+NamespaceIndentation: All
 
 PPIndentWidth: 2
 # PackConstructorInitializers: BinPack

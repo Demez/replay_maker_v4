@@ -1,12 +1,12 @@
 #include "main.h"
+#include "logging.h"
 #include "util.h"
 
 #include <stdarg.h>
 #include <time.h>
 
 
-extern const char*    g_log_dir;
-extern const char*    g_video_files;
+std::string           g_log_dir{};
 
 char                  g_date_str[ 32 ]{};
 char*                 g_file_name        = nullptr;
@@ -110,6 +110,23 @@ void log_set_con_color( e_log_color color )
 
 bool log_init()
 {
+	// TODO: store in config
+	if ( g_log_dir.empty() )
+	{
+		size_t      exe_dir_len = 0;
+		const char* exe_dir     = sys_get_exe_folder( &exe_dir_len );
+
+		g_log_dir = exe_dir;
+		g_log_dir += SEP_S;
+		g_log_dir += "logs";
+	}
+
+	if ( !fs_make_dir_check( g_log_dir.data() ) )
+	{
+		printf( "Failed to make log directory\n" );
+		return false;
+	}
+
 	time_t     time_raw;
 	struct tm* time_info;
 
@@ -118,18 +135,15 @@ bool log_init()
 
 	strftime( g_date_str, 32, "%F_%H-%M-%S", time_info );
 
-	g_file_name = fs_get_filename_no_ext( g_video_files );
+	g_file_name           = fs_get_filename_no_ext( g_videos_file_path );
 
-	// Format filename:
-	// Example - replay_encoder__2025-10-09_20-54-08__filename.log
-	char file_path[ 2048 ]{};
-	snprintf( file_path, 2048, "%s" SEP_S "replay_encoder__%s__%s__results.log", g_log_dir, g_date_str, g_file_name );
+	std::string file_path = log_build_name( "results" );
 
-	g_log_file_results = fopen( file_path, "w" );
+	g_log_file_results = fopen( file_path.data(), "w" );
 
 	if ( !g_log_file_results )
 	{
-		printf( "FAILED TO OPEN RESULTS LOG FILE FOR WRITING\n" );
+		printf( "LOG INIT FAILED: FAILED TO OPEN RESULTS LOG FILE FOR WRITING\n" );
 		return false;
 	}
 
@@ -140,18 +154,24 @@ bool log_init()
 }
 
 
-char* log_build_name( const char* name )
+std::string log_build_name( const char* name )
 {
 	// Format filename:
-	// Example - replay_encoder__2025-10-09_20-54-08__filename__custom_name.log
-	size_t len = snprintf( nullptr, 0, "%s" SEP_S "replay_encoder__%s__%s__%s.log", g_log_dir, g_date_str, g_file_name, name );
-	char* file_name = ch_calloc< char >( len );
-	snprintf( file_name, len, "%s" SEP_S "replay_encoder__%s__%s__%s.log", g_log_dir, g_date_str, g_file_name, name );
+	// Example - replay_maker__2025-10-09_20-54-08__filename__custom_name.log
+
+	// TODO: use filename for running encoder only?
+
+	size_t len = snprintf( nullptr, 0, "%s" SEP_S "replay_maker__%s__%s.log", g_log_dir.c_str(), g_date_str, name );
+
+	std::string file_name{};
+	file_name.resize( len + 2 );
+	snprintf( file_name.data(), len + 1, "%s" SEP_S "replay_maker__%s__%s.log", g_log_dir.c_str(), g_date_str, name );
 
 	return file_name;
 }
 
 
+// TODO: allow for another handle to be open, for easier encoder progress tracking?
 bool log_set_file( const char* name )
 {
 	if ( g_log_file )
@@ -161,12 +181,8 @@ bool log_set_file( const char* name )
 		g_log_file = nullptr;
 	}
 	
-	// Format filename:
-	// Example - replay_encoder__2025-10-09_20-54-08__filename__custom_name.log
-	char  file_path[ 2048 ]{};
-	snprintf( file_path, 2048, "%s" SEP_S "replay_encoder__%s__%s__%s.log", g_log_dir, g_date_str, g_file_name, name );
-
-	g_log_file = fopen( file_path, "w" );
+	std::string file_path = log_build_name( name );
+	g_log_file            = fopen( file_path.data(), "w" );
 
 	if ( !g_log_file )
 	{
@@ -243,6 +259,19 @@ size_t log_remove_carriage_return( char* buffer, size_t len, char*& output )
 }
 
 
+void log_print_v_channel( e_log_color color, const char* output, size_t len )
+{
+	log_set_con_color( color );
+
+	fputs( output, stdout );
+	fflush( stdout );
+
+	log_write( output, len );
+
+	log_set_con_color( e_log_color_default );
+}
+
+
 void log_print_v( log_channel channel, const char* format, va_list args )
 {
 	va_list copy;
@@ -264,15 +293,13 @@ void log_print_v( log_channel channel, const char* format, va_list args )
 	{
 		default:
 		case log_general:
-		{
-			log_set_con_color( e_log_color_cyan );
-
-			printf( result );
-			log_write( result, len );
-
-			log_set_con_color( e_log_color_default );
+			log_print_v_channel( e_log_color_default, result, len );
 			break;
-		}
+			
+		case log_logging:
+			log_print_v_channel( e_log_color_cyan, result, len );
+			break;
+
 		case log_ffmpeg:
 		{
 			printf( result );

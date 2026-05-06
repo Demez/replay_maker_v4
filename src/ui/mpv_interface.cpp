@@ -344,6 +344,10 @@ bool start_mpv()
 	// Disable VO
 	p_mpv_set_option_string( g_mpv, "vo", "libmpv" );
 
+	// Stops the main thread from being blocked somehow
+	// https://github.com/celluloid-player/celluloid/pull/982
+	p_mpv_set_option_string( g_mpv, "video-timing-offset", "0" );
+
 	if ( p_mpv_initialize( g_mpv ) < 0 )
 	{
 		printf( "mpv_initialize failed!\n" );
@@ -377,6 +381,8 @@ bool start_mpv()
 	glBindFramebuffer( GL_FRAMEBUFFER, g_mpv_fbo );
 
 	mpv_create_texture();
+
+	p_mpv_set_property_string( g_mpv, "keep-open", "always" );
 
 	return true;
 }

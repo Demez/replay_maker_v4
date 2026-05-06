@@ -1,5 +1,5 @@
 #include "encoder.h"
-#include "main.h"
+#include "logging.h"
 #include "clip/clip.h"
 #include "util.h"
 
@@ -41,9 +41,178 @@ char* gen_ffmpeg_cmd( clip_encode_preset_t& preset, clip_input_video_t& input, u
 }
 
 
-void ffmpeg_callback_read( char* buf, size_t len )
+void extend_buf_capacity( char*& dst, size_t& capacity )
 {
-	log_printf( log_ffmpeg, buf );
+	dst = ch_recalloc( dst, capacity, 4096 );
+	capacity += 4096;
+}
+
+
+void check_buf_capacity( enc_output_video_t& enc_output )
+{
+	if ( enc_output.ffmpeg_output_capacity <= enc_output.ffmpeg_cursor_pos )
+	{
+		extend_buf_capacity( enc_output.ffmpeg_output, enc_output.ffmpeg_output_capacity );
+	}
+}
+
+
+void buf_cat_len( char*& dst, size_t& dst_pos, size_t& capacity, const char* buf, size_t len )
+{
+	if ( dst_pos + len > capacity )
+		extend_buf_capacity( dst, capacity );
+
+	// strncat( dst, buf, len );
+	memcpy( dst + dst_pos, buf, len );
+	dst_pos += len;
+}
+
+
+void buf_cat( char*& dst, size_t& dst_pos, size_t& capacity, const char* buf )
+{
+	if ( !buf || !dst )
+		return;
+
+	buf_cat_len( dst, dst_pos, capacity, buf, strlen( buf ) );
+}
+
+
+void buf_cat_len( enc_output_video_t& enc_output, const char* buf, size_t len )
+{
+	buf_cat_len( enc_output.ffmpeg_output, enc_output.ffmpeg_cursor_pos, enc_output.ffmpeg_output_capacity, buf, len );
+}
+
+
+void buf_cat( enc_output_video_t& enc_output, const char* buf )
+{
+	buf_cat_len( enc_output.ffmpeg_output, enc_output.ffmpeg_cursor_pos, enc_output.ffmpeg_output_capacity, buf, strlen( buf ) );
+}
+
+
+e_exec_state ffmpeg_callback_read( char* buf, size_t buf_len )
+{
+	if ( buf )
+	{
+		log_printf( log_ffmpeg, buf );
+
+		enc_output_video_t& enc_output  = g_output_videos[ g_encoder_data.output_index ];
+		enc_output.ffmpeg_output_lock.lock();
+
+		check_buf_capacity( enc_output );
+
+		char* return_char = strchr( buf, '\r' );
+
+		if ( return_char )
+		{
+			while ( return_char )
+			{
+				size_t return_len = strlen( return_char );
+				size_t diff       = buf_len - return_len;
+		
+				buf_cat_len( enc_output, buf, diff );
+		
+				buf += diff;
+				buf_len -= diff;
+		
+				if ( buf[ 1 ] == '\n' )
+				{
+					// do nothing
+					buf_cat_len( enc_output, "\r\n", 2 );
+					buf += 2;
+					buf_len -= 2;
+				}
+				//else if ( buf[ 1 ] == '\0' )
+				//{
+				//	// do nothing
+				//	buf_cat_len( enc_output, "\r", 1 );
+				//	buf++;
+				//	buf_len--;
+				//}
+				else
+				{
+					// if ( buf[ 1 ] == '\0' )
+					// {
+					// 	printf( "what\n" );
+					// }
+
+					size_t len           = strlen( enc_output.ffmpeg_output );
+					char*  line          = enc_output.ffmpeg_output;
+					char*  last_line     = strrchr( line, '\n' );
+
+					if ( last_line && last_line[ 0 ] == '\n' )
+						last_line++;
+
+					// TEMP
+					if ( last_line[ 0 ] != 'f' )
+					{
+						printf( "WAIT\n" );
+					}
+
+					if ( last_line )
+					{
+						// size_t last_line_len = strlen( last_line );
+						size_t last_line_len = enc_output.ffmpeg_cursor_pos - ( last_line - line );
+
+						// TEMP
+						if ( line[ enc_output.ffmpeg_cursor_pos - ( last_line_len + 1 ) ] != '\n' )
+						{
+							printf( "WAIT 2\n" );
+						}
+
+						enc_output.ffmpeg_cursor_pos -= last_line_len;
+					}
+
+					buf++;
+					buf_len--;
+
+					if ( buf_len > 0 && buf[ 1 ] == '\0' )
+					{
+						printf( "what\n" );
+					}
+				}
+		
+				if ( buf_len == 0 )
+					break;
+
+				if ( buf[ 1 ] == '\0' )
+				{
+					// do nothing
+					buf_cat_len( enc_output, "\r", 1 );
+					buf++;
+					buf_len--;
+				}
+
+				return_char = strchr( buf, '\r' );
+			}
+
+			if ( buf_len > 0 )
+			{
+				buf_cat_len( enc_output, buf, buf_len );
+			}
+		}
+		else
+		{
+			buf_cat_len( enc_output, buf, buf_len );
+		}
+
+		enc_output.ffmpeg_output_lock.unlock();
+
+		// while ( return_char )
+		// {
+		// 
+		// 
+		// 	return_char = strchr( buf, '\r' );
+		// }
+
+	}
+
+	if ( !g_encode_running )
+		return e_exec_state_close;
+
+	if ( g_encode_pause )
+		return e_exec_state_pause;
+
+	return e_exec_state_ok;
 }
 
 
@@ -57,6 +226,9 @@ bool run_ffmpeg_check( const char* cmd, const char* path )
 	str_buf_t output{};
 	bool      ret = sys_execute_read_callback( cmd, output, ffmpeg_callback_read );
 	free( output.data );
+
+	if ( !encode_check_state() )
+		return false;
 
 	if ( !ret )
 #else
@@ -120,7 +292,7 @@ void add_metadata_cmd( clip_output_video_t& output, char* ffmpeg_cmd, bool add_m
 	// write ffmpeg metadata.txt file
 	char metadata_path[ 256 ] = { 0 };
 	strcat( metadata_path, g_temp_video_dir );
-	strcat( metadata_path, PATH_SEP_STR );
+	strcat( metadata_path, SEP_S );
 	strcat( metadata_path, output.name );
 	strcat( metadata_path, "__metadata.txt" );
 
@@ -298,15 +470,15 @@ void add_metadata_cmd( clip_output_video_t& output, char* ffmpeg_cmd, bool add_m
 }
 
 
-void create_output_video( clip_output_video_t& output, char* full_out_path, enc_video_data_t& video_data, bool add_markers, u32 preset_i )
+bool create_output_video( clip_output_video_t& output, const char* full_out_path, enc_video_data_t& video_data, bool add_markers, u32 preset_i )
 {
 	// write ffmpeg concat.txt file
 	FILE* fp = fopen( "concat.txt", "wb" );
 
 	if ( fp == nullptr )
 	{
-		printf( "failed to open file handle to write concat.txt\n" );
-		return;
+		log_printf( log_error, "failed to open file handle to write concat.txt\n" );
+		return false;
 	}
 
 	for ( u32 i = 0; i < video_data.segment_count; i++ )
@@ -330,10 +502,11 @@ void create_output_video( clip_output_video_t& output, char* full_out_path, enc_
 	if ( !run_ffmpeg_check( ffmpeg_cmd, full_out_path ) )
 	{
 		log_printf( log_result, "[FAIL] %s\n", full_out_path );
-		return;
+		return false;
 	}
 
 	log_printf( log_result, "[PASS] %s\n", full_out_path );
+	return true;
 
 	// TODO: delete concat.txt
 	// TODO: write date created and modified
@@ -719,29 +892,8 @@ enc_video_data_t get_video_segments( enc_output_video_t& enc_output, clip_output
 		clip_input_video_t& input        = output.input[ in_i ];
 
 		// verify the encode preset
-#if 1
 		if ( !uses_encode_preset( input.encode_overrides, preset_i ) )
 			continue;
-#else
-		bool                valid_preset = input.encode_overrides.presets_count == 0;
-
-		for ( u32 i = 0; i < input.encode_overrides.presets_count; i++ )
-		{
-			if ( input.encode_overrides.presets[ i ] == preset_i )
-			{
-				if ( input.encode_overrides.preset_exclude )
-					valid_preset = false;
-				else
-					valid_preset = true;
-
-				break;
-			}
-		}
-
-		// don't use this one
-		if ( !valid_preset )
-			continue;
-#endif
 
 		char* input_name = fs_get_filename_no_ext( input.path );
 
@@ -777,12 +929,34 @@ enc_video_data_t get_video_segments( enc_output_video_t& enc_output, clip_output
 }
 
 
-void run_encode_preset( char* out_dir, clip_encode_preset_t& preset, u32 preset_i )
+std::string get_video_output_name( clip_output_video_t& output, clip_encode_preset_t& preset )
+{
+	if ( output.prefix >= g_clip_data->prefix_count )
+		return {};
+
+	clip_prefix_t& prefix = g_clip_data->prefix[ output.prefix ];
+
+	std::string filename;
+
+	if ( preset.out_prefix )
+		filename.append( preset.out_prefix );
+
+	filename.append( prefix.prefix );
+	filename.append( output.name );
+	filename.append( "." );
+	filename.append( preset.ext );
+	
+	return filename;
+}
+
+
+void run_encode_preset( clip_encode_preset_t& preset, u32 preset_i )
 {
 	log_set_file( preset.name );
 
 	log_printf( log_result, "====================================================================\n[PRESET_CHANGE] %s\n", preset.name );
-	char full_out_path[ 4096 ] = { 0 };
+
+	g_encoder_data.encode_preset = preset_i;
 
 	for ( u32 out_i = 0; out_i < g_clip_data->output_count; out_i++ )
 	{
@@ -790,10 +964,13 @@ void run_encode_preset( char* out_dir, clip_encode_preset_t& preset, u32 preset_
 		clip_prefix_t&       prefix     = g_clip_data->prefix[ output.prefix ];
 		enc_output_video_t&  enc_output = g_output_videos[ out_i ];
 
+		g_encoder_data.output_index     = out_i;
+
 		if ( !enc_output.valid )
 		{
 			log_printf( log_error,  "skipping invalid video: \"%s\"\n", output.name );
 			log_printf( log_result, "[FAIL] Invalid Video - %s\n", output.name );
+			enc_output.state = e_enc_output_state_failed;
 			continue;
 		}
 
@@ -809,30 +986,27 @@ void run_encode_preset( char* out_dir, clip_encode_preset_t& preset, u32 preset_
 		}
 
 		if ( !valid_preset )
+		{
+			enc_output.state = e_enc_output_state_failed;
 			continue;
+		}
 
 		log_printf( "\n----------------------------------------------------\n\n" );
 
-		memset( full_out_path, 0, sizeof( char ) * 4096 );
-		strcat( full_out_path, out_dir );
+		enc_output.state     = e_enc_output_state_running;
 
-		if ( preset.out_prefix )
-			strcat( full_out_path, preset.out_prefix );
+		std::string filename = g_encoder_data.output_dir + get_video_output_name( output, preset );
 
-		strcat( full_out_path, prefix.prefix );
-		strcat( full_out_path, output.name );
-		strcat( full_out_path, "." );
-		strcat( full_out_path, preset.ext );
-
-		log_printf( "Output Video \"%s\"\n", full_out_path );
+		log_printf( "Output Video \"%s\"\n", filename.c_str() );
 
 		// check if the video exists
-		if ( fs_is_file( full_out_path ) )
+		if ( fs_is_file( filename.c_str() ) )
 		{
 			// make sure it's not an empty file
-			if ( fs_file_size( full_out_path ) > 0 )
+			if ( fs_file_size( filename.c_str() ) > 0 )
 			{
-				log_printf( log_result, "[PASS] [ALREADY EXISTS] %s\n", full_out_path );
+				log_printf( log_result, "[PASS] [ALREADY EXISTS] %s\n", filename.c_str() );
+				enc_output.state = e_enc_output_state_already_finished;
 				continue;
 			}
 		}
@@ -842,7 +1016,11 @@ void run_encode_preset( char* out_dir, clip_encode_preset_t& preset, u32 preset_
 		enc_video_data_t video_data = get_video_segments( enc_output, output, preset_i );
 
 		if ( video_data.segment_count == 0 )
+		{
+			// ?? use this state?
+			enc_output.state = e_enc_output_state_finished;
 			continue;
+		}
 		
 		bool skip_output = false;
 
@@ -853,11 +1031,19 @@ void run_encode_preset( char* out_dir, clip_encode_preset_t& preset, u32 preset_
 		else
 			skip_output = !run_encode_inputs_standard( video_data, preset );
 
+		if ( !encode_check_state() )
+			break;
+
 		// if we want to skip this or we just have no video segments
 		if ( !skip_output )
 		{
 			// concat them together
-			create_output_video( output, full_out_path, video_data, !preset.target_size, preset_i );
+			if ( !create_output_video( output, filename.c_str(), video_data, !preset.target_size, preset_i ) )
+				enc_output.state = e_enc_output_state_failed;
+		}
+		else
+		{
+			enc_output.state = e_enc_output_state_failed;
 		}
 
 		// free data
@@ -865,37 +1051,40 @@ void run_encode_preset( char* out_dir, clip_encode_preset_t& preset, u32 preset_
 			free( video_data.segment[ i ].path );
 
 		free( video_data.segment );
+
+		if ( enc_output.state != e_enc_output_state_failed )
+			enc_output.state = e_enc_output_state_finished;
+
+		if ( !encode_check_state() )
+			break;
 	}
 }
 
 
 void run_encoding()
 {
-	char* out_dir = ch_calloc< char >( 4096 );
-
-	if ( !out_dir )
-		return;
+	g_encoder_data.output_dir.clear();
 
 	for ( u32 preset_i = 0; preset_i < g_clip_data->preset_count; preset_i++ )
 	{
-		clip_encode_preset_t& preset = g_clip_data->preset[ preset_i ];
+		if ( !encode_check_state() )
+			break;
 
-		memset( out_dir, 0, sizeof( char ) * 4096 );
-		strcat( out_dir, g_output_dir );
+		clip_encode_preset_t& preset = g_clip_data->preset[ preset_i ];
+		g_encoder_data.output_dir.append( g_output_dir );
 
 		if ( preset.out_folder_append )
 		{
-			strcat( out_dir, PATH_SEP_STR );
-			strcat( out_dir, preset.out_folder_append );
+			g_encoder_data.output_dir.append( SEP_S, 1 );
+			g_encoder_data.output_dir.append( preset.out_folder_append );
 
-			if ( !fs_make_dir_check( out_dir ) )
+			if ( !fs_make_dir_check( g_encoder_data.output_dir.c_str() ) )
 				continue;
 		}
 
-		strcat( out_dir, PATH_SEP_STR );
-		run_encode_preset( out_dir, preset, preset_i );
-	}
+		g_encoder_data.output_dir.append( SEP_S, 1 );
 
-	free( out_dir );
+		run_encode_preset( preset, preset_i );
+	}
 }
 

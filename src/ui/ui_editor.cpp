@@ -308,13 +308,23 @@ void replay_editor_load( clip_output_video_t* output )
 }
 
 
-void draw_replay_edit_basic_info( int size[ 2 ] )
+void draw_replay_edit_creation_info( int size[ 2 ] )
 {
 	// select default prefix
 	if ( g_default_prefix >= g_clip_data->prefix_count )
 		g_default_prefix = 0;
 
-	if ( ImGui::BeginCombo( "Default Prefix", g_clip_data->prefix[ g_default_prefix ].name ) )
+	if ( !ImGui::BeginChild( "clip_creation", {}, ImGuiChildFlags_Borders | ImGuiChildFlags_AutoResizeY ) )
+	{
+		ImGui::EndChild();
+		return;
+	}
+
+	ImGui::TextUnformatted( "Default Prefix" );
+	ImGui::SameLine();
+	ImGui::SetNextItemWidth( -FLT_MIN );
+
+	if ( ImGui::BeginCombo( "##default_prefix", g_clip_data->prefix[ g_default_prefix ].name ) )
 	{
 		for ( u32 i = 0; i < g_clip_data->prefix_count; i++ )
 		{
@@ -327,9 +337,9 @@ void draw_replay_edit_basic_info( int size[ 2 ] )
 		ImGui::EndCombo();
 	}
 
-	ImGui::TextUnformatted( "TODO: Default Encode Presets Here" );
+	// ImGui::TextUnformatted( "TODO: Default Encode Presets Here" );
 
-	if ( ImGui::Button( "New Output Video" ) )
+	if ( ImGui::Button( "New Video" ) )
 	{
 		// create a new output video based on the filename of the playing video
 		char* current_video = mpv_get_current_video();
@@ -353,7 +363,10 @@ void draw_replay_edit_basic_info( int size[ 2 ] )
 	}
 
 	if ( !g_clip_current_output )
+	{
+		ImGui::EndChild();
 		return;
+	}
 
 	ImGui::SameLine();
 
@@ -375,6 +388,7 @@ void draw_replay_edit_basic_info( int size[ 2 ] )
 	{
 		clip_remove_output( g_clip_data, g_clip_current_output );
 		replay_editor_reset();
+		ImGui::EndChild();
 		return;
 	}
 
@@ -383,7 +397,7 @@ void draw_replay_edit_basic_info( int size[ 2 ] )
 	const ImVec2 name_text_size   = ImGui::CalcTextSize( "Name" );
 	const ImVec2 prefix_text_size = ImGui::CalcTextSize( "Prefix" );
 
-	float        avaliable_width  = size[ 0 ] - ( style.ItemSpacing.x * 2 );
+	float        avaliable_width  = size[ 0 ] - ( style.ItemSpacing.x * 2 + style.WindowPadding.x * 2 );
 	float        name_bar_width   = ( avaliable_width - prefix_text_size.x );
 
 	name_bar_width -= style.ItemSpacing.x * 2;
@@ -434,6 +448,8 @@ void draw_replay_edit_basic_info( int size[ 2 ] )
 
 		ImGui::EndCombo();
 	}
+
+	ImGui::EndChild();
 }
 
 
@@ -450,7 +466,7 @@ clip_reorder_drag_t g_clip_reorder_drag{};
 
 static ImVec2 mouse_pos_diff{};
 
-void draw_replay_list_entry( u64& imgui_id, u32 out_i, char* search_box, u32 prefix_search, bool collapse_all, bool drag_preview )
+void draw_replay_list_entry( u64& imgui_id, u32 out_i, char* search_box, u32 prefix_search, bool collapse_all, const std::vector< u32 >& preset_search )
 {
 	ImVec2 cursor_screen_pos = ImGui::GetCursorScreenPos();
 	ImVec2 cursor_pos        = ImGui::GetCursorPos();
@@ -460,7 +476,7 @@ void draw_replay_list_entry( u64& imgui_id, u32 out_i, char* search_box, u32 pre
 
 	ImDrawList* draw_list = ImGui::GetWindowDrawList();
 
-	drag_preview = g_clip_reorder_drag.active && out_i == g_clip_reorder_drag.clip_id;
+	bool drag_preview = g_clip_reorder_drag.active && out_i == g_clip_reorder_drag.clip_id;
 
 	clip_output_video_t& output = g_clip_data->output[ out_i ];
 	clip_prefix_t&       prefix = g_clip_data->prefix[ output.prefix ];
@@ -473,9 +489,43 @@ void draw_replay_list_entry( u64& imgui_id, u32 out_i, char* search_box, u32 pre
 		if ( !strcasestr( output.name, search_box ) )
 			return;
 
+	if ( preset_search.size() )
+	{
+		bool preset_found = false;
+
+		for ( u32 preset_i : preset_search )
+		{
+			if ( preset_found )
+				break;
+
+			for ( u32 in_i = 0; in_i < output.input_count; in_i++ )
+			{
+				if ( preset_found )
+					break;
+
+				clip_input_video_t& input = output.input[ in_i ];
+
+				for ( u32 in_preset_i = 0; in_preset_i < input.encode_overrides.presets_count; in_preset_i++ )
+				{
+					u32 in_preset = input.encode_overrides.presets[ in_preset_i ];
+
+					if ( in_preset == preset_i )
+					{
+						preset_found = true;
+						break;
+					}
+				}
+			}
+		}
+
+		if ( !preset_found )
+			return;
+	}
+
 	ImVec2 drag_text_size = ImGui::CalcTextSize( "--" );
 	ImVec2 drag_pos_min( cursor_screen_pos.x, cursor_screen_pos.y );
-	ImVec2 drag_pos_max( cursor_screen_pos.x + drag_text_size.x + ( style.FramePadding.x * 2 ), cursor_screen_pos.y + drag_text_size.y + ( style.FramePadding.y * 2 ) );
+	// ImVec2 drag_pos_max( cursor_screen_pos.x + drag_text_size.x + ( style.FramePadding.x * 2 ), cursor_screen_pos.y + drag_text_size.y + ( style.FramePadding.y * 2 ) );
+	ImVec2 drag_pos_max( cursor_screen_pos.x + drag_text_size.x, cursor_screen_pos.y + drag_text_size.y + ( style.FramePadding.y * 2 ) );
 
 	ImVec2 drag_pos_size( drag_pos_max - drag_pos_min );
 
@@ -520,7 +570,8 @@ void draw_replay_list_entry( u64& imgui_id, u32 out_i, char* search_box, u32 pre
 	}
 
 	// offset cursor to draw the rest of this
-	ImGui::SetCursorPosX( ImGui::GetCursorPosX() + drag_text_size.x + ( style.FramePadding.x * 2 ) + style.ItemSpacing.x );
+	// ImGui::SetCursorPosX( ImGui::GetCursorPosX() + drag_text_size.x + ( style.FramePadding.x * 2 ) + style.ItemSpacing.x );
+	ImGui::SetCursorPosX( ImGui::GetCursorPosX() + drag_text_size.x + style.ItemSpacing.x );
 
 	ImGui::PushID( imgui_id++ );
 	if ( ImGui::Button( "Load" ) )
@@ -617,87 +668,181 @@ void draw_replay_list( int size[ 2 ] )
 	if ( !g_clip_data )
 		return;
 
-	draw_replay_edit_basic_info( size );
+	ImGuiStyle& style = ImGui::GetStyle();
 
-	ImGui::Separator();
+	draw_replay_edit_creation_info( size );
 
-	ImGui::Text( "Clip Entries" );
+	bool                      collapse_all      = false;
+	static bool               sort_newest_top   = true;
+	static char               search_box[ 128 ] = { 0 };
+	static u32                prefix_search     = UINT32_MAX;
+	static std::vector< u32 > preset_search;
 
-	// Search Box
-	static char search_box[ 128 ] = { 0 };
-	ImGui::InputText( "Search Names", search_box, 128 );
-
-	// Search by Prefixes
-	static u32 prefix_search = UINT32_MAX;
-
-	if ( prefix_search < UINT32_MAX )
-		prefix_search = MIN( g_clip_data->prefix_count, prefix_search );
-
-	if ( ImGui::BeginCombo( "Prefix Filter", prefix_search == UINT32_MAX ? "" : g_clip_data->prefix[ prefix_search ].name ) )
+	if ( ImGui::BeginChild( "clip_filtering", {}, ImGuiChildFlags_Borders | ImGuiChildFlags_AutoResizeY ) )
 	{
-		if ( ImGui::Selectable( "None", prefix_search == UINT32_MAX ) )
-			prefix_search = UINT32_MAX;
+		ImGui::TextUnformatted( "Clip Entries" );
+		ImGui::Separator();
 
-		for ( u32 i = 0; i < g_clip_data->prefix_count; i++ )
+		ImVec2 prefix_filter_size = ImGui::CalcTextSize( "Prefix Filter" );
+		ImVec2 search_size        = ImGui::CalcTextSize( "Search" );
+
+		ImGui::TextUnformatted( "Search" );
+
+		ImGui::SameLine();
+		ImGui::Dummy( { prefix_filter_size.x - search_size.x - style.ItemSpacing.x, ImGui::GetTextLineHeight() } );
+		ImGui::SameLine();
+
+		ImGui::SetNextItemWidth( -FLT_MIN );
+
+		// Search Box
+		ImGui::InputText( "##search", search_box, 128 );
+
+		// Search by Prefixes
+		if ( prefix_search < UINT32_MAX )
+			prefix_search = MIN( g_clip_data->prefix_count, prefix_search );
+
+		ImGui::TextUnformatted( "Prefix Filter" );
+
+		ImGui::SameLine();
+		ImGui::SetNextItemWidth( -FLT_MIN );
+
+		if ( ImGui::BeginCombo( "##prefix_filter", prefix_search == UINT32_MAX ? "" : g_clip_data->prefix[ prefix_search ].name ) )
 		{
-			clip_prefix_t& prefix                                     = g_clip_data->prefix[ i ];
-			char           prefix_display[ MAX_LEN_PRESET_NAME + 16 ] = { 0 };
-			u32            result_count                               = 0;
+			if ( ImGui::Selectable( "None", prefix_search == UINT32_MAX ) )
+				prefix_search = UINT32_MAX;
 
-			for ( u32 out_i = 0; out_i < g_clip_data->output_count; out_i++ )
+			for ( u32 i = 0; i < g_clip_data->prefix_count; i++ )
 			{
-				if ( i == g_clip_data->output[ out_i ].prefix )
-					result_count++;
+				clip_prefix_t& prefix                                     = g_clip_data->prefix[ i ];
+				char           prefix_display[ MAX_LEN_PRESET_NAME + 16 ] = { 0 };
+				u32            result_count                               = 0;
+
+				for ( u32 out_i = 0; out_i < g_clip_data->output_count; out_i++ )
+				{
+					if ( i == g_clip_data->output[ out_i ].prefix )
+						result_count++;
+				}
+
+				snprintf( prefix_display, MAX_LEN_PRESET_NAME + 16, "%d - %s", result_count, prefix.name );
+
+				if ( ImGui::Selectable( prefix_display, i == prefix_search ) )
+				{
+					prefix_search = i;
+				}
 			}
 
-			snprintf( prefix_display, MAX_LEN_PRESET_NAME + 16, "%d - %s", result_count, prefix.name );
-
-			if ( ImGui::Selectable( prefix_display, i == prefix_search ) )
-			{
-				prefix_search = i;
-			}
+			ImGui::EndCombo();
 		}
 
-		ImGui::EndCombo();
-	}
+		ImGui::SameLine();
 
-	ImGui::SameLine();
+		// do the search again for this text lol
+		u32 result_count = 0;
+		for ( u32 out_i = 0; out_i < g_clip_data->output_count; out_i++ )
+		{
+			clip_output_video_t& output = g_clip_data->output[ out_i ];
 
-	// do the search again for this text lol
-	u32 result_count = 0;
-	for ( u32 out_i = 0; out_i < g_clip_data->output_count; out_i++ )
+			if ( prefix_search != UINT32_MAX )
+				if ( prefix_search != output.prefix )
+					continue;
+
+			if ( search_box[ 0 ] != '\0' )
+				if ( !strcasestr( output.name, search_box ) )
+					continue;
+
+			result_count++;
+		}
+
+		// Advanced filters, filter by encode presets
+		if ( ImGui::BeginCombo( "##presets", "Preset Filter", ImGuiComboFlags_HeightLargest | ImGuiComboFlags_WidthFitPreview ) )
+		{
+			for ( u32 i = 0; i < g_clip_data->preset_count; i++ )
+			{
+				// check if it's already in the search list
+				bool skip = false;
+				for ( size_t used_preset_i = 0; used_preset_i < preset_search.size(); used_preset_i++ )
+				{
+					if ( i == preset_search[ used_preset_i ] )
+					{
+						skip = true;
+						break;
+					}
+				}
+
+				if ( skip )
+					continue;
+
+				if ( ImGui::Selectable( g_clip_data->preset[ i ].name ) )
+				{
+					preset_search.emplace_back( i );
+				}
+			}
+
+			ImGui::EndCombo();
+		}
+
+		// index in the array to remove
+		size_t preset_remove = SIZE_MAX;
+
+		for ( size_t i = 0; i < preset_search.size(); i++ )
+		{
+			ImGui::SameLine();
+
+			clip_encode_preset_t& encode = g_clip_data->preset[ preset_search[ i ] ];
+
+			ImGui::PushStyleColor( ImGuiCol_ButtonActive, COLOR_BTN_RED_ACTIVE );
+			ImGui::PushStyleColor( ImGuiCol_ButtonHovered, COLOR_BTN_RED_HOVER );
+			ImGui::PushStyleColor( ImGuiCol_Button, COLOR_BTN_RED );
+
+			if ( ImGui::Button( encode.name ) )
+			{
+				preset_remove = i;
+			}
+
+			ImGui::PopStyleColor();
+			ImGui::PopStyleColor();
+			ImGui::PopStyleColor();
+		}
+
+		if ( preset_remove != SIZE_MAX )
+		{
+			preset_search.erase( preset_search.begin() + preset_remove );
+			preset_remove = SIZE_MAX;
+		}
+
+		ImGui::Separator();
+
+		collapse_all = ImGui::Button( "Collapse All" );
+
+		ImGui::SameLine();
+
+		if ( ImGui::Button( sort_newest_top ? "Sort: Newest First" : "Sort: Oldest First" ) )
+			sort_newest_top = !sort_newest_top;
+
+		ImGui::SameLine();
+		ImGui::Text( "%d Entries", result_count );
+
+
+	ImGui::Separator();
+
+	float      video_list_size{};
+
 	{
-		clip_output_video_t& output = g_clip_data->output[ out_i ];
+		
+		ImVec2 cursor_screen_pos = ImGui::GetCursorScreenPos();
+		ImVec2 region_avail      = ImGui::GetContentRegionAvail();
+		// video_list_size          = region_avail;
+		video_list_size          = size[ 1 ] - cursor_screen_pos[ 1 ];
 
-		if ( prefix_search != UINT32_MAX )
-			if ( prefix_search != output.prefix )
-				continue;
-
-		if ( search_box[ 0 ] != '\0' )
-			if ( !strcasestr( output.name, search_box ) )
-				continue;
-
-		result_count++;
+		video_list_size -= ( ImGui::GetFrameHeightWithSpacing() * 2 + style.ItemSpacing.y * 2 );
 	}
 
-	ImGui::Text( "%d Entries", result_count );
-
-	ImGui::Separator();
-
-	bool collapse_all = ImGui::Button( "Collapse All" );
-
-	ImGui::SameLine();
-
-	static bool sort_newest_top = true;
-
-	if ( ImGui::Button( sort_newest_top ? "Sort: Newest First" : "Sort: Oldest First" ) )
-		sort_newest_top = !sort_newest_top;
-
-	ImGui::Separator();
+	ImGui::SetNextWindowSize( { -1, video_list_size } );
 
 	//if ( !ImGui::BeginChild( "##video_list", {}, ImGuiChildFlags_Border ) )
 	if ( !ImGui::BeginChild( "##video_list" ) )
 	{
+		ImGui::EndChild();
 		ImGui::EndChild();
 		return;
 	}
@@ -709,8 +854,6 @@ void draw_replay_list( int size[ 2 ] )
 	ImVec2 cursor_screen_pos = ImGui::GetCursorScreenPos();
 	ImVec2 cursor_pos        = ImGui::GetCursorPos();
 	ImVec2 mouse_pos         = ImGui::GetMousePos();
-
-	ImGuiStyle& style        = ImGui::GetStyle();
 
 	ImVec2 drag_text_size = ImGui::CalcTextSize( "--" );
 	float entry_height = drag_text_size.y + ( style.FramePadding.y * 2 );
@@ -767,7 +910,7 @@ void draw_replay_list( int size[ 2 ] )
 			}
 		}
 
-		draw_replay_list_entry( imgui_id, out_i, search_box, prefix_search, collapse_all, false );
+		draw_replay_list_entry( imgui_id, out_i, search_box, prefix_search, collapse_all, preset_search );
 
 		if ( g_clip_reorder_drag.active && !g_clip_reorder_drag.just_selected )
 		{
@@ -819,6 +962,51 @@ void draw_replay_list( int size[ 2 ] )
 	}
 
 	ImGui::EndChild();
+	}
+	ImGui::EndChild();
+
+	// ===================================================================================
+	// Export Area
+
+	// ImGui::Separator();
+
+	if ( ImGui::BeginChild( "##export", {}, ImGuiChildFlags_None, ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse | ImGuiWindowFlags_NoSavedSettings ) )
+	{
+		ImGui::InputText( "Output Path", g_output_dir, 512 );
+		// ImGui::InputText( "Temp Path", g_temp_video_dir, 512 );
+
+		ImGui::BeginDisabled( g_clip_data->output_count == 0 || g_encode_running );
+
+		if ( ImGui::Button( "Export" ) )
+		{
+			encode_thread_start();
+		}
+
+		ImGui::SameLine();
+
+		// implement later
+		ImGui::BeginDisabled();
+		ImGui::BeginDisabled( g_clip_current_output == nullptr );
+
+		if ( ImGui::Button( "Export Selected" ) )
+		{
+		}
+
+		ImGui::EndDisabled();
+
+		ImGui::SameLine();
+
+		if ( ImGui::Button( "Export Advanced" ) )
+		{
+		}
+		ImGui::EndDisabled();
+
+		ImGui::EndDisabled();
+	}
+
+	ImGui::EndChild();
+
+	// ===================================================================================
 
 	if ( g_clip_reorder_drag.active && ImGui::IsMouseReleased( ImGuiMouseButton_Left ) )
 	{
@@ -1302,225 +1490,6 @@ void draw_input_video_edit_wrapper( u32 input_i, clip_input_video_t* input, bool
 }
 
 
-void draw_replay_edit( int size[ 2 ] )
-{
-	if ( !g_clip_data )
-	{
-		ImGui::TextUnformatted( "No Clip Data Loaded or Created, use File/New or File/Open" );
-		return;
-	}
-
-	draw_replay_edit_basic_info( size );
-
-	if ( !g_clip_current_output )
-		return;
-
-	// draw_preset_override_button( &g_clip_current_output->encode_overrides, "Edit Presets" );
-
-	//ImGui::Spacing();
-	//ImGui::Spacing();
-	//ImGui::Spacing();
-	//ImGui::Spacing();
-	//ImGui::Separator();
-
-	// probably not needed, we can just use the presets stored on output videos to determine what encode presets to run this video on
-	//draw_preset_override( g_clip_current_output->encode_overrides );
-	//ImGui::Separator();
-
-	// push_edit_button_color( &g_clip_current_output->encode_overrides );
-	//
-	// if ( ImGui::Button( "Edit Presets" ) )
-	// {
-	// 	if ( g_encode_override == &g_clip_current_output->encode_overrides )
-	// 		g_encode_override = nullptr;
-	// 	else
-	// 		g_encode_override = &g_clip_current_output->encode_overrides;
-	// }
-
-	//ImGui::Separator();
-
-	// lmao
-	//draw_playback_controls( size, false );
-	//ImGui::Separator(); 
-
-	ImGui::BeginDisabled( g_clip_current_input == UINT32_MAX );
-
-	// Current Clip Editor
-
-//	if ( ImGui::Button( "Add Entry" ) )
-//	{
-//		u32 i = clip_add_input( g_clip_current_output, mpv_get_current_video() );
-//		replay_editor_load_input( g_clip_current_output, i );
-//	}
-
-	ImGui::Separator();
-
-	ImVec4          frame_bg = ImGui::GetStyleColorVec4( ImGuiCol_ChildBg );
-	ImGuiChildFlags flags    = ImGuiChildFlags_Border | ImGuiChildFlags_AutoResizeY;
-
-	frame_bg.x = 0.15;
-	frame_bg.y = 0.15;
-	frame_bg.z = 0.15;
-	frame_bg.w = 1;
-
-	ImGui::PushStyleColor( ImGuiCol_ChildBg, frame_bg );
-
-	if ( ImGui::BeginChild( "##entry_editor", ImVec2( 0.f, 0.f ), flags ) )
-	{
-		if ( ImGui::Button( "Set Start Time" ) )
-		{
-			// get position from mkv
-			double time_pos = 0;
-			p_mpv_get_property( g_mpv, "time-pos", MPV_FORMAT_DOUBLE, &time_pos );
-
-			if ( g_edit_time_range )
-			{
-				// NOTE: maybe allow the user to set a start time later than the end time
-				// but color the time range as red so the user knows it's invalid
-				g_edit_time_range->start = time_pos;
-			}
-			else
-			{
-				g_time_range_start = time_pos;
-			}
-		}
-
-		ImGui::SameLine();
-
-		if ( ImGui::Button( "Set End Time" ) )
-		{
-			double time_pos = 0;
-			p_mpv_get_property( g_mpv, "time-pos", MPV_FORMAT_DOUBLE, &time_pos );
-
-			if ( g_edit_time_range )
-			{
-				// set end time
-				// TODO: add undo system and have this be an action you can undo
-
-				// NOTE: maybe allow the user to set a start time later than the end time
-				// but color the time range as red so the user knows it's invalid
-				if ( time_pos < g_edit_time_range->start )
-				{
-					printf( "end time is earlier than start time! - %.4f > %.4f\n", g_edit_time_range->start, time_pos );
-				}
-				else
-				{
-					g_edit_time_range->end = time_pos;
-				}
-			}
-			else
-			{
-				if ( time_pos < g_time_range_start )
-				{
-					printf( "end time is earlier than start time! - %.4f > %.4f\n", g_time_range_start, time_pos );
-				}
-				else
-				{
-					clip_add_time_range( g_clip_current_output, g_clip_current_input, g_time_range_start, time_pos );
-					g_time_range_start = time_pos;
-				}
-			}
-		}
-
-		ImGui::SameLine();
-
-		if ( ImGui::Button( "Reset Start Time" ) )
-		{
-			g_time_range_start = 0;
-		}
-
-		ImGui::SameLine();
-
-		if ( ImGui::Button( "Add Full Video Time" ) )
-		{
-			double duration = 0;
-			p_mpv_get_property( g_mpv, "duration", MPV_FORMAT_DOUBLE, &duration );
-			clip_add_time_range( g_clip_current_output, g_clip_current_input, 0, duration );
-		}
-
-		draw_input_video_edit( g_clip_current_input, &g_clip_current_output->input[ g_clip_current_input ], true );
-	}
-
-	ImGui::EndChild();
-
-	//if ( current == j )
-	{
-		ImGui::PopStyleColor();
-	}
-
-
-
-	ImGui::EndDisabled();
-	ImGui::Separator();
-	ImGui::TextUnformatted( "Entries" );
-
-	// display input videos
-	for ( u32 j = 0; j < g_clip_current_output->input_count; j++ )
-	{
-		clip_input_video_t* input    = &g_clip_current_output->input[ j ];
-
-		draw_input_video_edit_wrapper( j, input, false );
-
-#if 0
-		// in case this is changed in the function
-		u32                 current  = g_clip_current_input;
-
-		ImVec4              frame_bg = ImGui::GetStyleColorVec4( ImGuiCol_ChildBg );
-		ImGuiChildFlags     flags    = ImGuiChildFlags_Border | ImGuiChildFlags_AutoResizeY;
-
-		if ( current == j )
-		{
-			//continue;
-
-			// flags |= ImGuiChildFlags_FrameStyle;
-			// frame_bg.x = 0.5;
-			// frame_bg.y = 0.5;
-			// frame_bg.z = 0.5;
-
-			frame_bg.x = 0.15;
-			frame_bg.y = 0.15;
-			frame_bg.z = 0.15;
-			frame_bg.w = 1;
-		}
-		else
-		{
-			// frame_bg.x *= 0.4;
-			// frame_bg.y *= 0.4;
-			// frame_bg.z *= 0.4;
-		}
-
-		ImGui::PushStyleColor( ImGuiCol_ChildBg, frame_bg );
-
-		if ( ImGui::BeginChild( (size_t)input, ImVec2( 0.f, 0.f ), flags ) )
-		{
-			draw_input_video_edit( j, input, current == j );
-		}
-
-		ImGui::EndChild();
-
-		//if ( current == j )
-		{
-			ImGui::PopStyleColor();
-		}
-#endif
-	}
-
-	if ( g_encode_override )
-	{
-		ImGui::Separator();
-		draw_preset_override( *g_encode_override, false );
-	}
-
-	if ( g_clip_delete_input != UINT32_MAX )
-	{
-		clip_remove_input( g_clip_current_output, g_clip_delete_input );
-		g_clip_delete_input  = UINT32_MAX;
-
-		g_clip_current_input = g_clip_current_output->input_count > 0 ? 0 : UINT32_MAX;
-	}
-}
-
-
 void update_folder_list( const char* new_dir )
 {
 }
@@ -1668,14 +1637,6 @@ void draw_replay_editor_window( int window_size[ 2 ] )
 
 	if ( ImGui::BeginTabBar( "##replay_tabs" ) )
 	{
-		//if ( ImGui::BeginTabItem( "Replay Editor" /*, nullptr, g_focus_replay_maker ? ImGuiTabItemFlags_SetSelected : 0*/ ) )
-		//{
-		//	draw_replay_edit( element_size );
-		//	ImGui::EndTabItem();
-		//
-		//	g_focus_replay_maker = false;
-		//}
-
 		if ( ImGui::BeginTabItem( "Clip Entries" ) )
 		{
 			draw_replay_list( element_size );

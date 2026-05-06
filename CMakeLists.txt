@@ -145,27 +145,23 @@ endif()
 # ========================================================================================================
 
 set(
-    SRC_FILES_SHARED
+    SRC_FILES
+
+    src/main.cpp
+    src/main.h
     src/util.cpp
     src/util.h
     src/args.cpp
     src/args.h
-	
-    src/clip/clip.cpp
-    src/clip/clip.h
-    src/clip/json5.cpp
-    src/clip/json5.h
-)
+    src/logging.cpp
+    src/logging.h
 
-set(
-    SRC_FILES_UI
-    src/replay_maker_ui/main.cpp
-    src/replay_maker_ui/main.h
-    src/replay_maker_ui/mpv_interface.cpp
-    src/replay_maker_ui/ui_editor.cpp
-    src/replay_maker_ui/ui_timeline.cpp
-    src/replay_maker_ui/undo.cpp
-    src/replay_maker_ui/key_bind.cpp
+    src/ui/mpv_interface.cpp
+    src/ui/ui_encode.cpp
+    src/ui/ui_editor.cpp
+    src/ui/ui_timeline.cpp
+    src/ui/undo.cpp
+    src/ui/key_bind.cpp
 
     src/imgui/imconfig.h
     src/imgui/imgui.cpp
@@ -178,33 +174,29 @@ set(
 	src/imgui/imgui_freetype.cpp
 	src/imgui/imgui_freetype.h
 
+    src/encoder/encoder.cpp
+    src/encoder/encoder.h
+    src/encoder/encoder_main.cpp
+	
+    src/clip/clip.cpp
+    src/clip/clip.h
+    src/clip/json5.cpp
+    src/clip/json5.h
+
 	src/glad/glad.c
 	src/glad/glad.h
 	src/glad/khrplatform.h
 )
 
-set(
-    SRC_FILES_ENCODER
-    src/encoder/encoder.cpp
-    src/encoder/encoder.h
-    src/encoder/main.cpp
-    src/encoder/main.h
-    src/encoder/logging.cpp
-)
-
 if ( WIN32 )
 	set(
-		SRC_FILES_SHARED
-		${SRC_FILES_SHARED}
-		src/sys_win32.cpp
-	)
+		SRC_FILES
+		${SRC_FILES}
 
-	set(
-		SRC_FILES_UI
-		${SRC_FILES_UI}
-		src/replay_maker_ui/sys_win32_drag_drop.cpp
-		src/replay_maker_ui/sys_win32_replay.cpp
+		src/ui/sys_win32_drag_drop.cpp
+		src/ui/sys_win32_replay.cpp
 		src/imgui/imgui_impl_win32.cpp
+		src/sys_win32.cpp
 	)
 else()
 endif()
@@ -213,12 +205,12 @@ endif()
 # ========================================================================================================
 
 
-add_executable( replay_maker ${SRC_FILES_UI} ${SRC_FILES_SHARED} )
+add_executable( replay_maker ${SRC_FILES} )
 
 source_group(
 	TREE ${CMAKE_CURRENT_LIST_DIR}/src
 	PREFIX "Source Files"
-	FILES ${SRC_FILES_UI} ${SRC_FILES_SHARED}
+	FILES ${SRC_FILES}
 )
 
 # native file dialog
@@ -241,6 +233,7 @@ target_include_directories(
 	replay_maker PRIVATE
 	"src"
 	"src/replay_maker_ui"
+	"src/encoder"
 	"src/imgui"
 	"src/glad"
 	"thirdparty/SDL3/include"
@@ -257,21 +250,4 @@ set_target_properties(
 	VS_DEBUGGER_WORKING_DIRECTORY ${PROJ_OUT}
 )
 
-
-# ========================================================================================================
-
-
-add_executable( replay_encoder ${SRC_FILES_ENCODER} ${SRC_FILES_SHARED} )
-
-source_group(
-	TREE ${CMAKE_CURRENT_LIST_DIR}/src
-	PREFIX "Source Files"
-	FILES ${SRC_FILES_ENCODER} ${SRC_FILES_SHARED}
-)
-
-target_include_directories(
-	replay_encoder PRIVATE
-	"src"
-	"src/encoder"
-)
 

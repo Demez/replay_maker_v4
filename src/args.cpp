@@ -1,4 +1,5 @@
 #include "args.h"
+#include "main.h"
 
 
 enum e_arg_type : u8
@@ -52,36 +53,36 @@ void args_free()
 
 void args_print_help()
 {
-	printf( "%d registered arguments:\n\n", g_registered_args_count );
+	log_printf( "%d registered arguments:\n\n", g_registered_args_count );
 
 	for ( u32 i = 0; i < g_registered_args_count; i++ )
 	{
-		printf( g_registered_args[ i ].cmd_switch );
+		log_printf( g_registered_args[ i ].cmd_switch );
 
 		switch ( g_registered_args[ i ].type )
 		{
 			case e_arg_type_bool:
 			{
-				printf( " %s", g_registered_args[ i ].val_bool ? "true" : "false" );
+				log_printf( " %s", g_registered_args[ i ].val_bool ? "true" : "false" );
 				break;
 			}
 
 			case e_arg_type_string:
 			{
-				printf( " %s", g_registered_args[ i ].val_str );
+				log_printf( " %s", g_registered_args[ i ].val_str );
 
 				// yes we are intentionally doing a pointer check here, by default these are the same pointer
 				if ( g_registered_args[ i ].val_str != g_registered_args[ i ].default_val_str )
 				{
 					if ( strlen( g_registered_args[ i ].default_val_str ) > 0 )
-						printf( " (default %s)", g_registered_args[ i ].default_val_str );
+						log_printf( " (default %s)", g_registered_args[ i ].default_val_str );
 				}
 
 				break;
 			}
 		}
 
-		printf( "\n" );
+		log_printf( "\n" );
 	}
 }
 

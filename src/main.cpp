@@ -1,9 +1,11 @@
 #include "main.h"
+#include "args.h"
 
 #include <locale.h>
 
 #include "imgui.h"
 #include "imgui_internal.h"
+#include "imgui_freetype.h"
 #include "imgui_impl_sdl3.h"
 #include "imgui_impl_opengl3_loader.h"
 #include "imgui_impl_opengl3.h"
@@ -17,6 +19,18 @@
 #include "nfd.h"
 
 #include <time.h>
+
+
+namespace font
+{
+	ImFont* normal        = nullptr;
+	ImFont* normal_bold   = nullptr;
+	ImFont* normal_italic = nullptr;
+
+	ImFont* console       = nullptr;
+
+	u32     size          = 17;
+}
 
 
 SDL_Window*         g_main_window_sdl     = nullptr;
@@ -478,47 +492,52 @@ void draw_imgui_window( int window_size[ 2 ] )
 	//ImGui::ShowDemoWindow();
 	//return;
 
-	// draw sidebar
-	if ( g_show_sidebar )
+	if ( g_encode_running )
 	{
-		draw_replay_editor_window( window_size );
+		encode_draw();
 	}
-
-	// draw playback controls
+	else
 	{
-		int element_size[ 2 ] = { 0, 0 };
-		element_size[ 0 ]     = g_mpv_size[ 0 ] + 1;
-		element_size[ 1 ]     = window_size[ 1 ] - g_mpv_size[ 1 ];
-
-		ImGui::SetNextWindowSize( { (float)element_size[ 0 ], (float)element_size[ 1 ] } );
-		ImGui::SetNextWindowPos( { 0.f, (float)g_mpv_size[ 1 ] } );
-
-		if ( !ImGui::Begin( "##Playback Controls", 0, ImGuiWindowFlags_NoNav | ImGuiWindowFlags_NoDecoration ) )
-		// if ( !ImGui::Begin( "##Playback Controls", 0, ImGuiWindowFlags_NoNav | ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoCollapse ) )
+		// draw sidebar
+		if ( g_show_sidebar )
 		{
-			ImGui::End();
-			return;
+			draw_replay_editor_window( window_size );
 		}
 
-		draw_playback_controls( element_size, true );
+		// draw playback controls
+		{
+			int element_size[ 2 ] = { 0, 0 };
+			element_size[ 0 ]     = g_mpv_size[ 0 ] + 1;
+			element_size[ 1 ]     = window_size[ 1 ] - g_mpv_size[ 1 ];
 
-		ImGui::End();
+			ImGui::SetNextWindowSize( { (float)element_size[ 0 ], (float)element_size[ 1 ] } );
+			ImGui::SetNextWindowPos( { 0.f, (float)g_mpv_size[ 1 ] } );
+
+			if ( !ImGui::Begin( "##Playback Controls", 0, ImGuiWindowFlags_NoNav | ImGuiWindowFlags_NoDecoration ) )
+			// if ( !ImGui::Begin( "##Playback Controls", 0, ImGuiWindowFlags_NoNav | ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoCollapse ) )
+			{
+				ImGui::End();
+				return;
+			}
+
+			draw_playback_controls( element_size, true );
+
+			ImGui::End();
+		}
 	}
 }
 
 
 void save_settings()
 {
-	size_t exe_dir_len = 0;
-	char*  exe_dir     = sys_get_exe_folder( &exe_dir_len );
-	char settings_path[ 4096 ] = { 0 };
+	size_t      exe_dir_len           = 0;
+	const char* exe_dir               = sys_get_exe_folder( &exe_dir_len );
+	char        settings_path[ 4096 ] = { 0 };
 
 	memcpy( settings_path, exe_dir, exe_dir_len * sizeof( char ) );
-	strcat( settings_path, PATH_SEP_STR "replay_maker_config.json5" );
+	strcat( settings_path, SEP_S "replay_maker_config.json5" );
 
 	clip_save_settings( g_clip_data, settings_path );
-
-	free( exe_dir );
 }
 
 
@@ -721,13 +740,129 @@ static ivec2 g_old_mpv_size;
 static ivec2 g_old_window_size;
 
 
-void render_imgui();
+void         render_imgui();
 
+
+void move_divider( u32 index )
+{
+	// check if we released the key, we could release it outside the window mid drag, as it lags behind
+	if ( !ImGui::IsMouseDown( ImGuiMouseButton_Left ) )
+	{
+		g_grabbed_divider_idx = -1;
+		return;
+	}
+
+	g_grabbed_divider_idx = index;
+
+	int width, height;
+	SDL_GetWindowSize( g_main_window_sdl, &width, &height );
+
+	if ( index == 0 )
+	{
+		// vertical divider
+		//cursor_main.y -= g_grab_cursor_offset[ 1 ];
+		g_mpv_size[ 1 ] = CLAMP( g_mouse_pos[ 1 ], 0, height );
+		ImGui::SetMouseCursor( ImGuiMouseCursor_ResizeNS );
+	}
+	else if ( index == 1 )
+	{
+		// horizontal divider
+		//cursor_main.x -= g_grab_cursor_offset[ 0 ];
+		g_mpv_size[ 0 ] = CLAMP( g_mouse_pos[ 0 ], 0, width );
+		ImGui::SetMouseCursor( ImGuiMouseCursor_ResizeEW );
+	}
+
+	// update mpv window size
+	mpv_window_resize();
+
+//	window_render_all();
+}
+
+
+void update_dividers()
+{
+	//if ( !g_mouse_in_window )
+	//	return;
+
+	// calc divider rectangle
+	int width, height;
+	SDL_GetWindowSize( g_main_window_sdl, &width, &height );
+
+	// rectangle 0 - playback controls divider
+	ImVec2   div_0_min{ 0.f, (float)g_mpv_size[ 1 ] - DIVIDER_SIZE };
+	ImVec2   div_0_max{ (float)g_mpv_size[ 0 ], (float)g_mpv_size[ 1 ] + DIVIDER_SIZE };
+
+	// rectangle 1 - replay info
+	ImVec2   div_1_min{ (float)g_mpv_size[ 0 ] - DIVIDER_SIZE, 0.f };
+	ImVec2   div_1_max{ (float)g_mpv_size[ 0 ] + DIVIDER_SIZE, (float)height };
+
+	ImGuiIO& io                       = ImGui::GetIO();
+
+	g_hovered_divider                 = false;
+	static bool last_frame_left_click = false;
+	// bool        left_click            = ImGui::IsMouseClicked( ImGuiMouseButton_Left, false ) || ImGui::IsMouseDown( ImGuiMouseButton_Left );
+	bool        left_click            = ImGui::IsKeyPressed( ImGuiKey_MouseLeft, false );
+
+	if ( g_grabbed_divider_idx != -1 )
+	{
+		g_hovered_divider = true;
+		move_divider( g_grabbed_divider_idx );
+		last_frame_left_click = left_click;
+		return;
+	}
+
+	// NOTE: not perfect, windows keeps setting the cursor back to default even though im not using a cursor in a window class, hmm
+	if ( g_grabbed_divider_idx == 0 || mouse_in_rect( div_0_min, div_0_max ) )
+	{
+		g_hovered_divider = true;
+
+		//io.ConfigFlags |= ImGuiConfigFlags_NoMouseCursorChange | ImGuiConfigFlags_NoMouse;
+		ImGui::SetMouseCursor( ImGuiMouseCursor_ResizeNS );
+
+		if ( !last_frame_left_click && left_click )
+			move_divider( 0 );
+	}
+	else if ( g_show_sidebar && ( g_grabbed_divider_idx == 1 || mouse_in_rect( div_1_min, div_1_max ) ) )
+	{
+		g_hovered_divider = true;
+
+		//io.ConfigFlags |= ImGuiConfigFlags_NoMouseCursorChange | ImGuiConfigFlags_NoMouse;
+		ImGui::SetMouseCursor( ImGuiMouseCursor_ResizeEW );
+		//SetCursor( g_cursor_resize_h );
+
+		if ( !last_frame_left_click && left_click )
+			move_divider( 1 );
+	}
+	else if ( io.ConfigFlags & ( ImGuiConfigFlags_NoMouseCursorChange | ImGuiConfigFlags_NoMouse ) )
+	{
+		//io.ConfigFlags &= ~( ImGuiConfigFlags_NoMouseCursorChange | ImGuiConfigFlags_NoMouse );
+		ImGui::SetMouseCursor( ImGuiMouseCursor_Arrow );
+		//SetCursor( g_cursor_default );
+		g_grabbed_divider_idx = -1;
+	}
+
+	last_frame_left_click = left_click;
+}
 
 void window_render_all()
 {
-	render_imgui();
-	mpv_draw_frame();
+	if ( !g_fullscreen )
+	{
+		if ( !g_encode_running )
+		{
+			update_dividers();
+		}
+
+		render_imgui();
+	}
+	else
+	{
+		ImGui_ImplSDL3_NewFrame();
+		ImGui::NewFrame();
+		ImGui::EndFrame();
+
+		mpv_draw_frame();
+	}
 }
 
 
@@ -848,21 +983,16 @@ void render_imgui()
 	glViewport( 0, 0, width, height );
 	glClearColor( clear_color.x, clear_color.y, clear_color.z, clear_color.w );
 	glClear( GL_COLOR_BUFFER_BIT );
-	
-	mpv_draw_frame();
+
+	if ( !g_encode_running )
+	{
+		mpv_draw_frame();
+	}
 
 	ImGui_ImplOpenGL3_RenderDrawData( ImGui::GetDrawData() );
 
 	// Present
 	SDL_GL_SwapWindow( g_main_window_sdl );
-}
-
-
-void imgui_update_fullscreen()
-{
-	ImGui_ImplSDL3_NewFrame();
-	ImGui::NewFrame();
-	ImGui::EndFrame();
 }
 
 
@@ -913,108 +1043,6 @@ int mouse_in_divider()
 	//return -1;
 }
 #endif
-
-
-void move_divider( u32 index )
-{
-	// check if we released the key, we could release it outside the window mid drag, as it lags behind
-	if ( !ImGui::IsMouseDown( ImGuiMouseButton_Left ) )
-	{
-		g_grabbed_divider_idx = -1;
-		return;
-	}
-
-	g_grabbed_divider_idx = index;
-
-	int width, height;
-	SDL_GetWindowSize( g_main_window_sdl, &width, &height );
-
-	if ( index == 0 )
-	{
-		// vertical divider
-		//cursor_main.y -= g_grab_cursor_offset[ 1 ];
-		g_mpv_size[ 1 ] = CLAMP( g_mouse_pos[ 1 ], 0, height );
-		ImGui::SetMouseCursor( ImGuiMouseCursor_ResizeNS );
-	}
-	else if ( index == 1 )
-	{
-		// horizontal divider
-		//cursor_main.x -= g_grab_cursor_offset[ 0 ];
-		g_mpv_size[ 0 ] = CLAMP( g_mouse_pos[ 0 ], 0, width );
-		ImGui::SetMouseCursor( ImGuiMouseCursor_ResizeEW );
-	}
-
-	// update mpv window size
-	mpv_window_resize();
-
-	window_render_all();
-}
-
-
-void update_dividers()
-{
-	//if ( !g_mouse_in_window )
-	//	return;
-
-	// calc divider rectangle
-	int width, height;
-	SDL_GetWindowSize( g_main_window_sdl, &width, &height );
-	
-	// rectangle 0 - playback controls divider
-	ImVec2      div_0_min{ 0.f, (float)g_mpv_size[ 1 ] - DIVIDER_SIZE };
-	ImVec2      div_0_max{ (float)g_mpv_size[ 0 ], (float)g_mpv_size[ 1 ] + DIVIDER_SIZE };
-
-	// rectangle 1 - replay info
-	ImVec2      div_1_min{ (float)g_mpv_size[ 0 ] - DIVIDER_SIZE, 0.f };
-	ImVec2      div_1_max{ (float)g_mpv_size[ 0 ] + DIVIDER_SIZE, (float)height };
-
-	ImGuiIO&    io                    = ImGui::GetIO();
-
-	g_hovered_divider                 = false;
-	static bool last_frame_left_click = false;
-	// bool        left_click            = ImGui::IsMouseClicked( ImGuiMouseButton_Left, false ) || ImGui::IsMouseDown( ImGuiMouseButton_Left );
-	bool        left_click            = ImGui::IsKeyPressed( ImGuiKey_MouseLeft, false );
-
-	if ( g_grabbed_divider_idx != -1 )
-	{
-		g_hovered_divider = true;
-		move_divider( g_grabbed_divider_idx );
-		last_frame_left_click = left_click;
-		return;
-	}
-
-	// NOTE: not perfect, windows keeps setting the cursor back to default even though im not using a cursor in a window class, hmm
-	if ( g_grabbed_divider_idx == 0 || mouse_in_rect( div_0_min, div_0_max ) )
-	{
-		g_hovered_divider = true;
-
-		//io.ConfigFlags |= ImGuiConfigFlags_NoMouseCursorChange | ImGuiConfigFlags_NoMouse;
-		ImGui::SetMouseCursor( ImGuiMouseCursor_ResizeNS );
-
-		if ( !last_frame_left_click && left_click )
-			move_divider( 0 );
-	}
-	else if ( g_show_sidebar && ( g_grabbed_divider_idx == 1 || mouse_in_rect( div_1_min, div_1_max ) ) )
-	{
-		g_hovered_divider = true;
-
-		//io.ConfigFlags |= ImGuiConfigFlags_NoMouseCursorChange | ImGuiConfigFlags_NoMouse;
-		ImGui::SetMouseCursor( ImGuiMouseCursor_ResizeEW );
-		//SetCursor( g_cursor_resize_h );
-
-		if ( !last_frame_left_click && left_click )
-			move_divider( 1 );
-	}
-	else if ( io.ConfigFlags & ( ImGuiConfigFlags_NoMouseCursorChange | ImGuiConfigFlags_NoMouse ) )
-	{
-		//io.ConfigFlags &= ~( ImGuiConfigFlags_NoMouseCursorChange | ImGuiConfigFlags_NoMouse );
-		ImGui::SetMouseCursor( ImGuiMouseCursor_Arrow );
-		//SetCursor( g_cursor_default );
-		g_grabbed_divider_idx = -1;
-	}
-
-	last_frame_left_click = left_click;
-}
 
 
 void main_loop()
@@ -1069,28 +1097,7 @@ void main_loop()
 			continue;
 		}
 
-		if ( !g_fullscreen )
-		{
-			update_dividers();
-			//if ( g_grabbed_divider_idx != -1 )
-			//{
-			//	move_divider( g_grabbed_divider_idx );
-			//}
-		}
-		else
-		{
-			mpv_draw_frame();
-		}
-
-		// run imgui windows
-		if ( g_fullscreen )
-		{
-			imgui_update_fullscreen();
-		}
-		else
-		{
-			render_imgui();
-		}
+		window_render_all();
 
 		handle_keybinds();
 	}
@@ -1100,6 +1107,9 @@ void main_loop()
 void style_imgui()
 {
 	ImGuiStyle& style = ImGui::GetStyle();
+
+	// style.FramePadding.x     = 4;
+	// style.FramePadding.y     = 4;
 
 	style.WindowPadding.x    = 6;
 	style.WindowPadding.y    = 6;
@@ -1112,8 +1122,41 @@ void style_imgui()
 	style.FrameRounding      = 3;
 	style.GrabRounding       = 3;
 	style.PopupRounding      = 3;
-	// style.ScrollbarRounding = 3;
+	style.ScrollbarRounding  = 3;
 }
+
+void load_font( const char* path, int size, ImFont*& dst, ImFontConfig& font_cfg, bool load_symbols )
+{
+	font_cfg.FontLoaderFlags |= ImGuiFreeTypeLoaderFlags_LoadColor;
+
+	// Main Font
+	dst = ImGui::GetIO().Fonts->AddFontFromFileTTF( path, size, &font_cfg );
+
+#ifdef _WIN32
+	// All fonts will be merged into this one above
+	font_cfg.MergeMode = true;
+
+	// Japanese Characters
+	dst                = ImGui::GetIO().Fonts->AddFontFromFileTTF( "C:\\Windows\\Fonts\\YuGothM.ttc", size, &font_cfg );
+
+	// Symbols/Emoji's
+	if ( load_symbols )
+	{
+		// font_cfg.FontLoaderFlags |= ImGuiFreeTypeLoaderFlags_LoadColor | ImGuiFreeTypeLoaderFlags_Bitmap;
+		font_cfg.FontLoaderFlags |= ImGuiFreeTypeLoaderFlags_LoadColor;
+
+		// Segoe UI Symbol
+		dst = ImGui::GetIO().Fonts->AddFontFromFileTTF( "C:\\Windows\\Fonts\\seguisym.ttf", size, &font_cfg );
+
+		//char font_path[ 512 ]{};
+		//snprintf( font_path, 512, "%s/seguiemj.ttf", exe_path );
+
+		// ImGui::GetIO().Fonts->AddFontFromFileTTF( font_path, font_data.height, &font_cfg );
+		dst = ImGui::GetIO().Fonts->AddFontFromFileTTF( "C:\\Windows\\Fonts\\seguiemj.ttf", size, &font_cfg );
+	}
+#endif
+}
+
 
 
 auto main( int argc, char* argv[] ) -> int
@@ -1122,8 +1165,12 @@ auto main( int argc, char* argv[] ) -> int
 	// allows c ansi functions to use utf-8
 	// only works on Windows 10 version 1803 (10.0.17134.0) and above
 	// setlocale( LC_ALL, ".UTF-8" );
+	args_init( argc, argv );
 
 	sys_init();
+
+	if ( !log_init() )
+		return 1;
 
 	if ( !undo_history_init() )
 	{
@@ -1223,25 +1270,43 @@ auto main( int argc, char* argv[] ) -> int
 	ImGui_ImplSDL3_InitForOpenGL( g_main_window_sdl, g_gl_context );
 	ImGui_ImplOpenGL3_Init();
 
-	size_t exe_dir_len = 0;
-	char*  exe_dir     = sys_get_exe_folder( &exe_dir_len );
+	size_t      exe_dir_len = 0;
+	const char* exe_dir     = sys_get_exe_folder( &exe_dir_len );
+
+#if _WIN32 && 1
+	{
+		const char* font_path = "C:\\Windows\\Fonts\\segoeui.ttf";
+
+		{
+			ImFontConfig font_cfg{};
+			load_font( font_path, font::size, font::normal, font_cfg, false );
+		}
+
+		{
+			ImFontConfig font_cfg{};
+			snprintf( font_cfg.Name, 40, "Default - Bold" );
+			font_cfg.FontLoaderFlags |= ImGuiFreeTypeLoaderFlags_Bold;
+			load_font( font_path, font::size, font::normal_bold, font_cfg, false );
+		}
+
+		{
+			ImFontConfig font_cfg{};
+			snprintf( font_cfg.Name, 40, "Default - Oblique" );
+			font_cfg.FontLoaderFlags |= ImGuiFreeTypeLoaderFlags_Oblique;
+			load_font( font_path, font::size, font::normal_italic, font_cfg, false );
+		}
+	}
+#endif
 
 	{
-#if _WIN32 && 1
-		const char* font_path = "C:\\Windows\\Fonts\\segoeui.ttf";
-		ImGui::GetIO().Fonts->AddFontFromFileTTF( font_path, 17, nullptr );
-#else
 		char font_path[ 260 ] = { 0 };
 
 		memcpy( font_path, exe_dir, exe_dir_len * sizeof( char ) );
-		strcat( font_path, PATH_SEP_STR "CascadiaCode.ttf" );
-		ImGui::GetIO().Fonts->AddFontFromFileTTF( font_path, 15, nullptr );
-#endif
-	}
+		strcat( font_path, SEP_S "CascadiaCode.ttf" );
 
-	// load fonts
-	// ImGui::GetIO().Fonts->AddFontFromFileTTF( "D:\\projects\\replay_maker_v4\\out\\SourceSans3-Regular.ttf", 16, nullptr );
-	// ImGui::GetIO().Fonts->AddFontFromFileTTF( "D:\\projects\\replay_maker_v4\\out\\CascadiaCode.ttf", 15, nullptr );
+		ImFontConfig font_cfg{};
+		load_font( font_path, font::size, font::console, font_cfg, false );
+	}
 
 	ImGui_ImplOpenGL3_CreateDeviceObjects();
 
@@ -1250,7 +1315,7 @@ auto main( int argc, char* argv[] ) -> int
 	// imgui_set_theme_steam_green();
 
 	// ------------------------------------------
-	// Startup and Load MPV^
+	// Startup and Load MPV
 
 	if ( !start_mpv() )
 	{
@@ -1272,7 +1337,7 @@ auto main( int argc, char* argv[] ) -> int
 		char settings_path[ 4096 ] = { 0 };
 
 		memcpy( settings_path, exe_dir, exe_dir_len * sizeof( char ) );
-		strcat( settings_path, PATH_SEP_STR "replay_maker_config.json5" );
+		strcat( settings_path, SEP_S "replay_maker_config.json5" );
 
 		clip_parse_settings( g_clip_data, settings_path );
 	}
@@ -1281,7 +1346,7 @@ auto main( int argc, char* argv[] ) -> int
 		char recent_path[ 256 ] = { 0 };
 
 		memcpy( recent_path, exe_dir, exe_dir_len * sizeof( char ) );
-		strcat( recent_path, PATH_SEP_STR RECENTLY_OPENED_FILE );
+		strcat( recent_path, SEP_S RECENTLY_OPENED_FILE );
 
 		g_recently_opened_path = strdup( recent_path );
 	}
@@ -1290,14 +1355,12 @@ auto main( int argc, char* argv[] ) -> int
 //		char videos_path[ 4096 ] = { 0 };
 //
 //		memcpy( videos_path, exe_dir, exe_dir_len * sizeof( char ) );
-//		strcat( videos_path, PATH_SEP_STR "test_video.json5" );
+//		strcat( videos_path, SEP_S "test_video.json5" );
 //
 //		clip_parse_videos( g_clip_data, videos_path );
 //
 //		g_videos_file_path = strdup( videos_path );
 //	}
-
-	free( exe_dir );
 
 	g_recently_opened = ch_calloc< char* >( MAX_RECENT_OPEN );
 
@@ -1316,10 +1379,13 @@ auto main( int argc, char* argv[] ) -> int
 		}
 	}
 
-	printf( "loaded\n" );
-	
-	// Play this file.
-	//mpv_cmd_loadfile( TEST_VIDEO_ANSI );
+	if ( !encode_init() )
+	{
+		printf( "encoder failed to start!\n" );
+		return 1;
+	}
+
+	log_printf( "Startup Complete!\n" );
 	
 	// do one render to get everything set up
 	window_render_all();

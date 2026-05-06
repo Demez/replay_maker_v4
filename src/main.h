@@ -1,8 +1,10 @@
 #pragma once
 
 #include "util.h"
+#include "logging.h"
 #include "imgui.h"
 #include "glad.h"
+#include "encoder/encoder.h"
 #include "clip/clip.h"
 
 #include "SDL3/SDL.h"
@@ -10,6 +12,11 @@
 #include "mpv/client.h"
 #include "mpv/render.h"
 #include "mpv/render_gl.h"
+
+#include <string>
+
+
+// --------------------------------------------------------------------------------------------------------
 
 
 // metadata grabbed on video load from mpv
@@ -56,6 +63,26 @@ enum e_mpv_cmd
 constexpr ImVec4 COLOR_BTN_RED_ACTIVE{ 0.9f, 0.1f, 0.1f, 1.0f };
 constexpr ImVec4 COLOR_BTN_RED_HOVER{ 0.7f, 0.2f, 0.2f, 1.0f };
 constexpr ImVec4 COLOR_BTN_RED{ 0.5f, 0.1f, 0.1f, 1.0f };
+
+constexpr ImVec4 COLOR_GREEN_ACTIVE{ 0.1f, 0.9f, 0.1f, 1.0f };
+constexpr ImVec4 COLOR_GREEN_HOVER{ 0.2f, 0.7f, 0.2f, 1.0f };
+constexpr ImVec4 COLOR_GREEN{ 0.1f, 0.5f, 0.1f, 1.0f };
+
+constexpr ImVec4 COLOR_PURPLE_ACTIVE{ 0.8f, 0.0f, 1.f, 1.0f };
+constexpr ImVec4 COLOR_PURPLE_HOVER{ 0.67f, 0.0f, 0.8f, 1.0f };
+constexpr ImVec4 COLOR_PURPLE{ 0.55f, 0.0f, 0.65f, 1.0f };
+
+
+namespace font
+{
+	extern ImFont* normal;
+	extern ImFont* normal_bold;
+	extern ImFont* normal_italic;
+
+	extern ImFont* console;
+
+	extern u32     size;
+}
 
 
 // --------------------------------------------------------------------------------------------------------
