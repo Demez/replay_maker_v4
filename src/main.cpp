@@ -693,10 +693,11 @@ void update_recently_opened( const char* clips_file )
 
 
 // background clip data parsing
-void clip_thread_worker( clip_data_t* data, const char* path )
+void clip_thread_worker( clip_data_t* data, char* path )
 {
 	clip_parse_videos( data, path );
 	g_clip_load_thread_state = e_clip_parse_state_finished;
+	free( path );
 }
 
 
@@ -707,7 +708,9 @@ void clip_thread_open_file( clip_data_t* data, const char* path )
 		return;
 	}
 
-	g_clip_load_thread       = new std::thread( clip_thread_worker, data, path );
+	replay_editor_reset();
+
+	g_clip_load_thread       = new std::thread( clip_thread_worker, data, strdup( path ) );
 	g_clip_load_thread_state = e_clip_parse_state_running;
 }
 
