@@ -94,21 +94,16 @@ namespace font
 
 
 // --------------------------------------------------------------------------------------------------------
-// win32 stuff
+// system stuff
 
 struct ImGuiContext;
-
-void                               sys_pause_window_events( bool paused );
-
-bool                               win32_create_windows( int width, int height );
-void                               win32_exit();
-void                               sys_finish_init();
 
 void                               sys_mpv_full_window_enter();
 void                               sys_mpv_full_window_exit();
 void                               sys_mpv_full_window_toggle();
 
 u64                                sys_get_time_ms();
+void                               sys_set_window( SDL_Window* window );
 
 // --------------------------------------------------------------------------------------------------------
 // imgui helper functions
@@ -194,10 +189,13 @@ void                               draw_preset_override( clip_encode_settings_t&
 void                               enable_sidebar( bool enabled );
 void                               window_on_resize();
 void                               window_render_all();
+void                               update_dpi( float dpi_override = 0.f );
 
 // background clip data parsing
 void                               clip_thread_open_file( clip_data_t* data, const char* path );
 e_clip_parse_state                 clip_thread_state();
+bool                               clip_thread_loading();
+bool                               clip_thread_idle();
 
 // save encode presets and video prefixes
 void                               save_settings();
@@ -212,9 +210,12 @@ void                               update_recently_opened( const char* clips_fil
 
 extern bool                        g_running;
 extern bool                        g_fullscreen;
+extern bool                        g_in_window_drag;
+extern bool                        g_in_drag_drop;
+extern bool                        g_pause_window_events;
+extern float                       g_dpi;
 
-extern SDL_Window*                 g_main_window_sdl;
-extern void*                       g_main_window;
+extern SDL_Window*                 g_main_window;
 
 extern ivec2                       g_mouse_pos;
 extern ivec2                       g_mouse_delta;

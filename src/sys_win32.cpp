@@ -32,7 +32,7 @@ static size_t        g_exe_folder_len = 0;
 
 static LARGE_INTEGER g_win_perf_freq;
 
-extern void*         g_main_window;
+HWND                 g_main_hwnd;
 
 
 // ----------------------------------------------------------------------------------------
@@ -47,7 +47,7 @@ bool fs_exists( const char* path )
 
 bool fs_make_dir( const char* path )
 {
-	int ret = SHCreateDirectoryExA( (HWND)g_main_window, path, nullptr );
+	int ret = SHCreateDirectoryExA( g_main_hwnd, path, nullptr );
 
 	if ( ret != 0 )
 	{
@@ -879,6 +879,12 @@ int sys_init()
 		return 1;
 	}
 
+	if ( OleInitialize( NULL ) != S_OK )
+	{
+		printf( "Plat_Init(): Failed to Initialize Ole\n" );
+		return false;
+	}
+
 	QueryPerformanceFrequency( &g_win_perf_freq );
 
 	// Set EXE path and folder
@@ -933,8 +939,33 @@ int sys_init()
 }
 
 
+bool win32_register_drag_drop( HWND window );
+void win32_remove_drag_drop( HWND window );
+
+
 void sys_shutdown()
 {
+	// win32_remove_drag_drop( g_main_hwnd );
+
+	g_main_hwnd = nullptr;
+	OleUninitialize();
+}
+
+
+void sys_set_window( SDL_Window* window )
+{
+	SDL_PropertiesID props = SDL_GetWindowProperties( window );
+	void*            hwnd  = SDL_GetPointerProperty( props, SDL_PROP_WINDOW_WIN32_HWND_POINTER, nullptr );
+
+	if ( hwnd )
+	{
+		g_main_hwnd = (HWND)hwnd;
+		// win32_register_drag_drop( g_main_hwnd );
+	}
+	else
+	{
+		printf( "Failed to get HWND from Window: %s\n", SDL_GetError() );
+	}
 }
 
 

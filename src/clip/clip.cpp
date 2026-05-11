@@ -515,7 +515,7 @@ bool clip_parse_videos( clip_data_t* data, const char* path )
 
 	if ( data->output_count )
 	{
-		log_printf( "TODO: CLEAR OLD OUTPUT VIDEOS" );
+		log_printf( "TODO: CLEAR OLD OUTPUT VIDEOS\n" );
 	}
 
 	char* file = fs_read_file( path );

@@ -33,11 +33,15 @@ namespace font
 }
 
 
-SDL_Window*         g_main_window_sdl     = nullptr;
+SDL_Window*         g_main_window         = nullptr;
 SDL_GLContext       g_gl_context          = nullptr;
 
 bool                g_running             = true;
 bool                g_fullscreen          = false;
+bool                g_in_window_drag      = false;
+bool                g_in_drag_drop        = false;
+bool                g_pause_window_events = false;
+float               g_dpi                 = 1.f;
 
 ivec2               g_mouse_pos           = { 0, 0 };
 ivec2               g_mouse_delta         = { 0, 0 };
@@ -724,75 +728,21 @@ e_clip_parse_state clip_thread_state()
 }
 
 
-// ===============================================================================================
-
-
-void imgui_set_theme_steam_green()
+bool clip_thread_loading()
 {
-	// Classic VGUI2 Style Color Scheme
-	ImVec4* colors                           = ImGui::GetStyle().Colors;
-
-	colors[ ImGuiCol_Text ]                  = ImVec4( 1.00f, 1.00f, 1.00f, 1.00f );
-	colors[ ImGuiCol_TextDisabled ]          = ImVec4( 0.50f, 0.50f, 0.50f, 1.00f );
-	colors[ ImGuiCol_WindowBg ]              = ImVec4( 0.29f, 0.34f, 0.26f, 1.00f );
-	colors[ ImGuiCol_ChildBg ]               = ImVec4( 0.29f, 0.34f, 0.26f, 1.00f );
-	colors[ ImGuiCol_PopupBg ]               = ImVec4( 0.24f, 0.27f, 0.20f, 1.00f );
-	colors[ ImGuiCol_Border ]                = ImVec4( 0.54f, 0.57f, 0.51f, 0.50f );
-	colors[ ImGuiCol_BorderShadow ]          = ImVec4( 0.14f, 0.16f, 0.11f, 0.52f );
-	colors[ ImGuiCol_FrameBg ]               = ImVec4( 0.24f, 0.27f, 0.20f, 1.00f );
-	colors[ ImGuiCol_FrameBgHovered ]        = ImVec4( 0.27f, 0.30f, 0.23f, 1.00f );
-	colors[ ImGuiCol_FrameBgActive ]         = ImVec4( 0.30f, 0.34f, 0.26f, 1.00f );
-	colors[ ImGuiCol_TitleBg ]               = ImVec4( 0.24f, 0.27f, 0.20f, 1.00f );
-	colors[ ImGuiCol_TitleBgActive ]         = ImVec4( 0.29f, 0.34f, 0.26f, 1.00f );
-	colors[ ImGuiCol_TitleBgCollapsed ]      = ImVec4( 0.00f, 0.00f, 0.00f, 0.51f );
-	colors[ ImGuiCol_MenuBarBg ]             = ImVec4( 0.24f, 0.27f, 0.20f, 1.00f );
-	colors[ ImGuiCol_ScrollbarBg ]           = ImVec4( 0.35f, 0.42f, 0.31f, 1.00f );
-	colors[ ImGuiCol_ScrollbarGrab ]         = ImVec4( 0.28f, 0.32f, 0.24f, 1.00f );
-	colors[ ImGuiCol_ScrollbarGrabHovered ]  = ImVec4( 0.25f, 0.30f, 0.22f, 1.00f );
-	colors[ ImGuiCol_ScrollbarGrabActive ]   = ImVec4( 0.23f, 0.27f, 0.21f, 1.00f );
-	colors[ ImGuiCol_CheckMark ]             = ImVec4( 0.59f, 0.54f, 0.18f, 1.00f );
-	colors[ ImGuiCol_SliderGrab ]            = ImVec4( 0.35f, 0.42f, 0.31f, 1.00f );
-	colors[ ImGuiCol_SliderGrabActive ]      = ImVec4( 0.54f, 0.57f, 0.51f, 0.50f );
-	colors[ ImGuiCol_Button ]                = ImVec4( 0.29f, 0.34f, 0.26f, 0.40f );
-	colors[ ImGuiCol_ButtonHovered ]         = ImVec4( 0.35f, 0.42f, 0.31f, 1.00f );
-	colors[ ImGuiCol_ButtonActive ]          = ImVec4( 0.54f, 0.57f, 0.51f, 0.50f );
-	colors[ ImGuiCol_Header ]                = ImVec4( 0.35f, 0.42f, 0.31f, 1.00f );
-	colors[ ImGuiCol_HeaderHovered ]         = ImVec4( 0.35f, 0.42f, 0.31f, 0.6f );
-	colors[ ImGuiCol_HeaderActive ]          = ImVec4( 0.54f, 0.57f, 0.51f, 0.50f );
-	colors[ ImGuiCol_Separator ]             = ImVec4( 0.14f, 0.16f, 0.11f, 1.00f );
-	colors[ ImGuiCol_SeparatorHovered ]      = ImVec4( 0.54f, 0.57f, 0.51f, 1.00f );
-	colors[ ImGuiCol_SeparatorActive ]       = ImVec4( 0.59f, 0.54f, 0.18f, 1.00f );
-	colors[ ImGuiCol_ResizeGrip ]            = ImVec4( 0.19f, 0.23f, 0.18f, 0.00f );  // grip invis
-	colors[ ImGuiCol_ResizeGripHovered ]     = ImVec4( 0.54f, 0.57f, 0.51f, 1.00f );
-	colors[ ImGuiCol_ResizeGripActive ]      = ImVec4( 0.59f, 0.54f, 0.18f, 1.00f );
-	colors[ ImGuiCol_Tab ]                   = ImVec4( 0.35f, 0.42f, 0.31f, 1.00f );
-	colors[ ImGuiCol_TabHovered ]            = ImVec4( 0.54f, 0.57f, 0.51f, 0.78f );
-	colors[ ImGuiCol_TabActive ]             = ImVec4( 0.59f, 0.54f, 0.18f, 1.00f );
-	colors[ ImGuiCol_TabUnfocused ]          = ImVec4( 0.24f, 0.27f, 0.20f, 1.00f );
-	colors[ ImGuiCol_TabUnfocusedActive ]    = ImVec4( 0.35f, 0.42f, 0.31f, 1.00f );
-	//colors[ImGuiCol_DockingPreview]          = ImVec4(0.59f, 0.54f, 0.18f, 1.00f);
-	//colors[ImGuiCol_DockingEmptyBg]          = ImVec4(0.20f, 0.20f, 0.20f, 1.00f);
-	colors[ ImGuiCol_PlotLines ]             = ImVec4( 0.61f, 0.61f, 0.61f, 1.00f );
-	colors[ ImGuiCol_PlotLinesHovered ]      = ImVec4( 0.59f, 0.54f, 0.18f, 1.00f );
-	colors[ ImGuiCol_PlotHistogram ]         = ImVec4( 1.00f, 0.78f, 0.28f, 1.00f );
-	colors[ ImGuiCol_PlotHistogramHovered ]  = ImVec4( 1.00f, 0.60f, 0.00f, 1.00f );
-	colors[ ImGuiCol_TextSelectedBg ]        = ImVec4( 0.59f, 0.54f, 0.18f, 1.00f );
-	colors[ ImGuiCol_DragDropTarget ]        = ImVec4( 0.73f, 0.67f, 0.24f, 1.00f );
-	colors[ ImGuiCol_NavHighlight ]          = ImVec4( 0.59f, 0.54f, 0.18f, 1.00f );
-	colors[ ImGuiCol_NavWindowingHighlight ] = ImVec4( 1.00f, 1.00f, 1.00f, 0.70f );
-	colors[ ImGuiCol_NavWindowingDimBg ]     = ImVec4( 0.80f, 0.80f, 0.80f, 0.20f );
-	colors[ ImGuiCol_ModalWindowDimBg ]      = ImVec4( 0.80f, 0.80f, 0.80f, 0.35f );
-
-	ImGuiStyle& style                        = ImGui::GetStyle();
-	style.FrameBorderSize                    = 1.0f;
-	style.WindowRounding                     = 0.0f;
-	style.ChildRounding                      = 0.0f;
-	style.FrameRounding                      = 0.0f;
-	style.PopupRounding                      = 0.0f;
-	style.ScrollbarRounding                  = 0.0f;
-	style.GrabRounding                       = 0.0f;
-	style.TabRounding                        = 0.0f;
+	e_clip_parse_state state = clip_thread_state();
+	return state == e_clip_parse_state_running;
 }
+
+
+bool clip_thread_idle()
+{
+	e_clip_parse_state state = clip_thread_state();
+	return state == e_clip_parse_state_idle;
+}
+
+
+// ===============================================================================================
 
 
 static ivec2 g_old_mpv_size;
@@ -800,6 +750,28 @@ static ivec2 g_old_window_size;
 
 
 void         render_imgui();
+
+
+void         style_imgui()
+{
+	ImGuiStyle& style        = ImGui::GetStyle();
+
+	// style.FramePadding.x     = 4;
+	// style.FramePadding.y     = 4;
+
+	style.WindowPadding.x    = 6;
+	style.WindowPadding.y    = 6;
+	style.ItemSpacing.x      = 6;
+	style.ItemSpacing.y      = 6;
+	style.ItemInnerSpacing.x = 6;
+	style.ItemInnerSpacing.y = 6;
+
+	style.ChildRounding      = 3;
+	style.FrameRounding      = 3;
+	style.GrabRounding       = 3;
+	style.PopupRounding      = 3;
+	style.ScrollbarRounding  = 3;
+}
 
 
 void move_divider( u32 index )
@@ -814,7 +786,7 @@ void move_divider( u32 index )
 	g_grabbed_divider_idx = index;
 
 	int width, height;
-	SDL_GetWindowSize( g_main_window_sdl, &width, &height );
+	SDL_GetWindowSize( g_main_window, &width, &height );
 
 	if ( index == 0 )
 	{
@@ -845,7 +817,7 @@ void update_dividers()
 
 	// calc divider rectangle
 	int width, height;
-	SDL_GetWindowSize( g_main_window_sdl, &width, &height );
+	SDL_GetWindowSize( g_main_window, &width, &height );
 
 	// rectangle 0 - playback controls divider
 	ImVec2   div_0_min{ 0.f, (float)g_mpv_size[ 1 ] - DIVIDER_SIZE };
@@ -903,6 +875,7 @@ void update_dividers()
 	last_frame_left_click = left_click;
 }
 
+
 void window_render_all()
 {
 	if ( !g_fullscreen )
@@ -948,7 +921,7 @@ void window_on_resize()
 	ivec2 old_window_size = { g_window_size[ 0 ], g_window_size[ 1 ] };
 	ivec2 new_window_size = { 0, 0 };
 
-	SDL_GetWindowSize( g_main_window_sdl, &new_window_size[ 0 ], &new_window_size[ 1 ] );
+	SDL_GetWindowSize( g_main_window, &new_window_size[ 0 ], &new_window_size[ 1 ] );
 
 	ivec2 size_diff{};
 	size_diff[ 0 ] = new_window_size[ 0 ] - old_window_size[ 0 ];
@@ -970,7 +943,7 @@ void sys_mpv_full_window_exit()
 	g_fullscreen = false;
 
 	int width, height;
-	SDL_GetWindowSize( g_main_window_sdl, &width, &height );
+	SDL_GetWindowSize( g_main_window, &width, &height );
 
 	// scale the mpv window size based on
 	int diff_x      = width - g_old_window_size[ 0 ];
@@ -1005,7 +978,7 @@ void enable_sidebar( bool enabled )
 	static int old_mpv_width = g_mpv_size[ 0 ];
 
 	int        width, height;
-	SDL_GetWindowSize( g_main_window_sdl, &width, &height );
+	SDL_GetWindowSize( g_main_window, &width, &height );
 
 	if ( !enabled )
 	{
@@ -1024,7 +997,7 @@ void enable_sidebar( bool enabled )
 void render_imgui()
 {
 	int width, height;
-	SDL_GetWindowSize( g_main_window_sdl, &width, &height );
+	SDL_GetWindowSize( g_main_window, &width, &height );
 
 	int    window_size[ 2 ] = { width, height };
 
@@ -1051,57 +1024,81 @@ void render_imgui()
 	ImGui_ImplOpenGL3_RenderDrawData( ImGui::GetDrawData() );
 
 	// Present
-	SDL_GL_SwapWindow( g_main_window_sdl );
+	SDL_GL_SwapWindow( g_main_window );
 }
 
 
-#if 0
-int mouse_in_divider()
+void update_dpi( float dpi_override )
 {
-	// calc divider rectangle
-	int width, height;
-	SDL_GetWindowSize( g_main_window_sdl, &width, &height );
+	float scale = 0.f;
 
-	// rectangle 0 - playback controls divider
-	ImVec2   div_0_min{ 0.f, (float)g_mpv_size[ 1 ] - DIVIDER_SIZE };
-	ImVec2   div_0_max{ (float)g_mpv_size[ 0 ], (float)g_mpv_size[ 1 ] + DIVIDER_SIZE };
-
-	// rectangle 1 - replay info
-	ImVec2   div_1_min{ (float)g_mpv_size[ 0 ] - DIVIDER_SIZE, 0.f };
-	ImVec2   div_1_max{ (float)g_mpv_size[ 0 ] + DIVIDER_SIZE, (float)height };
-
-	ImGuiIO& io = ImGui::GetIO();
-
-	if ( mouse_in_rect( div_0_min, div_0_max ) )
+	if ( dpi_override == 0.f )
 	{
-		io.ConfigFlags |= ImGuiConfigFlags_NoMouseCursorChange | ImGuiConfigFlags_NoMouse;
-		//SetCursor( g_cursor_resize_v );
-		return 0;
+		scale = SDL_GetWindowDisplayScale( g_main_window );
 	}
-	else if ( g_show_sidebar && mouse_in_rect( div_1_min, div_1_max ) )
+	else
 	{
-		io.ConfigFlags |= ImGuiConfigFlags_NoMouseCursorChange | ImGuiConfigFlags_NoMouse;
-		//SetCursor( g_cursor_resize_h );
-		return 1;
+		scale = CLAMP( dpi_override, 0.25f, 5.f );
 	}
 
-	io.ConfigFlags &= ~( ImGuiConfigFlags_NoMouseCursorChange | ImGuiConfigFlags_NoMouse );
-	ImGui::SetMouseCursor( ImGuiMouseCursor_Arrow );
-	//SetCursor( g_cursor_default );
-	return -1;
+	g_dpi          = scale;
+	ImGui::GetStyle() = ImGuiStyle();
 
-	//if ( point_in_rect( g_mouse_pos, rect_0 ) )
-	//{
-	//	return 0;
-	//}
-	//else if ( point_in_rect( g_mouse_pos, rect_1 ) )
-	//{
-	//	return 1;
-	//}
-	//
-	//return -1;
+	style_imgui();
+
+	ImGui::GetStyle().ScaleAllSizes( scale );
+	ImGui::GetStyle().FontScaleDpi = scale;
 }
+
+
+bool sdl_window_resize_watcher( void* userdata, SDL_Event* event )
+{
+	if ( g_in_drag_drop )
+		return true;
+
+	if ( SDL_GetWindowFlags( g_main_window ) & SDL_WINDOW_MINIMIZED )
+		return true;
+
+	switch ( event->type )
+	{
+		case SDL_EVENT_WINDOW_MINIMIZED:
+			return true;
+
+		case SDL_EVENT_WINDOW_DISPLAY_SCALE_CHANGED:
+			update_dpi();
+			break;
+
+			// Redraw window - Window is being resized
+			// NOTE: this is also called when dragging the window around
+#ifdef _WIN32
+		case SDL_EVENT_WINDOW_EXPOSED:
+		{
+			// clear focusing of any windows
+			ImGui::SetNextFrameWantCaptureKeyboard( false );
+			ImGui::SetWindowFocus( nullptr );
+
+			g_in_window_drag = true;
+			window_render_all();
+			g_in_window_drag = false;
+			break;
+		}
 #endif
+		case SDL_EVENT_WINDOW_RESIZED:
+		{
+			// clear focusing of any windows
+			ImGui::SetNextFrameWantCaptureKeyboard( false );
+			ImGui::SetWindowFocus( nullptr );
+			window_on_resize();
+			window_render_all();
+			break;
+		}
+
+		default:
+			break;
+	}
+
+	return true;
+}
 
 
 void main_loop()
@@ -1111,6 +1108,8 @@ void main_loop()
 	u64      start_time   = sys_get_time_ms();
 	u64      current_time = start_time;
 	float    time         = 0.f;
+
+	static std::string drop_file;
 
 	while ( g_running )
 	{
@@ -1122,6 +1121,29 @@ void main_loop()
 
 			switch ( event.type )
 			{
+				// The system requests a file open
+				case SDL_EVENT_DROP_FILE:
+				{
+					drop_file = event.drop.data;
+					break;
+				}
+
+				// Current set of drops is now complete (NULL filename)
+				case SDL_EVENT_DROP_COMPLETE:
+				{
+					if ( g_in_drag_drop )
+						break;
+
+					mpv_cmd_loadfile( drop_file.c_str() );
+					SDL_RaiseWindow( g_main_window );
+					drop_file.clear();
+					break;
+				}
+
+				case SDL_EVENT_WINDOW_DISPLAY_SCALE_CHANGED:
+					update_dpi();
+					break;
+
 				case SDL_EVENT_MOUSE_MOTION:
 					g_mouse_pos[ 0 ] = event.motion.x;
 					g_mouse_pos[ 1 ] = event.motion.y;
@@ -1168,7 +1190,7 @@ void main_loop()
 		mpv_event* video_event = p_mpv_wait_event( g_mpv, 0.01f );
 
 		// is the window minimized
-		if ( SDL_GetWindowFlags( g_main_window_sdl ) & SDL_WINDOW_MINIMIZED )
+		if ( SDL_GetWindowFlags( g_main_window ) & SDL_WINDOW_MINIMIZED )
 		{
 			SDL_Delay( 10 );
 			continue;
@@ -1178,28 +1200,6 @@ void main_loop()
 
 		handle_keybinds();
 	}
-}
-
-
-void style_imgui()
-{
-	ImGuiStyle& style = ImGui::GetStyle();
-
-	// style.FramePadding.x     = 4;
-	// style.FramePadding.y     = 4;
-
-	style.WindowPadding.x    = 6;
-	style.WindowPadding.y    = 6;
-	style.ItemSpacing.x      = 6;
-	style.ItemSpacing.y      = 6;
-	style.ItemInnerSpacing.x = 6;
-	style.ItemInnerSpacing.y = 6;
-
-	style.ChildRounding      = 3;
-	style.FrameRounding      = 3;
-	style.GrabRounding       = 3;
-	style.PopupRounding      = 3;
-	style.ScrollbarRounding  = 3;
 }
 
 
@@ -1278,9 +1278,9 @@ auto main( int argc, char* argv[] ) -> int
 		return 1;
 	}
 
-	if ( ImGui::CreateContext() == nullptr )
+	if ( !SDL_Init( SDL_INIT_EVENTS | SDL_INIT_VIDEO ) )
 	{
-		printf( "ImGui::CreateContext failed!\n" );
+		printf( "Failed to init SDL\n" );
 		return 1;
 	}
 
@@ -1292,37 +1292,19 @@ auto main( int argc, char* argv[] ) -> int
 	g_mpv_size[ 0 ] = g_window_size[ 0 ] - 600;  // replay editor/sidebar
 	g_mpv_size[ 1 ] = g_window_size[ 1 ] - 200;   // playback controls
 
-	// 2 imgui windows
-	if ( !win32_create_windows( g_window_size[ 0 ], g_window_size[ 1 ] ) )
+	g_main_window   = SDL_CreateWindow( "Replay Maker", g_window_size[ 0 ], g_window_size[ 1 ], SDL_WINDOW_RESIZABLE | SDL_WINDOW_OPENGL | SDL_WINDOW_HIGH_PIXEL_DENSITY | SDL_WINDOW_HIDDEN );
+
+	if ( !g_main_window )
 	{
-		printf( "win32_create_windows failed!\n" );
+		printf( "Failed to Create Main Window!\n" );
 		return 1;
 	}
 
-	// ------------------------------------------
+	SDL_SetWindowMinimumSize( g_main_window, 640, 480 );
 
-	if ( !SDL_Init( SDL_INIT_EVENTS | SDL_INIT_VIDEO ) )
-	{
-		printf( "Failed to init SDL\n" );
-		return 1;
-	}
+	sys_set_window( g_main_window );
 
-	{
-		SDL_PropertiesID props = SDL_CreateProperties();
-
-		SDL_SetPointerProperty( props, SDL_PROP_WINDOW_CREATE_WIN32_HWND_POINTER, g_main_window );
-		SDL_SetBooleanProperty( props, SDL_PROP_WINDOW_CREATE_OPENGL_BOOLEAN, true );
-
-		g_main_window_sdl = SDL_CreateWindowWithProperties( props );
-	}
-
-	if ( !g_main_window_sdl )
-	{
-		printf( "Failed to create SDL window\n" );
-		return 1;
-	}
-
-	g_gl_context = SDL_GL_CreateContext( g_main_window_sdl );
+	g_gl_context = SDL_GL_CreateContext( g_main_window );
 
 	if ( !g_gl_context )
 	{
@@ -1330,7 +1312,7 @@ auto main( int argc, char* argv[] ) -> int
 		return 1;
 	}
 
-	SDL_GL_MakeCurrent( g_main_window_sdl, g_gl_context );
+	SDL_GL_MakeCurrent( g_main_window, g_gl_context );
 
 	if ( !gladLoadGL() )
 	{
@@ -1341,11 +1323,23 @@ auto main( int argc, char* argv[] ) -> int
 	// ------------------------------------------
 	// init imgui
 
-	const char* glsl_version    = nullptr;
-	// const char* glsl_version    = "#version 130";
+	if ( ImGui::CreateContext() == nullptr )
+	{
+		printf( "ImGui::CreateContext failed!\n" );
+		return 1;
+	}
 
-	ImGui_ImplSDL3_InitForOpenGL( g_main_window_sdl, g_gl_context );
-	ImGui_ImplOpenGL3_Init();
+	if ( !ImGui_ImplSDL3_InitForOpenGL( g_main_window, g_gl_context ) )
+	{
+		printf( "Failed to init ImGui\n" );
+		return 1;
+	}
+
+	if ( !ImGui_ImplOpenGL3_Init() )
+	{
+		printf( "Failed to init ImGui OpenGL\n" );
+		return 1;
+	}
 
 	size_t      exe_dir_len = 0;
 	const char* exe_dir     = sys_get_exe_folder( &exe_dir_len );
@@ -1389,8 +1383,6 @@ auto main( int argc, char* argv[] ) -> int
 
 	style_imgui();
 
-	// imgui_set_theme_steam_green();
-
 	// ------------------------------------------
 	// Startup and Load MPV
 
@@ -1402,7 +1394,7 @@ auto main( int argc, char* argv[] ) -> int
 
 	// ------------------------------------------
 
-	g_clip_data        = clip_create();
+	g_clip_data = clip_create();
 
 	if ( !g_clip_data )
 	{
@@ -1465,11 +1457,16 @@ auto main( int argc, char* argv[] ) -> int
 	}
 
 	log_printf( "Startup Complete!\n" );
+
+	if ( !SDL_AddEventWatch( sdl_window_resize_watcher, nullptr ) )
+	{
+		printf( "Failed to add SDL Event Watch\n" );
+	}
 	
 	// do one render to get everything set up
 	window_render_all();
 
-	sys_finish_init();
+	SDL_ShowWindow( g_main_window );
 
 	main_loop();
 
@@ -1481,7 +1478,7 @@ auto main( int argc, char* argv[] ) -> int
 
 	ImGui::DestroyContext();
 
-	win32_exit();
+	sys_shutdown();
 
 	// close mpv
 	stop_mpv();

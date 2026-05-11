@@ -45,18 +45,20 @@ void on_file_dialog_open()
 	int pause   = 1;
 	int cmd_ret = p_mpv_set_property( g_mpv, "pause", MPV_FORMAT_FLAG, &pause );
 
-	sys_pause_window_events( true );
+	g_pause_window_events = true;
 }
 
 
 void on_file_dialog_exit()
 {
-	sys_pause_window_events( false );
+	g_pause_window_events = false;
 }
 
 
 void draw_replay_info_menu_bar()
 {
+	ImGui::BeginDisabled( clip_thread_loading() );
+
 	ImGui::BeginMenuBar();
 
 	if ( ImGui::BeginMenu( "File" ) )
@@ -230,6 +232,8 @@ void draw_replay_info_menu_bar()
 
 	if ( g_draw_built_in_menu == 1 )
 		ImGui::ShowStyleEditor();
+
+	ImGui::EndDisabled();
 }
 
 
@@ -546,7 +550,7 @@ void draw_replay_list_entry( u64& imgui_id, u32 out_i, char* search_box, u32 pre
 	ImVec2 line_pos_1_min( drag_pos_min.x, drag_pos_min.y + ( drag_pos_size.y * 0.6 ) );
 	ImVec2 line_pos_1_max( drag_pos_max.x, line_pos_1_min.y );
 
-	if ( clip_thread_state() == e_clip_parse_state_idle && !g_clip_reorder_drag.active || out_i == g_clip_reorder_drag.clip_id )
+	if ( clip_thread_idle() && !g_clip_reorder_drag.active || out_i == g_clip_reorder_drag.clip_id )
 	{
 		if ( point_in_rect( mouse_pos, drag_pos_min, drag_pos_max ) )
 		{
@@ -694,7 +698,7 @@ void draw_replay_list( int size[ 2 ] )
 
 	if ( ImGui::BeginChild( "clip_filtering", {}, ImGuiChildFlags_Borders | ImGuiChildFlags_AutoResizeY ) )
 	{
-		ImGui::BeginDisabled( clip_thread_state() != e_clip_parse_state_idle );
+		ImGui::BeginDisabled( clip_thread_loading() );
 
 		ImGui::TextUnformatted( "Clip Entries" );
 		ImGui::Separator();
@@ -873,7 +877,7 @@ void draw_replay_list( int size[ 2 ] )
 	ImVec2 cursor_pos        = ImGui::GetCursorPos();
 	ImVec2 mouse_pos         = ImGui::GetMousePos();
 
-	ImGui::BeginDisabled( clip_thread_state() != e_clip_parse_state_idle );
+	ImGui::BeginDisabled( clip_thread_loading() );
 
 	ImVec2 drag_text_size = ImGui::CalcTextSize( "--" );
 	float entry_height = drag_text_size.y + ( style.FramePadding.y * 2 );
@@ -992,7 +996,7 @@ void draw_replay_list( int size[ 2 ] )
 
 	// ImGui::Separator();
 
-	ImGui::BeginDisabled( clip_thread_state() != e_clip_parse_state_idle );
+	ImGui::BeginDisabled( clip_thread_loading() );
 
 	if ( ImGui::BeginChild( "##export", {}, ImGuiChildFlags_None, ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse | ImGuiWindowFlags_NoSavedSettings ) )
 	{
@@ -1038,7 +1042,7 @@ void draw_replay_list( int size[ 2 ] )
 
 	// ===================================================================================
 
-	if ( clip_thread_state() == e_clip_parse_state_idle && g_clip_reorder_drag.active && ImGui::IsMouseReleased( ImGuiMouseButton_Left ) )
+	if ( clip_thread_idle() && g_clip_reorder_drag.active && ImGui::IsMouseReleased( ImGuiMouseButton_Left ) )
 	{
 		g_clip_reorder_drag.active = false;
 		clip_move_output( g_clip_data, g_clip_reorder_drag.clip_id, g_clip_reorder_drag.target_id );

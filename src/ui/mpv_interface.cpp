@@ -291,27 +291,10 @@ void mpv_update_texture()
 
 void mpv_create_texture()
 {
-	//glDeleteTextures( 1, &g_mpv_fbo_tex );
-	//g_mpv_fbo_tex = 0;
-
-	int width, height;
-	SDL_GetWindowSize( g_main_window_sdl, &width, &height );
-
 	//glGenRenderbuffers( 1, &g_mpv_rbo );
 	glGenTextures( 1, &g_mpv_fbo_tex );
-	glBindTexture( GL_TEXTURE_2D, g_mpv_fbo_tex );
 
-	glTexImage2D( GL_TEXTURE_2D, 0, GL_RGB, width, height, 0, GL_RGB, GL_UNSIGNED_BYTE, nullptr );
-
-	glTexParameteri( GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR );
-	glTexParameteri( GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR );
-	glFramebufferTexture2D( GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, g_mpv_fbo_tex, 0 );
-
-	if ( glCheckFramebufferStatus( GL_FRAMEBUFFER ) != GL_FRAMEBUFFER_COMPLETE )
-		printf( "FBO incomplete!\n" );
-
-	glBindTexture( GL_TEXTURE_2D, 0 );
-	glBindFramebuffer( GL_FRAMEBUFFER, 0 );
+	mpv_update_texture();
 }
 
 

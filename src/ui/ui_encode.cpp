@@ -360,7 +360,7 @@ void encode_draw()
 	ImGuiStyle& style = ImGui::GetStyle();
 
 	int window_width, window_height;
-	SDL_GetWindowSizeInPixels( g_main_window_sdl, &window_width, &window_height );
+	SDL_GetWindowSizeInPixels( g_main_window, &window_width, &window_height );
 
 	// ==========================================================================================================
 	// wait for it to finish lol

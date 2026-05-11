@@ -193,10 +193,6 @@ if ( WIN32 )
 	set(
 		SRC_FILES
 		${SRC_FILES}
-
-		src/ui/sys_win32_drag_drop.cpp
-		src/ui/sys_win32_replay.cpp
-		src/imgui/imgui_impl_win32.cpp
 		src/sys_win32.cpp
 	)
 else()
