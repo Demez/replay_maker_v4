@@ -546,7 +546,7 @@ void draw_replay_list_entry( u64& imgui_id, u32 out_i, char* search_box, u32 pre
 	ImVec2 line_pos_1_min( drag_pos_min.x, drag_pos_min.y + ( drag_pos_size.y * 0.6 ) );
 	ImVec2 line_pos_1_max( drag_pos_max.x, line_pos_1_min.y );
 
-	if ( !g_clip_reorder_drag.active || out_i == g_clip_reorder_drag.clip_id )
+	if ( clip_thread_state() == e_clip_parse_state_idle && !g_clip_reorder_drag.active || out_i == g_clip_reorder_drag.clip_id )
 	{
 		if ( point_in_rect( mouse_pos, drag_pos_min, drag_pos_max ) )
 		{
@@ -601,7 +601,7 @@ void draw_replay_list_entry( u64& imgui_id, u32 out_i, char* search_box, u32 pre
 	//memset( header_name, 0, sizeof( char ) * 512 );
 
 	// snprintf( header_name, 512, "%d %s - %s - %d Inputs", out_i, prefix.name, output.name, output.input_count );
-	snprintf( header_name, 512, "%s - %s - %d Inputs", prefix.name, output.name, output.input_count );
+	snprintf( header_name, 512, "%s - %s - %d Inputs", prefix.name, output.name ? output.name : "Loading...", output.input_count );
 
 	if ( collapse_all )
 		ImGui::SetNextItemOpen( false );
@@ -617,7 +617,7 @@ void draw_replay_list_entry( u64& imgui_id, u32 out_i, char* search_box, u32 pre
 	else if ( output.state == e_output_state_invalid )
 		ImGui::PushStyleColor( ImGuiCol_Header, COLOR_BTN_RED );
 
-	if ( !ImGui::CollapsingHeader( header_name, current_output ? ImGuiTreeNodeFlags_Selected | ImGuiTreeNodeFlags_Framed : 0 ) )
+	if ( !ImGui::CollapsingHeader( output.name ? header_name : "Loading...", current_output ? ImGuiTreeNodeFlags_Selected | ImGuiTreeNodeFlags_Framed : 0 ) )
 	{
 		if ( current_output || output.state == e_output_state_invalid )
 			ImGui::PopStyleColor();
@@ -692,10 +692,10 @@ void draw_replay_list( int size[ 2 ] )
 	static u32                prefix_search     = UINT32_MAX;
 	static std::vector< u32 > preset_search;
 
-	ImGui::BeginDisabled( clip_thread_state() != e_clip_parse_state_idle );
-
 	if ( ImGui::BeginChild( "clip_filtering", {}, ImGuiChildFlags_Borders | ImGuiChildFlags_AutoResizeY ) )
 	{
+		ImGui::BeginDisabled( clip_thread_state() != e_clip_parse_state_idle );
+
 		ImGui::TextUnformatted( "Clip Entries" );
 		ImGui::Separator();
 
@@ -855,6 +855,8 @@ void draw_replay_list( int size[ 2 ] )
 
 	ImGui::SetNextWindowSize( { -1, video_list_size } );
 
+	ImGui::EndDisabled();
+
 	//if ( !ImGui::BeginChild( "##video_list", {}, ImGuiChildFlags_Border ) )
 	if ( !ImGui::BeginChild( "##video_list" ) )
 	{
@@ -870,6 +872,8 @@ void draw_replay_list( int size[ 2 ] )
 	ImVec2 cursor_screen_pos = ImGui::GetCursorScreenPos();
 	ImVec2 cursor_pos        = ImGui::GetCursorPos();
 	ImVec2 mouse_pos         = ImGui::GetMousePos();
+
+	ImGui::BeginDisabled( clip_thread_state() != e_clip_parse_state_idle );
 
 	ImVec2 drag_text_size = ImGui::CalcTextSize( "--" );
 	float entry_height = drag_text_size.y + ( style.FramePadding.y * 2 );
@@ -977,6 +981,8 @@ void draw_replay_list( int size[ 2 ] )
 		out_i += sort_newest_top ? -1 : 1;
 	}
 
+	ImGui::EndDisabled();
+
 	ImGui::EndChild();
 	}
 	ImGui::EndChild();
@@ -985,6 +991,8 @@ void draw_replay_list( int size[ 2 ] )
 	// Export Area
 
 	// ImGui::Separator();
+
+	ImGui::BeginDisabled( clip_thread_state() != e_clip_parse_state_idle );
 
 	if ( ImGui::BeginChild( "##export", {}, ImGuiChildFlags_None, ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse | ImGuiWindowFlags_NoSavedSettings ) )
 	{
