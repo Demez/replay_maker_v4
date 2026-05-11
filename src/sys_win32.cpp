@@ -18,7 +18,7 @@
 #include <TlHelp32.h>
 
 
-// ----------------------------------------------------
+// ----------------------------------------------------------------------------------------
 
 
 HANDLE               g_con_out        = INVALID_HANDLE_VALUE;
@@ -31,6 +31,77 @@ static char*         g_exe_folder     = nullptr;
 static size_t        g_exe_folder_len = 0;
 
 static LARGE_INTEGER g_win_perf_freq;
+
+extern void*         g_main_window;
+
+
+// ----------------------------------------------------------------------------------------
+
+
+bool fs_exists( const char* path )
+{
+	DWORD attributes = GetFileAttributesA( path );
+	return attributes != INVALID_FILE_ATTRIBUTES;
+}
+
+
+bool fs_make_dir( const char* path )
+{
+	int ret = SHCreateDirectoryExA( (HWND)g_main_window, path, nullptr );
+
+	if ( ret != 0 )
+	{
+		printf( "Failed to create directory %d\n", ret );
+		sys_print_last_error();
+	}
+
+	return ret == 0;
+}
+
+
+bool fs_is_dir( const char* path )
+{
+	DWORD attributes = GetFileAttributesA( path );
+
+	if ( attributes == INVALID_FILE_ATTRIBUTES )
+		return false;
+
+	if ( attributes & FILE_ATTRIBUTE_DIRECTORY )
+		return true;
+
+	return false;
+}
+
+
+bool fs_is_file( const char* path )
+{
+	wchar_t*                  path_w = sys_to_wchar_extended( path );
+
+	WIN32_FILE_ATTRIBUTE_DATA data{};
+	BOOL                      ret = GetFileAttributesEx( path_w, GetFileExInfoStandard, &data );
+
+	// DWORD    attributes = GetFileAttributesEx( path_w,  );
+
+	free( path_w );
+
+	if ( !ret )
+	{
+		// printf( "Failed to get file attributes: %s\n", path );
+		// sys_print_last_error();
+		return false;
+	}
+
+	// if ( attributes == INVALID_FILE_ATTRIBUTES )
+	// 	return false;
+
+	if ( !( data.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY ) )
+		return true;
+
+	return false;
+}
+
+
+// ----------------------------------------------------------------------------------------
 
 
 

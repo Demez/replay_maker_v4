@@ -282,40 +282,6 @@ char* fs_get_filename_no_ext( const char* path )
 }
 
 
-bool fs_exists( const char* path )
-{
-	return access( path, 0 ) != -1;
-}
-
-
-bool fs_make_dir( const char* path )
-{
-	return mkdir( path ) == 0;
-}
-
-
-bool fs_is_dir( const char* path )
-{
-	struct stat s;
-
-	if ( stat( path, &s ) == 0 )
-		return ( s.st_mode & S_IFDIR );
-
-	return false;
-}
-
-
-bool fs_is_file( const char* path )
-{
-	struct stat s;
-
-	if ( stat( path, &s ) == 0 )
-		return ( s.st_mode & S_IFREG );
-
-	return false;
-}
-
-
 bool fs_make_dir_check( const char* path )
 {
 	if ( fs_exists( path ) )
