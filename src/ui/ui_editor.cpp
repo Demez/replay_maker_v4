@@ -36,6 +36,8 @@ static bool                    g_focus_replay_maker = false;
 
 static int                     g_draw_built_in_menu = 0;
 
+extern float                   g_save_timer;
+
 
 void on_file_dialog_open()
 {
@@ -1016,6 +1018,12 @@ void draw_replay_list( int size[ 2 ] )
 		ImGui::EndDisabled();
 
 		ImGui::EndDisabled();
+
+		if ( g_save_timer > 0.f )
+		{
+			ImGui::SameLine();
+			ImGui::Text( "Saved: %s", g_videos_file_path );
+		}
 	}
 
 	ImGui::EndChild();

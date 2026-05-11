@@ -108,6 +108,8 @@ void                               sys_mpv_full_window_enter();
 void                               sys_mpv_full_window_exit();
 void                               sys_mpv_full_window_toggle();
 
+u64                                sys_get_time_ms();
+
 // --------------------------------------------------------------------------------------------------------
 // imgui helper functions
 
@@ -228,6 +230,10 @@ extern char**                      g_recently_opened;
 extern u8                          g_recently_opened_count;
 
 extern bool                        g_preset_combo_open;
+
+extern float                       g_frame_time;
+
+extern float                       g_save_timer;
 
 constexpr u8                       MAX_RECENT_OPEN = 8;
 

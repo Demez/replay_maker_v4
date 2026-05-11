@@ -21,14 +21,16 @@
 // ----------------------------------------------------
 
 
-HANDLE        g_con_out        = INVALID_HANDLE_VALUE;
-static HANDLE g_job            = INVALID_HANDLE_VALUE;
+HANDLE               g_con_out        = INVALID_HANDLE_VALUE;
+static HANDLE        g_job            = INVALID_HANDLE_VALUE;
 
-static char*  g_exe_path       = nullptr;
-static size_t g_exe_path_len   = 0;
+static char*         g_exe_path       = nullptr;
+static size_t        g_exe_path_len   = 0;
 
-static char*  g_exe_folder     = nullptr;
-static size_t g_exe_folder_len = 0;
+static char*         g_exe_folder     = nullptr;
+static size_t        g_exe_folder_len = 0;
+
+static LARGE_INTEGER g_win_perf_freq;
 
 
 
@@ -806,6 +808,8 @@ int sys_init()
 		return 1;
 	}
 
+	QueryPerformanceFrequency( &g_win_perf_freq );
+
 	// Set EXE path and folder
 	wchar_t output_w[ 4096 ];
 	GetModuleFileName( NULL, output_w, 4096 );
@@ -860,5 +864,13 @@ int sys_init()
 
 void sys_shutdown()
 {
+}
+
+
+u64 sys_get_time_ms()
+{
+	LARGE_INTEGER counter;
+	QueryPerformanceCounter( &counter );
+	return (uint64_t)( counter.QuadPart * 1000 / g_win_perf_freq.QuadPart );
 }
 

@@ -55,6 +55,14 @@ char*               g_videos_file_path;
 
 video_media_info_t  g_video_media_info;
 
+float               g_save_timer             = -1.f;
+
+float               g_frame_time             = 0.f;
+
+
+std::thread*        g_clip_load_thread       = nullptr;
+e_clip_parse_state  g_clip_load_thread_state = e_clip_parse_state_idle;
+
 //#define TEST_VIDEO L"H:\\videos\\av1_testing\\Replay 2024-07-21 23-10-44.mkv"
 //#define TEST_VIDEO L"D:\\projects\\replay_maker_v4\\out\\test.mp4"
 
@@ -543,7 +551,16 @@ void save_settings()
 
 void save_videos()
 {
-	clip_save_videos( g_clip_data, g_videos_file_path );
+	if ( !g_videos_file_path )
+		return;
+
+	if ( g_clip_load_thread_state != e_clip_parse_state_idle )
+		return;
+
+	if ( clip_save_videos( g_clip_data, g_videos_file_path ) )
+	{
+		g_save_timer = 5000.f;
+	}
 }
 
 
@@ -669,10 +686,6 @@ void update_recently_opened( const char* clips_file )
 
 
 // ===============================================================================================
-
-
-std::thread*       g_clip_load_thread       = nullptr;
-e_clip_parse_state g_clip_load_thread_state = e_clip_parse_state_idle;
 
 
 // background clip data parsing
@@ -1095,6 +1108,10 @@ void main_loop()
 {
 	ImGuiIO& io = ImGui::GetIO();
 
+	u64      start_time   = sys_get_time_ms();
+	u64      current_time = start_time;
+	float    time         = 0.f;
+
 	while ( g_running )
 	{
 		// Handle Events
@@ -1129,6 +1146,20 @@ void main_loop()
 					break;
 			}
 		}
+		
+		// -----------------------------------------------------------------------------------
+		// Update Frame Time
+
+		current_time = sys_get_time_ms();
+		g_frame_time = ( current_time / 1000.f ) - ( start_time / 1000.f );
+
+		// don't let the time go too crazy, usually happens when in a breakpoint
+		// time                 = std::min( real_time, 0.1f );
+
+		// g_total_time += ( time * 1000.f );
+
+		if ( g_save_timer > 0.f )
+			g_save_timer -= g_frame_time;
 
 		if ( !g_running )
 			break;
