@@ -36,7 +36,7 @@ struct enc_output_video_t
 struct video_segment_t
 {
 	char* path;
-	u32   input;
+	u32   source;
 	u32   time;
 
 	float bitrate = 0.f;

@@ -156,6 +156,7 @@ set(
     src/logging.cpp
     src/logging.h
     src/ffprobe_util.cpp
+    src/vector.hpp
 
     src/ui/mpv_interface.cpp
     src/ui/ui_encode.cpp

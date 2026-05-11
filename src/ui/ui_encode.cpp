@@ -5,7 +5,7 @@
 
 bool used_in_preset( clip_encode_settings_t& override, u32 preset_i );
 
-// makes sure the time range desired is valid for this input video
+// makes sure the time range desired is valid for this source video
 bool valid_time_range( clip_time_range_t& range, video_metadata_t& metadata );
 
 
@@ -86,27 +86,27 @@ void encode_draw_sidebar()
 				float                 duration          = 0.f;
 				bool                  duration_invalid  = false;
 
-				for ( u32 in_i = 0; in_i < output.input_count; in_i++ )
-				{
-					clip_input_video_t& input = output.input[ in_i ];
-
-					if ( used_in_preset( input.encode_settings, preset_idx ) )
-					{
-						is_used_in_preset = true;
-					}
-					else
-					{
-						continue;
-					}
-
-					for ( u32 time_i = 0; time_i < input.time_range_count; time_i++ )
-					{
-						if ( !valid_time_range( input.time_range[ time_i ], input.metadata ) )
-							duration_invalid = true;
-
-						duration += input.time_range[ time_i ].end - input.time_range[ time_i ].start;
-					}
-				}
+			//	for ( u32 in_i = 0; in_i < output.source_count; in_i++ )
+			//	{
+			//		clip_source_t& source = output.source[ in_i ];
+			//
+			//		if ( used_in_preset( source.encode_settings, preset_idx ) )
+			//		{
+			//			is_used_in_preset = true;
+			//		}
+			//		else
+			//		{
+			//			continue;
+			//		}
+			//
+			//		for ( u32 time_i = 0; time_i < source.time_range_count; time_i++ )
+			//		{
+			//			if ( !valid_time_range( source.time_range[ time_i ], source.metadata ) )
+			//				duration_invalid = true;
+			//
+			//			duration += source.time_range[ time_i ].end - source.time_range[ time_i ].start;
+			//		}
+			//	}
 
 				if ( !is_used_in_preset )
 					continue;
@@ -277,29 +277,31 @@ void encode_draw_output_info()
 
 	ImGui::Separator();
 
-	for ( u32 in_i = 0; in_i < output.input_count; in_i++ )
+#if 0
+	for ( u32 in_i = 0; in_i < output.source_count; in_i++ )
 	{
-		clip_input_video_t& input = output.input[ in_i ];
+		clip_source_t& source = output.source[ in_i ];
 
-		if ( !used_in_preset( input.encode_settings, preset_idx ) )
+		if ( !used_in_preset( source.encode_settings, preset_idx ) )
 			continue;
 
-		ImGui::Text( "Source %u: %s", in_i, input.path );
+		ImGui::Text( "Source %u: %s", in_i, source.path );
 
-		for ( u32 time_i = 0; time_i < input.time_range_count; time_i++ )
+		for ( u32 time_i = 0; time_i < source.time_range_count; time_i++ )
 		{
-			if ( !valid_time_range( input.time_range[ time_i ], input.metadata ) )
+			if ( !valid_time_range( source.time_range[ time_i ], source.metadata ) )
 			{
 				duration_invalid = true;
 				continue;
 			}
 
-			float range_duration = input.time_range[ time_i ].end - input.time_range[ time_i ].start;
-			ImGui::Text( "    %.4f - %.4f (%.4f)", input.time_range[ time_i ].start, input.time_range[ time_i ].end, range_duration );
+			float range_duration = source.time_range[ time_i ].end - source.time_range[ time_i ].start;
+			ImGui::Text( "    %.4f - %.4f (%.4f)", source.time_range[ time_i ].start, source.time_range[ time_i ].end, range_duration );
 
-			duration += input.time_range[ time_i ].end - input.time_range[ time_i ].start;
+			duration += source.time_range[ time_i ].end - source.time_range[ time_i ].start;
 		}
 	}
+#endif
 
 	ImGui::Separator();
 

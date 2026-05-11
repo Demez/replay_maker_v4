@@ -418,7 +418,13 @@ void mpv_cmd_loadfile( const char* file )
 	if ( !g_mpv )
 		return;
 
-	printf( "loading file: %s\n", file );
+	if ( !file )
+		return;
+
+	if ( strlen( file ) == 0 )
+		return;
+
+	printf( "Loading Video: %s\n", file );
 
 	const char* cmd[]   = { "loadfile", file, NULL };
 	int         cmd_ret = p_mpv_command_async( g_mpv, NULL, cmd );
@@ -444,12 +450,9 @@ void mpv_cmd_loadfile( const char* file )
 		{
 			if ( event->error != 0 )
 			{
-				printf( "failed to load video - %d\n", event->error );
+				printf( "Failed to load video - %d\n", event->error );
 				return;
 			}
-
-			// Video Loaded
-			//break;
 		}
 		else if ( event->event_id == MPV_EVENT_PLAYBACK_RESTART )
 		{
@@ -464,12 +467,8 @@ void mpv_cmd_loadfile( const char* file )
 	g_current_video = util_strdup( file );
 
 	get_media_info();
-
-	// or use video-params?
-	//	p_mpv_get_property( g_mpv, "width", MPV_FORMAT_INT64, &g_video_width );
-	//	p_mpv_get_property( g_mpv, "height", MPV_FORMAT_INT64, &g_video_height );
-	//
-	//	p_mpv_get_property( g_mpv, "height", MPV_FORMAT_INT64, &g_video_height );
+	
+	printf( "Video Loaded\n" );
 }
 
 

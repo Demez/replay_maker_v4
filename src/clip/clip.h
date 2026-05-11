@@ -6,11 +6,12 @@
 #include <unordered_map>
 
 
-constexpr size_t MAX_LEN_EXT           = 5;
-constexpr size_t MAX_LEN_PRESET_NAME   = 64;
+constexpr size_t MAX_LEN_EXT               = 5;
+constexpr size_t MAX_LEN_PRESET_NAME       = 64;
 
-constexpr u32    CLIP_VIDEO_FORMAT_VER = 3;
-constexpr u32    CLIP_SETTINGS_VER     = 1;
+constexpr u32    CLIP_VIDEO_FORMAT_VER     = 4;
+constexpr u32    CLIP_VIDEO_FORMAT_VER_MIN = 3;
+constexpr u32    CLIP_SETTINGS_VER         = 1;
 
 
 enum e_encode_preset
@@ -19,7 +20,7 @@ enum e_encode_preset
 	e_encode_preset_move,         // only moves the file
 	e_encode_preset_target_size,  // re-encodes until it gets close to the target size
 	e_encode_preset_raw,          // high quality re-encoding to reduce file size
-	e_encode_preset_raw_chapters, // doesn't re-encode it, but only adds chapters to the input video, as we expect it to be encoded already
+	e_encode_preset_raw_chapters, // doesn't re-encode it, but only adds chapters to the source video, as we expect it to be encoded already
 };
 
 
@@ -52,6 +53,7 @@ struct video_metadata_t
 
 
 // controls how to use parts of videos in a encode preset
+// REMOVED IN VERSION 4
 struct clip_encode_settings_t
 {
 	// TODO: implement this! this will only be allowed with one encode preset being used, and still needs a preset active to override
@@ -70,31 +72,53 @@ struct clip_time_range_t
 };
 
 
-struct clip_input_video_t
+struct clip_source_t
 {
 	char*                  path;
 
-	clip_time_range_t*     time_range;
-	u32                    time_range_count;
-	bool                   file_missing;
+	//clip_time_range_t*     time_range;        // OBSOLETE
+	//u32                    time_range_count;  // OBSOLETE
 
-	clip_encode_settings_t encode_settings;
+	//clip_encode_settings_t encode_settings;  // OBSOLETE
 
 	video_metadata_t       metadata;
+	bool                   file_missing;
 };
 
 
+struct clip_source_usage_t
+{
+	ChVector< clip_time_range_t > time_range;
+	u32                           source_index;
+};
+
+
+struct clip_preset_output_t
+{
+	ChVector< clip_source_usage_t > sources;
+	u32                             preset;
+};
+
+
+// RENAME FROM OUTPUT TO SOMETHING ELSE, LIKE VIDEO GROUP?
 struct clip_output_video_t
 {
-	char*                  name;
+	char*                               name;
 
-	clip_input_video_t*    input;
-	u32                    input_count;
+	clip_source_t*                      source;
+	u32                                 source_count;
 
-	u32                    prefix;
+	u32                                 prefix;
 
-	e_output_state         state;
-	bool                   enabled;  // if false, don't encode this video
+	// these are the real outputs this video has, use for format 4
+	// u32*                                presets;
+	// u32                                 presets_count;
+
+	ChVector< clip_preset_output_t >    presets;
+	// u32                                 preset_count;
+
+	e_output_state                      state;
+	bool                                enabled;  // if false, don't encode this video
 };
 
 
@@ -122,7 +146,7 @@ struct clip_encode_preset_t
 	// u32   use_prefix_from;  // id of a preset to use as a output prefix
 
 	// bool  two_pass;
-	bool  use_full_video;  // use full video instead of time range by default, can be overridden if we have time ranges, and uses the input time as markers (TODO: take markers from what preset?)
+	bool  use_full_video;  // use full video instead of time range by default, can be overridden if we have time ranges, and uses the source time as markers (TODO: take markers from what preset?)
 };
 
 
@@ -135,6 +159,8 @@ struct clip_prefix_t
 
 struct clip_data_t
 {
+	u32                   version = 0;
+
 	clip_output_video_t*  output;
 	u32                   output_count;
 
@@ -155,7 +181,7 @@ void                  clip_free( clip_data_t* data );
 bool                  clip_parse_settings( clip_data_t* data, const char* path );
 bool                  clip_parse_videos( clip_data_t* data, const char* path );
 
-void                  clip_get_video_metadata( clip_input_video_t& input );
+void                  clip_get_video_metadata( clip_source_t& source );
 void                  clip_check_video( clip_data_t* data, clip_output_video_t& output );
 void                  clip_check_videos( clip_data_t* data );
 
@@ -187,6 +213,11 @@ void                  clip_duplicate_time_range( clip_output_video_t* output, u3
 
 void                  clip_add_preset_to_encode_override( clip_data_t* data, clip_encode_settings_t& override, const char* preset_name );
 void                  clip_add_preset_to_encode_override( clip_data_t* data, clip_encode_settings_t& override, u32 preset_index );
+
+void                  clip_add_preset( clip_data_t* data, clip_output_video_t& output, u32 preset_index );
+void                  clip_remove_preset( clip_data_t* data, clip_output_video_t& output, u32 preset_index );
+
+clip_preset_output_t* clip_get_preset_output( clip_output_video_t* output, u32 preset_index );
 
 void                  clip_move_output( clip_data_t* data, u32 output_id, u32 insert_position );
 

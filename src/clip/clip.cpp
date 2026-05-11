@@ -12,6 +12,7 @@ std::unordered_map< std::string, video_metadata_t > g_video_metadata_map;
 clip_data_t* clip_create()
 {
 	clip_data_t* data = ch_calloc< clip_data_t >( 1 );
+	data->version     = CLIP_VIDEO_FORMAT_VER;
 
 #if 0
 	// for now, create a default encode preset and a default prefix preset
@@ -242,7 +243,7 @@ bool clip_parse_settings( clip_data_t* data, const char* path )
 // ============================================================================================================================
 
 
-void clip_parse_encode_override( clip_data_t* data, clip_encode_settings_t& override, json_object_t& root )
+void clip_parse_encode_override( clip_data_t* data, clip_output_video_t& output, json_object_t& root, u32 source_i )
 {
 	if ( root.aType != e_json_type_object )
 	{
@@ -262,13 +263,6 @@ void clip_parse_encode_override( clip_data_t* data, clip_encode_settings_t& over
 				continue;
 			}
 
-			u32* preset_array = ch_calloc< u32 >( object.aObjects.count );
-
-			if ( !preset_array )
-				continue;
-
-			override.presets = preset_array;
-
 			for ( size_t preset_name_i = 0; preset_name_i < object.aObjects.count; preset_name_i++ )
 			{
 				json_object_t& json_preset = object.aObjects.data[ preset_name_i ];
@@ -279,7 +273,50 @@ void clip_parse_encode_override( clip_data_t* data, clip_encode_settings_t& over
 					if ( !util_strncmp( json_preset.aString.data, json_preset.aString.size, data->preset[ preset_i ].name, strlen( data->preset[ preset_i ].name ) ) )
 						continue;
 
-					override.presets[ override.presets_count++ ] = preset_i;
+					// check if we have a preset with this already
+					bool found_preset = false;
+					for ( u32 preset_use_i = 0; preset_use_i < output.presets.size(); preset_use_i++ )
+					{
+						clip_preset_output_t& preset_use = output.presets[ preset_use_i ];
+						if ( preset_use.preset == preset_i )
+						{
+							found_preset      = true;
+							bool found_source = false;
+
+							// look for this source
+							for ( clip_source_usage_t& source_use : preset_use.sources )
+							{
+								if ( source_use.source_index == source_i )
+								{
+									found_source = true;
+									break;
+								}
+							}
+
+							if ( !found_source )
+							{
+								clip_source_usage_t& source_use = preset_use.sources.emplace_back();
+								source_use.source_index         = source_i;
+							}
+
+							break;
+						}
+					}
+
+					// create a new one and add it
+					if ( !found_preset )
+					{
+						// if ( array_append( output.preset, output.preset_count ) )
+						// {
+						// }
+
+						clip_preset_output_t& preset_use = output.presets.emplace_back();
+						preset_use.preset                = preset_i;
+
+						clip_source_usage_t& source_use  = preset_use.sources.emplace_back();
+						source_use.source_index          = source_i;
+					}
+
 					break;
 				}
 			}
@@ -288,84 +325,16 @@ void clip_parse_encode_override( clip_data_t* data, clip_encode_settings_t& over
 }
 
 
-// I was going to use this, but instead, i realize i need this here for when i add the ffmpeg_cmd override option, i do expect to add that at some point
-#if 0
-void clip_parse_encode_override_version_2( clip_data_t* data, clip_encode_override_t& override, json_object_t& root )
-{
-	if ( root.aType != e_json_type_array )
-	{
-		log_printf( "expected encode_override to be an array of strings!\n" );
-		return;
-	}
-
-	u32* preset_array = ch_calloc< u32 >( root.aObjects.count );
-
-	if ( !preset_array )
-		return;
-
-	override.presets = preset_array;
-
-	for ( size_t preset_name_i = 0; preset_name_i < root.aObjects.count; preset_name_i++ )
-	{
-		json_object_t& json_preset = root.aObjects.data[ preset_name_i ];
-
-		// look for the preset
-		for ( u32 preset_i = 0; preset_i < data->preset_count; preset_i++ )
-		{
-			if ( !util_strncmp( json_preset.aString.data, json_preset.aString.size, data->preset[ preset_i ].name, strlen( data->preset[ preset_i ].name ) ) )
-				continue;
-
-			override.presets[ override.presets_count++ ] = preset_i;
-			break;
-		}
-	}
-
-	for ( size_t root_i = 0; root_i < root.aObjects.count; root_i++ )
-	{
-		json_object_t& object = root.aObjects.data[ root_i ];
-
-		if ( util_strncmp( "presets", 7, object.aName.data, object.aName.size ) )
-		{
-			if ( object.aType != e_json_type_array )
-			{
-				log_printf( "Expected array of strings for presets value in encode_overrides\n" );
-				continue;
-			}
-
-			u32* preset_array = ch_calloc< u32 >( object.aObjects.count );
-
-		}
-	}
-}
-
-
-void clip_parse_encode_override( clip_data_t* data, clip_encode_override_t& override, json_object_t& root )
-{
-	if ( root.aType == e_json_type_object )
-	{
-		clip_parse_encode_override_version_1( data, override, root );
-	}
-	else if ( root.aType == e_json_type_array )
-	{
-		clip_parse_encode_override_version_2( data, override, root );
-	}
-	else
-	{
-		log_printf( "expected encode_override to be an object or an array!\n" );
-	}
-}
-#endif
-
-
-bool clip_parse_input( clip_data_t* data, clip_output_video_t& output, json_object_t& root, u32 input_i )
+// version 3 parsing
+bool clip_parse_input_v3( clip_data_t* data, clip_output_video_t& output, json_object_t& root, u32 input_i )
 {
 	if ( root.aType != e_json_type_object )
 	{
-		log_printf( "expected video input to be an object!\n" );
+		log_printf( "expected video source to be an object!\n" );
 		return false;
 	}
 
-	clip_input_video_t& input = output.input[ input_i ];
+	clip_source_t& source = output.source[ input_i ];
 
 	for ( size_t root_i = 0; root_i < root.aObjects.count; root_i++ )
 	{
@@ -373,14 +342,15 @@ bool clip_parse_input( clip_data_t* data, clip_output_video_t& output, json_obje
 
 		if ( util_strncmp( "path", 4, object.aName.data, object.aName.size ) )
 		{
-			input.path = strdup( object.aString.data );
+			source.path = strdup( object.aString.data );
 		}
 		else if ( util_strncmp( "encode_overrides", 16, object.aName.data, object.aName.size ) )
 		{
-			clip_parse_encode_override( data, input.encode_settings, object );
+			clip_parse_encode_override( data, output, object, input_i );
 		}
 		else if ( util_strncmp( "time_ranges", 11, object.aName.data, object.aName.size ) )
 		{
+			#if 0
 			if ( object.aType != e_json_type_array )
 			{
 				log_printf( "expected time_ranges to be an array!\n" );
@@ -392,7 +362,7 @@ bool clip_parse_input( clip_data_t* data, clip_output_video_t& output, json_obje
 			if ( !time_range_array )
 				continue;
 
-			input.time_range = time_range_array;
+			source.time_range = time_range_array;
 
 			for ( size_t range_i = 0; range_i < object.aObjects.count; range_i++ )
 			{
@@ -400,7 +370,7 @@ bool clip_parse_input( clip_data_t* data, clip_output_video_t& output, json_obje
 				
 				if ( range_json.aType == e_json_type_object )
 				{
-					clip_time_range_t& time_range = input.time_range[ input.time_range_count++ ];
+					clip_time_range_t& time_range = source.time_range[ source.time_range_count++ ];
 
 					for ( size_t time_i = 0; time_i < range_json.aObjects.count; time_i++ )
 					{
@@ -429,19 +399,133 @@ bool clip_parse_input( clip_data_t* data, clip_output_video_t& output, json_obje
 						continue;
 					}
 
-					clip_time_range_t& time_range = input.time_range[ input.time_range_count++ ];
+					clip_time_range_t& time_range = source.time_range[ source.time_range_count++ ];
 					time_range.start              = range_json.aObjects.data[ 0 ].aDouble;
 					time_range.end                = range_json.aObjects.data[ 1 ].aDouble;
+				}
+			}
+			#endif
+		}
+		else
+		{
+			log_printf( "unknown source video property: \"%s\"\n", object.aName.data );
+		}
+	}
+
+	clip_get_video_metadata( source );
+
+	return true;
+}
+
+
+bool clip_parse_output_preset( clip_data_t* data, clip_output_video_t& output, json_object_t& root, clip_preset_output_t& preset_use )
+{
+	if ( root.aType != e_json_type_object )
+	{
+		log_printf( "expected video source to be an object!\n" );
+		return false;
+	}
+
+	for ( size_t root_i = 0; root_i < root.aObjects.count; root_i++ )
+	{
+		json_object_t& object = root.aObjects.data[ root_i ];
+
+		if ( util_strncmp( "preset", 6, object.aName.data, object.aName.size ) )
+		{
+			// look for the preset
+			bool found = false;
+			for ( u32 preset_i = 0; preset_i < data->preset_count; preset_i++ )
+			{
+				if ( !util_strncmp( object.aString.data, object.aString.size, data->preset[ preset_i ].name, strlen( data->preset[ preset_i ].name ) ) )
+					continue;
+
+				preset_use.preset = preset_i;
+				found             = true;
+				break;
+			}
+
+			if ( !found )
+			{
+				printf( "Failed to find valid encode preset for video: %s\n", object.aString.data );
+				return false;
+			}
+		}
+		else if ( util_strncmp( "ffmpeg_cmd", 10, object.aName.data, object.aName.size ) )
+		{
+			// soon.....
+		}
+		else if ( util_strncmp( "sources", 7, object.aName.data, object.aName.size ) )
+		{
+			if ( object.aType != e_json_type_array )
+			{
+				log_printf( "expected presets/sources to be an array!\n" );
+				continue;
+			}
+
+			preset_use.sources.resize( object.aObjects.count );
+
+			for ( size_t source_use_i = 0; source_use_i < object.aObjects.count; source_use_i++ )
+			{
+				json_object_t&       obj_json = object.aObjects.data[ source_use_i ];
+				clip_source_usage_t& source_use  = preset_use.sources[ source_use_i ];
+
+				for ( size_t j = 0; j < obj_json.aObjects.count; j++ )
+				{
+					json_object_t& source_json = obj_json.aObjects.data[ j ];
+
+					if ( util_strncmp( "source", 6, source_json.aName.data, source_json.aName.size ) )
+					{
+						if ( source_json.aType == e_json_type_int )
+						{
+							int source_i = source_json.aInt;
+
+							// make sure this is valid
+							if ( source_i < 0 || source_i > output.source_count )
+							{
+								log_printf( log_error, "source index out of bounds, got %d, only have %d sources\n", source_i, output.source_count );
+								break;
+							}
+							else
+							{
+								source_use.source_index = source_i;
+							}
+						}
+						else
+						{
+							log_printf( log_error, "expected source index to be an int, got %s\n", json_type_to_str( source_json.aType ) );
+							break;
+						}
+					}
+					else if ( util_strncmp( "time_ranges", 11, source_json.aName.data, source_json.aName.size ) )
+					{
+						source_use.time_range.resize( source_json.aObjects.count );
+
+						for ( size_t range_i = 0; range_i < source_json.aObjects.count; range_i++ )
+						{
+							json_object_t& range_json = source_json.aObjects.data[ range_i ];
+
+							if ( range_json.aType == e_json_type_array )
+							{
+								if ( range_json.aObjects.count != 2 )
+								{
+									log_printf( log_error, "time_ranges entry does not have only 2 entires\n" );
+									continue;
+								}
+
+								clip_time_range_t& time_range = source_use.time_range[ range_i ];
+								time_range.start              = range_json.aObjects.data[ 0 ].aDouble;
+								time_range.end                = range_json.aObjects.data[ 1 ].aDouble;
+							}
+						}
+					}
 				}
 			}
 		}
 		else
 		{
-			log_printf( "unknown input video property: \"%s\"\n", object.aName.data );
+			log_printf( "unknown source video property: \"%s\"\n", object.aName.data );
 		}
 	}
-
-	clip_get_video_metadata( input );
 
 	return true;
 }
@@ -471,31 +555,82 @@ void clip_parse_video( clip_data_t* data, json_object_t& root, u32 output_i )
 				break;
 			}
 		}
-		// output videos don't use encode overrides anymore, only on input videos and time ranges
-		else if ( util_strncmp( "encode_overrides", 16, object.aName.data, object.aName.size ) )
-		{
-		//	clip_parse_encode_override( data, output.encode_overrides, object );
-		}
+		// version 3
 		else if ( util_strncmp( "inputs", 6, object.aName.data, object.aName.size ) )
 		{
 			if ( object.aType != e_json_type_array )
 			{
-				log_printf( "Expected array of objects for input videos\n" );
+				log_printf( "Expected array of objects for source videos\n" );
 				continue;
 			}
 
-			clip_input_video_t* video_array = ch_calloc< clip_input_video_t >( object.aObjects.count );
+			clip_source_t* video_array = ch_calloc< clip_source_t >( object.aObjects.count );
 
 			if ( !video_array )
 				continue;
 
-			output.input = video_array;
+			output.source = video_array;
 
 			for ( size_t video_i = 0; video_i < object.aObjects.count; video_i++ )
 			{
 				json_object_t& json_video = object.aObjects.data[ video_i ];
-				if ( clip_parse_input( data, output, json_video, video_i ) )
-					output.input_count++;
+				if ( clip_parse_input_v3( data, output, json_video, video_i ) )
+					output.source_count++;
+			}
+		}
+		else if ( util_strncmp( "sources", 7, object.aName.data, object.aName.size ) )
+		{
+			if ( object.aType != e_json_type_array )
+			{
+				log_printf( "Expected array of strings for source videos\n" );
+				continue;
+			}
+
+			output.source = ch_calloc< clip_source_t >( object.aObjects.count );
+
+			if ( !output.source )
+				continue;
+
+			output.source_count = object.aObjects.count;
+
+			for ( size_t video_i = 0; video_i < object.aObjects.count; video_i++ )
+			{
+				json_object_t& json_video = object.aObjects.data[ video_i ];
+
+				if ( json_video.aType != e_json_type_string )
+				{
+					log_printf( log_error, "Expected string for source video path, got \"%s\"\n", json_type_to_str( json_video.aType ) );
+				}
+				else
+				{
+					output.source[ video_i ].path = strdup( json_video.aString.data );
+				}
+
+				clip_get_video_metadata( output.source[ video_i ] );
+			}
+		}
+		else if ( util_strncmp( "presets", 7, object.aName.data, object.aName.size ) )
+		{
+			if ( object.aType != e_json_type_array )
+			{
+				log_printf( "Expected array of objects for presets\n" );
+				continue;
+			}
+
+			output.presets.clear();
+			output.presets.resize( object.aObjects.count );
+
+			for ( size_t preset_use_i = 0; preset_use_i < object.aObjects.count; preset_use_i++ )
+			{
+				json_object_t& json_preset_use = object.aObjects.data[ preset_use_i ];
+
+				if ( json_preset_use.aType != e_json_type_object )
+				{
+					log_printf( log_error, "Expected object for output preset, got \"%s\"\n", json_type_to_str( json_preset_use.aType ) );
+					continue;
+				}
+
+				clip_parse_output_preset( data, output, json_preset_use, output.presets[ preset_use_i ] );
 			}
 		}
 		else
@@ -564,11 +699,18 @@ bool clip_parse_videos( clip_data_t* data, const char* path )
 			log_printf( "Version entry is not an integer type!\n" );
 			goto fail;
 		}
-		else if ( version.aInt < CLIP_VIDEO_FORMAT_VER )
+		else if ( version.aInt < CLIP_VIDEO_FORMAT_VER_MIN )
 		{
-			log_printf( "File is older video format version (got version %d, expected version %d)\n", version.aInt, CLIP_VIDEO_FORMAT_VER );
+			log_printf( "File is older video format version (got version %d, expected min version %d)\n", version.aInt, CLIP_VIDEO_FORMAT_VER_MIN );
 			goto fail;
 		}
+		else if ( version.aInt > CLIP_VIDEO_FORMAT_VER )
+		{
+			log_printf( "File is too new of a video format version (got version %d, expected version %d)\n", version.aInt, CLIP_VIDEO_FORMAT_VER );
+			goto fail;
+		}
+
+		data->version = version.aInt;
 	}
 	else
 	{
@@ -616,24 +758,137 @@ fail:
 }
 
 
-void clip_get_video_metadata( clip_input_video_t& input )
+void clip_get_video_metadata( clip_source_t& source )
 {
-	std::string path = input.path;
+	std::string path = source.path;
 	auto        it   = g_video_metadata_map.find( path );
 
 	if ( it != g_video_metadata_map.end() )
 	{
-		input.metadata = it->second;
+		source.metadata = it->second;
 	}
 
-	get_video_metadata( input.path, input.metadata );
-	g_video_metadata_map[ path ] = input.metadata;
+	get_video_metadata( source.path, source.metadata );
+	g_video_metadata_map[ path ] = source.metadata;
 }
 
 
 void clip_check_video( clip_data_t* data, clip_output_video_t& output )
 {
-	// TODO: check input time ranges and make sure it's valid
+#if 0
+	// ----------------------------------------------------------------------------------------
+	// determine encode presets for this output video
+
+	extern bool used_in_preset( clip_encode_settings_t & override, u32 preset_i );
+
+	// figure out what encode presets this runs on
+	for ( u32 in_i = 0; in_i < output.source_count; in_i++ )
+	{
+		clip_source_t& source = output.source[ in_i ];
+
+		for ( u32 preset_i = 0; preset_i < source.encode_settings.presets_count; preset_i++ )
+		{
+			bool preset_already_added = false;
+			for ( u32 search_i = 0; search_i < output.presets_count; search_i++ )
+			{
+				if ( output.presets[ search_i ] == source.encode_settings.presets[ preset_i ] )
+				{
+					preset_already_added = true;
+					break;
+				}
+			}
+
+			if ( preset_already_added )
+				continue;
+
+			// add it to this list
+			u32* new_data = ch_realloc< u32 >( output.presets, output.presets_count + 1 );
+
+			if ( !new_data )
+			{
+				log_printf( "failed to allocate data for storing output video presets\n" );
+				return;
+			}
+
+			output.presets                           = new_data;
+			output.presets[ output.presets_count++ ] = source.encode_settings.presets[ preset_i ];
+		}
+	}
+
+	// ----------------------------------------------------------------------------------------
+	// get source video metadata
+
+	bool all_valid = true;
+
+	// find all unique source videos, there will be duplicates for different encode presets
+	// this way we don't need get metadata for the same video multiple times
+
+	for ( u32 in_i = 0; in_i < output.source_count; in_i++ )
+	{
+		clip_source_t& source = output.source[ in_i ];
+
+		if ( source.file_missing || !fs_exists( source.path ) )
+		{
+			all_valid          = false;
+			source.file_missing = true;
+			break;
+		}
+	}
+
+	// ----------------------------------------------------------------------------------------
+	// print data for each encode preset
+
+	for ( u32 preset_i = 0; preset_i < output.presets_count; preset_i++ )
+	{
+		clip_encode_preset_t& preset = g_clip_data->preset[ output.presets[ preset_i ] ];
+
+		float duration         = 0.f;
+		bool  duration_invalid = false;
+		for ( u32 in_i = 0; in_i < output.source_count; in_i++ )
+		{
+			clip_source_t& source = output.source[ in_i ];
+
+			if ( !used_in_preset( source.encode_settings, preset_i ) )
+				continue;
+
+			for ( u32 time_i = 0; time_i < source.time_range_count; time_i++ )
+			{
+				if ( !valid_time_range( source.time_range[ time_i ], source.metadata ) )
+					duration_invalid = true;
+
+				duration += source.time_range[ time_i ].end - source.time_range[ time_i ].start;
+			}
+		}
+
+		log_printf( "    Duration: %.4f%s\n\n", duration, duration_invalid ? " [INVALID]" : "" );
+
+		// print source videos for this preset and their time ranges
+		for ( u32 in_i = 0; in_i < output.source_count; in_i++ )
+		{
+			clip_source_t& source = output.source[ in_i ];
+
+			// validate preset
+			if ( !used_in_preset( source.encode_settings, preset_i ) )
+				continue;
+
+			log_printf( "    %s%s\n", source.path, source.file_missing ? " [INVALID]" : "" );
+
+			if ( source.file_missing )
+				continue;
+
+			for ( u32 time_i = 0; time_i < source.time_range_count; time_i++ )
+			{
+				bool  valid          = valid_time_range( source.time_range[ time_i ], source.metadata );
+				float range_duration = source.time_range[ time_i ].end - source.time_range[ time_i ].start;
+
+				log_printf( "        %.4f - %.4f (%.4f)%s\n", source.time_range[ time_i ].start, source.time_range[ time_i ].end, range_duration, valid ? "" : " [INVALID]" );
+			}
+		}
+	}
+
+	if ( !all_valid )
+		return;
+#endif
 
 	output.state = e_output_state_wait;
 }
@@ -716,6 +971,9 @@ static bool clip_save_encode_override( clip_data_t* data, clip_encode_settings_t
 
 bool clip_save_videos( clip_data_t* data, const char* path )
 {
+	return false;
+
+#if 0
 	if ( !data )
 		return false;
 
@@ -784,10 +1042,10 @@ bool clip_save_videos( clip_data_t* data, const char* path )
 		// inputs
 		output_json.aObjects.data[ 3 ].aName          = json_strn( "inputs", 6 );
 		output_json.aObjects.data[ 3 ].aType          = e_json_type_array;
-		output_json.aObjects.data[ 3 ].aObjects.count = output.input_count;
-		output_json.aObjects.data[ 3 ].aObjects.data  = ch_malloc< json_object_t >( output.input_count );
+		output_json.aObjects.data[ 3 ].aObjects.count = output.source_count;
+		output_json.aObjects.data[ 3 ].aObjects.data  = ch_malloc< json_object_t >( output.source_count );
 
-		if ( output.input_count )
+		if ( output.source_count )
 		{
 			if ( !output_json.aObjects.data[ 3 ].aObjects.data )
 			{
@@ -795,10 +1053,10 @@ bool clip_save_videos( clip_data_t* data, const char* path )
 				return false;
 			}
 
-			for ( u32 input_i = 0; input_i < output.input_count; input_i++ )
+			for ( u32 input_i = 0; input_i < output.source_count; input_i++ )
 			{
 				json_object_t&      input_json = output_json.aObjects.data[ 3 ].aObjects.data[ input_i ];
-				clip_input_video_t& input      = output.input[ input_i ];
+				clip_source_t& source      = output.source[ input_i ];
 
 				if ( !json_add_objects( input_json, 3 ) )
 				{
@@ -809,10 +1067,10 @@ bool clip_save_videos( clip_data_t* data, const char* path )
 				// path
 				input_json.aObjects.data[ 0 ].aName   = json_strn( "path", 4 );
 				input_json.aObjects.data[ 0 ].aType   = e_json_type_string;
-				input_json.aObjects.data[ 0 ].aString = json_str( input.path );
+				input_json.aObjects.data[ 0 ].aString = json_str( source.path );
 
 				// encode_overrides
-				if ( !clip_save_encode_override( data, input.encode_settings, input_json.aObjects.data[ 1 ] ) )
+				if ( !clip_save_encode_override( data, source.encode_settings, input_json.aObjects.data[ 1 ] ) )
 				{
 					json_free( root );
 					return false;
@@ -821,13 +1079,13 @@ bool clip_save_videos( clip_data_t* data, const char* path )
 				// time_ranges
 				input_json.aObjects.data[ 2 ].aName = json_strn( "time_ranges", 11 );
 
-				if ( !json_add_array( input_json.aObjects.data[ 2 ], input.time_range_count ) )
+				if ( !json_add_array( input_json.aObjects.data[ 2 ], source.time_range_count ) )
 				{
 					json_free( root );
 					return false;
 				}
 
-				for ( u32 time_i = 0; time_i < input.time_range_count; time_i++ )
+				for ( u32 time_i = 0; time_i < source.time_range_count; time_i++ )
 				{
 					json_object_t& json_time = input_json.aObjects.data[ 2 ].aObjects.data[ time_i ];
 
@@ -839,11 +1097,11 @@ bool clip_save_videos( clip_data_t* data, const char* path )
 
 					// json_time.aObjects.data[ 0 ].aName   = json_strn( "start", 5 );
 					json_time.aObjects.data[ 0 ].aType   = e_json_type_double;
-					json_time.aObjects.data[ 0 ].aDouble = input.time_range[ time_i ].start;
+					json_time.aObjects.data[ 0 ].aDouble = source.time_range[ time_i ].start;
 
 					// json_time.aObjects.data[ 1 ].aName   = json_strn( "end", 3 );
 					json_time.aObjects.data[ 1 ].aType   = e_json_type_double;
-					json_time.aObjects.data[ 1 ].aDouble = input.time_range[ time_i ].end;
+					json_time.aObjects.data[ 1 ].aDouble = source.time_range[ time_i ].end;
 				}
 			}
 		}
@@ -872,6 +1130,7 @@ bool clip_save_videos( clip_data_t* data, const char* path )
 
 	log_printf( "Saved videos to \"%s\"\n", path );
 	return true;
+#endif
 }
 
 
@@ -1027,23 +1286,23 @@ u32 clip_add_input( clip_output_video_t* output, const char* path )
 	if ( !output )
 		return UINT32_MAX;
 
-	clip_input_video_t* new_data = ch_realloc< clip_input_video_t >( output->input, output->input_count + 1 );
+	clip_source_t* new_data = ch_realloc< clip_source_t >( output->source, output->source_count + 1 );
 
 	if ( !new_data )
 		return UINT32_MAX;
 
-	output->input = new_data;
-	memset( &output->input[ output->input_count ], 0, sizeof( clip_input_video_t ) );
+	output->source = new_data;
+	memset( &output->source[ output->source_count ], 0, sizeof( clip_source_t ) );
 
-	clip_input_video_t* input = &output->input[ output->input_count ];
-	input->path               = ch_malloc< char >( strlen( path ) + 1 );
+	clip_source_t* source = &output->source[ output->source_count ];
+	source->path               = ch_malloc< char >( strlen( path ) + 1 );
 
-	strcpy( input->path, path );
-	input->path[ strlen( path ) ] = 0;
+	strcpy( source->path, path );
+	source->path[ strlen( path ) ] = 0;
 
-	clip_get_video_metadata( *input );
+	clip_get_video_metadata( *source );
 
-	return output->input_count++;
+	return output->source_count++;
 }
 
 
@@ -1061,22 +1320,25 @@ void duplicate_encode_overrides( clip_encode_settings_t& src, clip_encode_settin
 
 u32 clip_duplicate_input( clip_output_video_t* output, u32 input_i )
 {
+	return UINT32_MAX;
+
+#if 0
 	if ( !output )
 		return UINT32_MAX;
 
-	if ( input_i >= output->input_count )
+	if ( input_i >= output->source_count )
 	{
-		log_printf( "invalid input index\n" );
+		log_printf( "invalid source index\n" );
 		return UINT32_MAX;
 	}
 
-	u32 input_dst_i = clip_add_input( output, output->input[ input_i ].path );
+	u32 input_dst_i = clip_add_input( output, output->source[ input_i ].path );
 
 	if ( input_dst_i == UINT32_MAX )
 		return UINT32_MAX;
 
-	clip_input_video_t& input_src = output->input[ input_i ];
-	clip_input_video_t& input_dst = output->input[ input_dst_i ];
+	clip_source_t& input_src = output->source[ input_i ];
+	clip_source_t& input_dst = output->source[ input_dst_i ];
 	input_dst.metadata            = input_src.metadata;
 
 	if ( input_src.time_range_count )
@@ -1094,6 +1356,7 @@ u32 clip_duplicate_input( clip_output_video_t* output, u32 input_i )
 	duplicate_encode_overrides( input_src.encode_settings, input_dst.encode_settings );
 
 	return input_dst_i;
+#endif
 }
 
 
@@ -1133,15 +1396,13 @@ void clip_remove_output( clip_data_t* data, u32 output_i )
 
 	clip_output_video_t& output = data->output[ output_i ];
 
-	// remove input videos
-	for ( u32 i = 0; i < output.input_count; i++ )
+	// remove source videos
+	for ( u32 i = 0; i < output.source_count; i++ )
 	{
-		free( output.input[ i ].path );
-		free( output.input[ i ].time_range );
-		free( output.input[ i ].encode_settings.presets );
+		free( output.source[ i ].path );
 	}
 
-	free( output.input );
+	free( output.source );
 
 	util_array_remove_element( data->output, data->output_count, output_i );
 }
@@ -1152,94 +1413,98 @@ void clip_remove_input( clip_output_video_t* output, u32 input_i )
 	if ( !output )
 		return;
 
-	if ( input_i > output->input_count )
+	if ( input_i > output->source_count )
 	{
-		log_printf( "invalid input index\n" );
+		log_printf( "invalid source index\n" );
 		return;
 	}
 
-	clip_input_video_t& input = output->input[ input_i ];
+	clip_source_t& source = output->source[ input_i ];
 	
-	free( input.path );
-	free( input.time_range );
-	free( input.encode_settings.presets );
+	free( source.path );
 
-	util_array_remove_element( output->input, output->input_count, input_i );
+	util_array_remove_element( output->source, output->source_count, input_i );
 }
 
 
 void clip_add_time_range( clip_output_video_t* output, u32 input_i, float start_time, float end_time )
 {
+#if 0
 	if ( !output )
 		return;
 
-	if ( input_i > output->input_count )
+	if ( input_i > output->source_count )
 	{
-		log_printf( "invalid input index\n" );
+		log_printf( "invalid source index\n" );
 		return;
 	}
 
-	clip_input_video_t& input = output->input[ input_i ];
+	clip_source_t& source = output->source[ input_i ];
 
-	// What if you made time ranges linked lists? maybe the same with input videos? would allow for easy re-ordering
-	clip_time_range_t* new_data = ch_realloc< clip_time_range_t >( input.time_range, input.time_range_count + 1 );
+	// What if you made time ranges linked lists? maybe the same with source videos? would allow for easy re-ordering
+	clip_time_range_t* new_data = ch_realloc< clip_time_range_t >( source.time_range, source.time_range_count + 1 );
 
 	if ( !new_data )
 		return;
 
-	input.time_range = new_data;
-	memset( &input.time_range[ input.time_range_count ], 0, sizeof( clip_time_range_t ) );
+	source.time_range = new_data;
+	memset( &source.time_range[ source.time_range_count ], 0, sizeof( clip_time_range_t ) );
 
-	input.time_range[ input.time_range_count ].start = start_time;
-	input.time_range[ input.time_range_count ].end   = end_time;
+	source.time_range[ source.time_range_count ].start = start_time;
+	source.time_range[ source.time_range_count ].end   = end_time;
 
-	input.time_range_count++;
+	source.time_range_count++;
+#endif
 }
 
 
 void clip_remove_time_range( clip_output_video_t* output, u32 input_i, u32 time_range )
 {
+#if 0
 	if ( !output )
 		return;
 
-	if ( input_i > output->input_count )
+	if ( input_i > output->source_count )
 	{
-		log_printf( "invalid input index\n" );
+		log_printf( "invalid source index\n" );
 		return;
 	}
 
-	clip_input_video_t& input = output->input[ input_i ];
-	util_array_remove_element( input.time_range, input.time_range_count, time_range );
+	clip_source_t& source = output->source[ input_i ];
+	util_array_remove_element( source.time_range, source.time_range_count, time_range );
+#endif
 }
 
 
 void clip_duplicate_time_range( clip_output_video_t* output, u32 input_i, u32 src_time_range_i )
 {
+#if 0
 	if ( !output )
 		return;
 
-	if ( input_i > output->input_count )
+	if ( input_i > output->source_count )
 	{
-		log_printf( "invalid input index\n" );
+		log_printf( "invalid source index\n" );
 		return;
 	}
 
-	clip_input_video_t& input = output->input[ input_i ];
+	clip_source_t& source = output->source[ input_i ];
 
-	if ( src_time_range_i > input.time_range_count )
+	if ( src_time_range_i > source.time_range_count )
 	{
 		log_printf( "invalid time range to duplicate\n" );
 		return;
 	}
 
-	if ( array_append( input.time_range, input.time_range_count ) )
+	if ( array_append( source.time_range, source.time_range_count ) )
 		return;
 
-	clip_time_range_t& src_time = input.time_range[ src_time_range_i ];
-	clip_time_range_t& dst_time = input.time_range[ input.time_range_count++ ];
+	clip_time_range_t& src_time = source.time_range[ src_time_range_i ];
+	clip_time_range_t& dst_time = source.time_range[ source.time_range_count++ ];
 
 	dst_time.start              = src_time.start;
 	dst_time.end                = src_time.end;
+#endif
 }
 
 
@@ -1271,6 +1536,49 @@ void clip_add_preset_to_encode_override( clip_data_t* data, clip_encode_settings
 	}
 
 	log_printf( "Failed to find preset: %s\n", preset_name );
+}
+
+
+void clip_add_preset( clip_data_t* data, clip_output_video_t& output, u32 preset_index )
+{
+	for ( clip_preset_output_t& preset_out : output.presets )
+	{
+		if ( preset_out.preset == preset_index )
+			break;
+	}
+
+	clip_preset_output_t& preset_out = output.presets.emplace_back();
+	preset_out.preset                = preset_index;
+}
+
+
+void clip_remove_preset( clip_data_t* data, clip_output_video_t& output, u32 preset_index )
+{
+	for ( size_t i = 0; i < output.presets.size(); i++ )
+	{
+		if ( output.presets[ i ].preset != preset_index )
+			continue;
+
+		output.presets.remove( i );
+		break;
+	}
+}
+
+
+clip_preset_output_t* clip_get_preset_output( clip_output_video_t* output, u32 preset_index )
+{
+	if ( !output )
+		return nullptr;
+
+	for ( size_t i = 0; i < output->presets.size(); i++ )
+	{
+		if ( output->presets[ i ].preset != preset_index )
+			continue;
+
+		return &output->presets[ i ];
+	}
+
+	return nullptr;
 }
 
 

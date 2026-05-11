@@ -184,7 +184,7 @@ void                               draw_playback_controls( int window_size[ 2 ],
 void                               replay_editor_load_input( u32 output_i, u32 input_i );
 void                               replay_editor_reset();
 
-void                               draw_preset_override( clip_encode_settings_t& override, bool edit );
+void                               draw_preset_override( clip_output_video_t& output, bool edit );
 
 void                               enable_sidebar( bool enabled );
 void                               window_on_resize();

@@ -93,6 +93,9 @@ bool used_in_preset( clip_encode_settings_t& override, u32 preset_i )
 
 bool collect_video_info()
 {
+	return false;
+
+#if 0
 	g_output_videos = ch_calloc< enc_output_video_t >( g_clip_data->output_count );
 
 	if ( !g_output_videos )
@@ -130,16 +133,16 @@ bool collect_video_info()
 		// determine encode presets for this output video
 
 		// figure out what encode presets this runs on
-		for ( u32 in_i = 0; in_i < output.input_count; in_i++ )
+		for ( u32 in_i = 0; in_i < output.source_count; in_i++ )
 		{
-			clip_input_video_t& input = output.input[ in_i ];
+			clip_source_t& source = output.source[ in_i ];
 
-			for ( u32 preset_i = 0; preset_i < input.encode_settings.presets_count; preset_i++ )
+			for ( u32 preset_i = 0; preset_i < source.encode_settings.presets_count; preset_i++ )
 			{
 				bool preset_already_added = false;
 				for ( u32 search_i = 0; search_i < enc_output.presets_count; search_i++ )
 				{
-					if ( enc_output.presets[ search_i ] == input.encode_settings.presets[ preset_i ] )
+					if ( enc_output.presets[ search_i ] == source.encode_settings.presets[ preset_i ] )
 					{
 						preset_already_added = true;
 						break;
@@ -159,7 +162,7 @@ bool collect_video_info()
 				}
 
 				enc_output.presets                               = new_data;
-				enc_output.presets[ enc_output.presets_count++ ] = input.encode_settings.presets[ preset_i ];
+				enc_output.presets[ enc_output.presets_count++ ] = source.encode_settings.presets[ preset_i ];
 			}
 		}
 
@@ -173,21 +176,21 @@ bool collect_video_info()
 		log_printf( "\n" );
 
 		// ----------------------------------------------------------------------------------------
-		// get input video metadata
+		// get source video metadata
 
 		bool all_valid            = true;
 
-		// find all unique input videos, there will be duplicates for different encode presets
+		// find all unique source videos, there will be duplicates for different encode presets
 		// this way we don't need get metadata for the same video multiple times
 
-		for ( u32 in_i = 0; in_i < output.input_count; in_i++ )
+		for ( u32 in_i = 0; in_i < output.source_count; in_i++ )
 		{
-			clip_input_video_t& input = output.input[ in_i ];
+			clip_source_t& source = output.source[ in_i ];
 
-			if ( input.file_missing || !fs_exists( input.path ) )
+			if ( source.file_missing || !fs_exists( source.path ) )
 			{
 				all_valid          = false;
-				input.file_missing = true;
+				source.file_missing = true;
 				break;
 			}
 		}
@@ -210,44 +213,44 @@ bool collect_video_info()
 
 			float duration         = 0.f;
 			bool  duration_invalid = false;
-			for ( u32 in_i = 0; in_i < output.input_count; in_i++ )
+			for ( u32 in_i = 0; in_i < output.source_count; in_i++ )
 			{
-				clip_input_video_t& input = output.input[ in_i ];
+				clip_source_t& source = output.source[ in_i ];
 
-				if ( !used_in_preset( input.encode_settings, preset_i ) )
+				if ( !used_in_preset( source.encode_settings, preset_i ) )
 					continue;
 
-				for ( u32 time_i = 0; time_i < input.time_range_count; time_i++ )
+				for ( u32 time_i = 0; time_i < source.time_range_count; time_i++ )
 				{
-					if ( !valid_time_range( input.time_range[ time_i ], input.metadata ) )
+					if ( !valid_time_range( source.time_range[ time_i ], source.metadata ) )
 						duration_invalid = true;
 
-					duration += input.time_range[ time_i ].end - input.time_range[ time_i ].start;
+					duration += source.time_range[ time_i ].end - source.time_range[ time_i ].start;
 				}
 			}
 
 			log_printf( "    Duration: %.4f%s\n\n", duration, duration_invalid ? " [INVALID]" : "" );
 
-			// print input videos for this preset and their time ranges
-			for ( u32 in_i = 0; in_i < output.input_count; in_i++ )
+			// print source videos for this preset and their time ranges
+			for ( u32 in_i = 0; in_i < output.source_count; in_i++ )
 			{
-				clip_input_video_t& input = output.input[ in_i ];
+				clip_source_t& source = output.source[ in_i ];
 
 				// validate preset
-				if ( !used_in_preset( input.encode_settings, preset_i ) )
+				if ( !used_in_preset( source.encode_settings, preset_i ) )
 					continue;
 
-				log_printf( "    %s%s\n", input.path, input.file_missing ? " [INVALID]" : "" );
+				log_printf( "    %s%s\n", source.path, source.file_missing ? " [INVALID]" : "" );
 
-				if ( input.file_missing )
+				if ( source.file_missing )
 					continue;
 
-				for ( u32 time_i = 0; time_i < input.time_range_count; time_i++ )
+				for ( u32 time_i = 0; time_i < source.time_range_count; time_i++ )
 				{
-					bool  valid          = valid_time_range( input.time_range[ time_i ], input.metadata );
-					float range_duration = input.time_range[ time_i ].end - input.time_range[ time_i ].start;
+					bool  valid          = valid_time_range( source.time_range[ time_i ], source.metadata );
+					float range_duration = source.time_range[ time_i ].end - source.time_range[ time_i ].start;
 
-					log_printf( "        %.4f - %.4f (%.4f)%s\n", input.time_range[ time_i ].start, input.time_range[ time_i ].end, range_duration, valid ? "" : " [INVALID]" );
+					log_printf( "        %.4f - %.4f (%.4f)%s\n", source.time_range[ time_i ].start, source.time_range[ time_i ].end, range_duration, valid ? "" : " [INVALID]" );
 				}
 			}
 		}
@@ -257,6 +260,7 @@ bool collect_video_info()
 	}
 
 	return true;
+#endif
 }
 
 

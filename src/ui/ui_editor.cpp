@@ -16,6 +16,7 @@ clip_data_t*                   g_clip_data              = nullptr;
 clip_output_video_t*           g_clip_current_output    = nullptr;
 u32                            g_clip_current_output_index = UINT32_MAX;
 u32                            g_clip_current_input     = 0;
+u32                            g_clip_current_preset    = 0;
 u32                            g_clip_delete_input      = UINT32_MAX;
 char                           g_output_name_buf[ 512 ] = { 0 };
 
@@ -83,8 +84,6 @@ void draw_replay_info_menu_bar()
 
 			nfdresult_t result             = NFD_OpenDialogU8_With( &out_path, &args );
 
-			on_file_dialog_exit();
-
 			if ( result == NFD_OKAY )
 			{
 				g_videos_file_path = util_strdup_r( g_videos_file_path, out_path );
@@ -98,6 +97,8 @@ void draw_replay_info_menu_bar()
 			}
 
 			free( cwd );
+
+			on_file_dialog_exit();
 
 			printf( "Open\n" );
 		}
@@ -258,10 +259,10 @@ bool replay_editor_set_video( u32 output_i, u32 input_i )
 
 	clip_output_video_t& output = g_clip_data->output[ output_i ];
 
-	if ( input_i >= output.input_count )
+	if ( input_i >= output.source_count )
 	{
 		input_i = 0;
-		printf( "invalid input index\n" );
+		printf( "invalid source index\n" );
 		// return false;
 	}
 
@@ -287,19 +288,19 @@ void replay_editor_load_input( u32 output_i, u32 input_i )
 
 	clip_output_video_t& output = g_clip_data->output[ output_i ];
 
-	if ( output.input_count <= input_i )
+	if ( output.source_count <= input_i )
 	{
 		mpv_cmd_close_video();
 		g_focus_replay_maker = true;
 		return;
 	}
 
-	clip_input_video_t& input = output.input[ input_i ];
+	clip_source_t& source = output.source[ input_i ];
 	g_focus_replay_maker      = true;
 
 	if ( mpv_get_current_video() )
 	{
-		if ( strcmp( mpv_get_current_video(), input.path ) == 0 )
+		if ( strcmp( mpv_get_current_video(), source.path ) == 0 )
 		{
 			// hack to keep it lol
 			g_time_range_start = cur_start_time;
@@ -307,7 +308,7 @@ void replay_editor_load_input( u32 output_i, u32 input_i )
 		}
 	}
 
-	mpv_cmd_loadfile( input.path );
+	mpv_cmd_loadfile( source.path );
 }
 
 
@@ -513,22 +514,14 @@ void draw_replay_list_entry( u64& imgui_id, u32 out_i, char* search_box, u32 pre
 			if ( preset_found )
 				break;
 
-			for ( u32 in_i = 0; in_i < output.input_count; in_i++ )
+			for ( size_t preset_use_i = 0; preset_use_i < output.presets.size(); preset_use_i++ )
 			{
-				if ( preset_found )
-					break;
+				clip_preset_output_t& preset_use = output.presets[ preset_use_i ];
 
-				clip_input_video_t& input = output.input[ in_i ];
-
-				for ( u32 in_preset_i = 0; in_preset_i < input.encode_settings.presets_count; in_preset_i++ )
+				if ( preset_use.preset == preset_i )
 				{
-					u32 in_preset = input.encode_settings.presets[ in_preset_i ];
-
-					if ( in_preset == preset_i )
-					{
-						preset_found = true;
-						break;
-					}
+					preset_found = true;
+					break;
 				}
 			}
 		}
@@ -604,8 +597,8 @@ void draw_replay_list_entry( u64& imgui_id, u32 out_i, char* search_box, u32 pre
 	char   header_name[ 512 ] = { 0 };
 	//memset( header_name, 0, sizeof( char ) * 512 );
 
-	// snprintf( header_name, 512, "%d %s - %s - %d Inputs", out_i, prefix.name, output.name, output.input_count );
-	snprintf( header_name, 512, "%s - %s - %d Inputs", prefix.name, output.name ? output.name : "Loading...", output.input_count );
+	// snprintf( header_name, 512, "%d %s - %s - %d Inputs", out_i, prefix.name, output.name, output.source_count );
+	snprintf( header_name, 512, "%s - %s - %u Export%s", prefix.name, output.name ? output.name : "Loading...", output.presets.size(), output.presets.size() > 1 ? "s" : "" );
 
 	if ( collapse_all )
 		ImGui::SetNextItemOpen( false );
@@ -644,33 +637,33 @@ void draw_replay_list_entry( u64& imgui_id, u32 out_i, char* search_box, u32 pre
 	//
 	//ImGui::PopID();
 
-	for ( u32 in_i = 0; in_i < output.input_count; in_i++ )
+	for ( u32 in_i = 0; in_i < output.source_count; in_i++ )
 	{
-		clip_input_video_t& input = output.input[ in_i ];
+		clip_source_t& source = output.source[ in_i ];
 
 		ImGui::PushID( in_i + 1 );
 
-		ImGui::TextUnformatted( input.path );
+		ImGui::TextUnformatted( source.path );
 
-		// if ( ImGui::TreeNode( input.path ) )
+		// if ( ImGui::TreeNode( source.path ) )
 		{
 			// display encode presets
-			//for ( u32 preset_i = 0; preset_i < input.encode_overrides.presets_count; preset_i++ )
+			//for ( u32 preset_i = 0; preset_i < source.encode_overrides.presets_count; preset_i++ )
 			//{
 			//
 			//}
 
-			// display input video times
-			for ( u32 time_range_i = 0; time_range_i < input.time_range_count; time_range_i++ )
-			{
-				char start_str[ TIME_BUFFER ] = { 0 };
-				char end_str[ TIME_BUFFER ]   = { 0 };
-
-				util_format_time( start_str, input.time_range[ time_range_i ].start );
-				util_format_time( end_str, input.time_range[ time_range_i ].end );
-
-				ImGui::Text( "  %d - %s - %s", time_range_i, start_str, end_str );
-			}
+			// display source video times
+			//for ( u32 time_range_i = 0; time_range_i < source.time_range_count; time_range_i++ )
+			//{
+			//	char start_str[ TIME_BUFFER ] = { 0 };
+			//	char end_str[ TIME_BUFFER ]   = { 0 };
+			//
+			//	util_format_time( start_str, source.time_range[ time_range_i ].start );
+			//	util_format_time( end_str, source.time_range[ time_range_i ].end );
+			//
+			//	ImGui::Text( "  %d - %s - %s", time_range_i, start_str, end_str );
+			//}
 
 			// ImGui::TreePop();
 		}
@@ -1095,7 +1088,7 @@ void draw_preset_override_single( clip_encode_settings_t& override )
 }
 
 
-void draw_preset_override( clip_encode_settings_t& override, bool edit )
+void draw_preset_override( clip_output_video_t& output, bool edit )
 {
 	ImGuiStyle& style = ImGui::GetStyle();
 
@@ -1109,9 +1102,9 @@ void draw_preset_override( clip_encode_settings_t& override, bool edit )
 			{
 				// lmao what the fuck
 				bool skip = false;
-				for ( u32 used_preset_i = 0; used_preset_i < override.presets_count; used_preset_i++ )
+				for ( u32 used_preset_i = 0; used_preset_i < output.presets.size(); used_preset_i++ )
 				{
-					if ( i == override.presets[ used_preset_i ] )
+					if ( i == output.presets[ used_preset_i ].preset )
 					{
 						skip = true;
 						break;
@@ -1123,7 +1116,7 @@ void draw_preset_override( clip_encode_settings_t& override, bool edit )
 
 				if ( ImGui::Selectable( g_clip_data->preset[ i ].name ) )
 				{
-					clip_add_preset_to_encode_override( g_clip_data, override, i );
+					clip_add_preset( g_clip_data, output, i );
 				}
 			}
 
@@ -1134,12 +1127,12 @@ void draw_preset_override( clip_encode_settings_t& override, bool edit )
 	// index in the array to remove
 	u32 preset_remove = UINT32_MAX;
 
-	for ( u32 i = 0; i < override.presets_count; i++ )
+	for ( u32 i = 0; i < output.presets.size(); i++ )
 	{
 		if ( edit || i > 0 )
 			ImGui::SameLine();
 
-		clip_encode_preset_t& encode                                 = g_clip_data->preset[ override.presets[ i ] ];
+		clip_encode_preset_t& encode = g_clip_data->preset[ output.presets[ i ].preset ];
 
 		ImGui::PushStyleColor( ImGuiCol_ButtonActive, COLOR_BTN_RED_ACTIVE );
 		ImGui::PushStyleColor( ImGuiCol_ButtonHovered, COLOR_BTN_RED_HOVER );
@@ -1157,42 +1150,8 @@ void draw_preset_override( clip_encode_settings_t& override, bool edit )
 
 	if ( preset_remove != UINT32_MAX )
 	{
-		util_array_remove_element( override.presets, override.presets_count, preset_remove );
+		// util_array_remove_element( override.presets, override.presets_count, preset_remove );
 	}
-
-#if 0
-
-	ImGui::SameLine();
-
-	ImVec2 region_avail = ImGui::GetContentRegionAvail();
-	ImVec2 text_size    = ImGui::CalcTextSize( "Presets" );
-	ImVec2 inc_size    = ImGui::CalcTextSize( "INCLUDE" );
-	ImVec2 exc_size    = ImGui::CalcTextSize( "EXCLUDE" );
-
-	float  include_size = MAX( inc_size.x, exc_size.x );
-	include_size += style.ItemSpacing.x * 2;
-
-	// add Y frame padding for drop down arrow
-	float  combo_size    = text_size.x + ( ( style.FramePadding.x + style.FramePadding.y + style.ItemSpacing.x ) * 2 );
-
-	float  spacing_width = region_avail.x;
-	spacing_width -= combo_size;
-	spacing_width -= style.ItemSpacing.x;
-	spacing_width -= include_size;
-
-	spacing_width = MAX( -style.ItemSpacing.x, spacing_width );
-
-	ImGui::Dummy( { spacing_width, 0.f } );
-	ImGui::SameLine();
-
-	ImGui::SetNextItemWidth( combo_size );
-#endif
-
-	//	ImGui::Separator();
-	//
-	//	if ( ImGui::Button( "Enter Custom ffmpeg cmd" ) )
-	//	{
-	//	}
 }
 
 
@@ -1225,304 +1184,6 @@ void draw_edit_override_button( T*& selected, T* item, const char* name )
 void draw_preset_override_button( clip_encode_settings_t* override, const char* name )
 {
 	draw_edit_override_button( g_encode_override, override, name );
-}
-
-
-void draw_input_video_edit( u32 input_i, clip_input_video_t* input, bool edit )
-{
-	ImGuiStyle& style = ImGui::GetStyle();
-
-	// ImGui::Text( "Input %d:\n%s", input_i, input->path );
-	ImGui::TextUnformatted( input->path );
-
-	if ( !edit && ImGui::Button( "Set Current" ) )
-	{
-		replay_editor_load_input( g_clip_current_output_index, input_i );
-	}
-
-	if ( !edit )
-		ImGui::SameLine();
-
-	if ( ImGui::Button( "Duplicate" ) )
-	{
-		u32 i = clip_duplicate_input( g_clip_current_output, input_i );
-
-		if ( i != UINT32_MAX )
-			replay_editor_load_input( g_clip_current_output_index, i );
-	}
-
-	ImGui::SameLine();
-
-	// calcuate total duration
-	float total_duration = 0.f;
-	for ( u32 time_range_i = 0; time_range_i < input->time_range_count; time_range_i++ )
-		total_duration += input->time_range[ time_range_i ].end - input->time_range[ time_range_i ].start;
-
-	char total_duration_str[ TIME_BUFFER ] = { 0 };
-	util_format_time( total_duration_str, total_duration );
-	ImGui::Text( "Duration: %s", total_duration_str );
-
-	ImGui::SameLine();
-
-	ImVec2 line_remain   = ImGui::GetContentRegionAvail();
-
-	float  spacing_width = line_remain.x;
-	spacing_width -= ImGui::CalcTextSize( "Delete" ).x;
-	spacing_width -= style.FramePadding.x * 2;
-	spacing_width -= style.ItemSpacing.x;
-
-	spacing_width = MAX( -style.ItemSpacing.x, spacing_width );
-
-	ImGui::Dummy( { spacing_width, 0.f } );
-	ImGui::SameLine();
-
-	ImGui::PushStyleColor( ImGuiCol_ButtonActive, COLOR_BTN_RED_ACTIVE );
-	ImGui::PushStyleColor( ImGuiCol_ButtonHovered, COLOR_BTN_RED_HOVER );
-	ImGui::PushStyleColor( ImGuiCol_Button, COLOR_BTN_RED );
-
-	if ( ImGui::Button( "Delete" ) )
-	{
-		g_clip_delete_input = input_i;
-	}
-
-	ImGui::PopStyleColor();
-	ImGui::PopStyleColor();
-	ImGui::PopStyleColor();
-
-	//ImGui::SameLine();
-	//draw_preset_override_button( &input->encode_overrides, "Edit Input Presets" );
-
-	ImGui::Separator();
-
-	draw_preset_override( input->encode_settings, edit );
-
-	// display input video times
-	if ( input->time_range_count == 0 )
-		return;
-
-	ImGui::Separator();
-
-	u32    copy_time_range   = UINT32_MAX;
-	u32    delete_time_range = UINT32_MAX;
-	u32    move_time_range   = UINT32_MAX;
-	bool   move_up           = false;
-
-	//	ImGui::Indent( 16.f );
-
-	size_t imgui_id          = 10000;
-
-	bool   disabled          = mpv_get_current_video() ? strcmp( input->path, mpv_get_current_video() ) != 0 : true;
-
-	for ( u32 time_range_i = 0; time_range_i < input->time_range_count; time_range_i++ )
-	{
-		if ( time_range_i > 0 )
-			ImGui::Separator();
-
-		if ( edit )
-		{
-			// push id
-			ImGui::PushID( imgui_id++ );
-
-			if ( ImGui::Button( "X" ) )
-			{
-				delete_time_range = time_range_i;
-			}
-
-			ImGui::PopID();
-
-			ImGui::SameLine();
-
-			ImGui::PushID( imgui_id++ );
-
-			if ( ImGui::Button( "Dup" ) )
-			{
-				copy_time_range = time_range_i;
-			}
-
-			ImGui::PopID();
-
-			ImGui::SameLine();
-
-			//static char edit_btn[ 8 ] = { 0 };
-			//snprintf( edit_btn, 8, "Edit %d", time_range_i );
-
-			// ImGui::BeginDisabled( input_i != g_clip_current_input );
-			ImGui::BeginDisabled( disabled );
-
-			ImGui::PushID( imgui_id++ );
-			draw_edit_override_button( g_edit_time_range, &input->time_range[ time_range_i ], "Edit" );
-			ImGui::PopID();
-
-			ImGui::EndDisabled();
-
-			ImGui::SameLine();
-
-			// these buttons aren't implemented yet
-			ImGui::BeginDisabled( true );
-
-			ImGui::PushID( imgui_id++ );
-
-			if ( ImGui::Button( "/\\" ) )
-			{
-				move_time_range = time_range_i;
-				move_up         = true;
-			}
-
-			ImGui::PushStyleVar( ImGuiStyleVar_ItemSpacing, { 0, 0 } );
-			ImGui::SameLine();
-
-			if ( ImGui::Button( "\\/" ) )
-			{
-				move_time_range = time_range_i;
-				move_up         = false;
-			}
-
-			ImGui::PopStyleVar();
-
-			ImGui::PopID();
-
-			ImGui::EndDisabled();
-
-			ImGui::SameLine();
-			//	ImGui::Spacing();
-			//	ImGui::SameLine();
-		}
-
-		char duration_str[ TIME_BUFFER ] = { 0 };
-		util_format_time( duration_str, input->time_range[ time_range_i ].end - input->time_range[ time_range_i ].start );
-
-		ImVec2 region_avail       = ImGui::GetContentRegionAvail();
-		ImVec2 size_duration      = ImGui::CalcTextSize( duration_str );
-		float  duration_area      = ( size_duration.x / 2 ) + style.ItemSpacing.x;
-		float  single_button_area = ( region_avail.x / 2.f ) - duration_area;
-
-		ImGui::BeginDisabled( disabled );
-
-		char start_str[ TIME_BUFFER ] = { 0 };
-		char end_str[ TIME_BUFFER ]   = { 0 };
-
-		util_format_time( start_str, input->time_range[ time_range_i ].start );
-		util_format_time( end_str, input->time_range[ time_range_i ].end );
-
-		// snprintf( start_str, 32, "%.4f", input->time_range[ time_range_i ].start );
-		// snprintf( end_str, 32, "%.4f", input->time_range[ time_range_i ].end );
-
-		ImGui::PushID( imgui_id++ );
-		ImGui::PushItemWidth( single_button_area );
-
-		// TODO: if we're editing this time range, maybe when we push the start or end time button, it changes to the current seek time instead?
-		if ( ImGui::Button( start_str, ImVec2( single_button_area, 0 ) ) )
-		{
-			const char* cmd[]   = { "seek", start_str, "absolute", NULL };
-			int         cmd_ret = p_mpv_command_async( g_mpv, 0, cmd );
-		}
-
-		ImGui::PopID();
-
-		ImGui::SameLine();
-
-		if ( ImGui::Button( end_str, ImVec2( single_button_area, 0 ) ) )
-		{
-			const char* cmd[]   = { "seek", end_str, "absolute", NULL };
-			int         cmd_ret = p_mpv_command_async( g_mpv, 0, cmd );
-		}
-
-		ImGui::SameLine();
-		ImGui::PopItemWidth();
-
-		ImGui::PushItemWidth( duration_area );
-		ImGui::TextUnformatted( duration_str );
-		ImGui::PopItemWidth();
-
-		ImGui::EndDisabled();
-
-		// ImGui::PushID( imgui_id++ );
-		// draw_preset_override( input->time_range[ time_range_i ].encode_overrides );
-		// ImGui::PopID();
-		// ImGui::Text( "%.4f - %.4f", input->time_range[ time_range_i ].start, input->time_range[ time_range_i ].end );
-	}
-
-	if ( edit )
-	{
-		// show current start time
-		char start_time_str[ TIME_BUFFER ] = { 0 };
-		util_format_time( start_time_str, g_time_range_start );
-		ImGui::Text( "Current Start Time: %s", start_time_str );
-	}
-
-//	ImGui::Unindent( 16.f );
-
-	// does the user want to move a time range?
-	if ( move_time_range != UINT32_MAX )
-	{
-		// move up
-		if ( move_up && move_time_range == 0 )
-		{
-			return;
-		}
-
-		// move down
-		if ( !move_up && move_time_range == input->time_range_count )
-		{
-			return;
-		}
-
-		move_time_range = UINT32_MAX;
-	}
-
-	// does the user want to delete a time range
-	else if ( delete_time_range != UINT32_MAX )
-	{
-		clip_remove_time_range( g_clip_current_output, input_i, delete_time_range );
-		delete_time_range = UINT32_MAX;
-	}
-
-	// does the user want to copy a time range
-	else if ( copy_time_range != UINT32_MAX )
-	{
-		clip_duplicate_time_range( g_clip_current_output, input_i, copy_time_range );
-		copy_time_range = UINT32_MAX;
-	}
-}
-
-
-void draw_input_video_edit_wrapper( u32 input_i, clip_input_video_t* input, bool edit )
-{
-	ImVec4          frame_bg = ImGui::GetStyleColorVec4( ImGuiCol_ChildBg );
-	ImGuiChildFlags flags    = ImGuiChildFlags_Border | ImGuiChildFlags_AutoResizeY;
-
-	if ( edit || input_i == g_clip_current_input )
-	{
-		// flags |= ImGuiChildFlags_FrameStyle;
-		// frame_bg.x = 0.5;
-		// frame_bg.y = 0.5;
-		// frame_bg.z = 0.5;
-
-		frame_bg.x = 0.15;
-		frame_bg.y = 0.15;
-		frame_bg.z = 0.15;
-		frame_bg.w = 1;
-	}
-	else
-	{
-		// frame_bg.x *= 0.4;
-		// frame_bg.y *= 0.4;
-		// frame_bg.z *= 0.4;
-	}
-
-	ImGui::PushStyleColor( ImGuiCol_ChildBg, frame_bg );
-
-	if ( ImGui::BeginChild( edit ? edit : (size_t)input, ImVec2( 0.f, 0.f ), flags ) )
-	{
-		draw_input_video_edit( input_i, input, edit );
-	}
-
-	ImGui::EndChild();
-
-	//if ( current == j )
-	{
-		ImGui::PopStyleColor();
-	}
 }
 
 

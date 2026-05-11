@@ -27,6 +27,7 @@ extern clip_data_t*         g_clip_data;
 extern clip_output_video_t* g_clip_current_output;
 extern u32                  g_clip_current_output_index;
 extern u32                  g_clip_current_input;
+extern u32                  g_clip_current_preset;
 
 u32                         g_selected_section      = UINT32_MAX;
 
@@ -48,7 +49,7 @@ void timeline_reset()
 {
 	g_selected_section = UINT32_MAX;
 
-	// TODO: maybe later, have saved markers for each input video, so if your swapping back and forth to line something up, this can stay saved?
+	// TODO: maybe later, have saved markers for each source video, so if your swapping back and forth to line something up, this can stay saved?
 	g_timeline_marker_active[ 0 ] = false;
 	g_timeline_marker_active[ 1 ] = false;
 
@@ -90,16 +91,182 @@ void timeline_marker_control( ImGuiIO& io, ImGuiKey key, int marker )
 
 void timeline_draw()
 {
-	bool draw_tabs_and_sections = g_clip_current_output && g_clip_current_input != UINT32_MAX &&
-		( mpv_get_current_video() ? strcmp( g_clip_current_output->input[ g_clip_current_input ].path, mpv_get_current_video() ) == 0 : false );
 
 	g_preset_combo_open = false;
 
 	// if ( draw_tabs_and_sections )
+
+	ImGuiIO&              io             = ImGui::GetIO();
+	ImGuiStyle&           style          = ImGui::GetStyle();
+
+	ImDrawList*           draw_list      = ImGui::GetWindowDrawList();
+
+	u32                   focused_source = 0;
+	float                 duration_total = 0.f;
+
+	struct duration_t
+	{
+		float duration = 0.f;
+		float total_prev = 0.f;
+	};
+
+	std::vector< duration_t > durations;
+
+	// TODO: make sure no inputs get captured if focused in a drop down or typing in a text box
+
+	bool        capture_inputs = !io.WantTextInput && !g_preset_combo_open;
+
+	// test WantCaptureMouseUnlessPopupClose?
+
+	// ------------------------------------------------------------------------------------------
+	// Draw Preset List
+	{
+		ImGuiStyle& style = ImGui::GetStyle();
+
+		ImGui::BeginDisabled( !g_clip_current_output );
+
+		{
+			if ( ImGui::BeginCombo( "##presets", "Presets", ImGuiComboFlags_HeightLargest | ImGuiComboFlags_WidthFitPreview ) )
+			{
+				g_preset_combo_open = true;
+
+				for ( u32 i = 0; i < g_clip_data->preset_count; i++ )
+				{
+					// lmao what the fuck
+					bool skip = false;
+					for ( u32 used_preset_i = 0; used_preset_i < g_clip_current_output->presets.size(); used_preset_i++ )
+					{
+						if ( i == g_clip_current_output->presets[ used_preset_i ].preset )
+						{
+							skip = true;
+							break;
+						}
+					}
+
+					if ( skip )
+						continue;
+
+					if ( ImGui::Selectable( g_clip_data->preset[ i ].name ) )
+					{
+						clip_add_preset( g_clip_data, *g_clip_current_output, i );
+					}
+				}
+
+				ImGui::EndCombo();
+			}
+		}
+
+		if ( g_clip_current_output )
+		{
+			// index in the array to remove
+			u32 preset_remove = UINT32_MAX;
+
+			for ( u32 i = 0; i < g_clip_current_output->presets.size(); i++ )
+			{
+				ImGui::SameLine();
+
+				clip_encode_preset_t& encode = g_clip_data->preset[ g_clip_current_output->presets[ i ].preset ];
+
+				ImGui::PushStyleColor( ImGuiCol_ButtonActive, COLOR_BTN_RED_ACTIVE );
+				ImGui::PushStyleColor( ImGuiCol_ButtonHovered, COLOR_BTN_RED_HOVER );
+				ImGui::PushStyleColor( ImGuiCol_Button, COLOR_BTN_RED );
+
+				if ( ImGui::Button( encode.name ) )
+				{
+					preset_remove = g_clip_current_output->presets[ i ].preset;
+				}
+
+				ImGui::PopStyleColor();
+				ImGui::PopStyleColor();
+				ImGui::PopStyleColor();
+			}
+
+			if ( preset_remove != UINT32_MAX )
+			{
+				clip_remove_preset( g_clip_data, *g_clip_current_output, preset_remove );
+
+				if ( g_clip_current_preset == preset_remove )
+				{
+					if ( g_clip_current_output->presets.size() )
+					{
+						g_clip_current_preset = g_clip_current_output->presets[ 0 ].preset;
+					}
+					else
+					{
+						g_clip_current_preset = 0;
+					}
+				}
+			}
+		}
+
+		ImGui::EndDisabled();
+	}
+
+	clip_preset_output_t* preset_out = clip_get_preset_output( g_clip_current_output, g_clip_current_preset );
+
+	if ( preset_out )
+	{
+		for ( clip_source_usage_t& source_use : preset_out->sources )
+		{
+			clip_source_t& source = g_clip_current_output->source[ source_use.source_index ];
+			durations.emplace_back( source.metadata.duration, duration_total );
+			duration_total += source.metadata.duration;
+		}
+	}
+
+	bool draw_tabs_and_sections = g_clip_current_output && g_clip_current_input != UINT32_MAX &&
+	                              ( mpv_get_current_video() ? strcmp( g_clip_current_output->source[ g_clip_current_input ].path, mpv_get_current_video() ) == 0 : false );
+
+	// ------------------------------------------------------------------------------------------
+	// Draw tabs on top for which encode preset currently in use and current source video?
+	float       text_height    = ImGui::GetFontSize();
+
+	if ( ImGui::BeginTabBar( "##timeline_tabs" ) )
+	{
+		if ( draw_tabs_and_sections )
+		{
+			for ( u32 preset_out_i = 0; preset_out_i < g_clip_current_output->presets.size(); preset_out_i++ )
+			{
+				clip_preset_output_t& preset_out_ = g_clip_current_output->presets[ preset_out_i ];
+				clip_encode_preset_t& preset      = g_clip_data->preset[ preset_out_.preset ];
+
+				char                title[ 64 ]{};
+				snprintf( title, 64, "Preset: %s", preset.name );
+
+				bool selected_tab = g_clip_current_preset == preset_out_.preset;
+
+				if ( selected_tab )
+				{
+					ImGui::PushStyleColor( ImGuiCol_Tab, style.Colors[ ImGuiCol_TabSelected ] );
+				}
+
+				// if ( ImGui::TabItemButton( title, selected_tab ? ImGuiTabItemFlags_SetSelected : 0 ) )
+				if ( ImGui::TabItemButton( title ) )
+				{
+					if ( g_clip_current_preset != preset_out_.preset )
+					{
+						g_clip_current_preset = preset_out_.preset;
+
+						if ( preset_out_.sources.size() )
+							replay_editor_load_input( g_clip_current_output_index, preset_out_.sources[ 0 ].source_index );
+					}
+				}
+
+				if ( selected_tab )
+				{
+					ImGui::PopStyleColor();
+				}
+			}
+		}
+
+		ImGui::EndTabBar();
+	}
+
+	// ------------------------------------------------------------------------------------------
 	{
 		// ImGui::BeginDisabled( !draw_tabs_and_sections );
-		ImGui::BeginDisabled( !( g_clip_current_output && g_clip_current_input != UINT32_MAX ) );
 		// ImGui::SameLine();
+		ImGui::BeginDisabled( !g_clip_current_output );
 
 		if ( ImGui::Button( "Add Video" ) )
 		{
@@ -113,13 +280,16 @@ void timeline_draw()
 		ImGui::PushStyleColor( ImGuiCol_ButtonHovered, COLOR_BTN_RED_HOVER );
 		ImGui::PushStyleColor( ImGuiCol_Button, COLOR_BTN_RED );
 
+		ImGui::EndDisabled();
+		ImGui::BeginDisabled( !( g_clip_current_output && g_clip_current_input != UINT32_MAX ) );
+
 		if ( ImGui::Button( "Delete Video" ) )
 		{
 			clip_remove_input( g_clip_current_output, g_clip_current_input );
 			timeline_reset();
 			// replay_editor_reset();
 
-			g_clip_current_input = g_clip_current_output->input_count > 0 ? 0 : UINT32_MAX;
+			g_clip_current_input = g_clip_current_output->source_count > 0 ? 0 : UINT32_MAX;
 
 			ImGui::EndDisabled();
 
@@ -136,73 +306,17 @@ void timeline_draw()
 
 		ImGui::EndDisabled();
 
-		if ( draw_tabs_and_sections )
-		{
-			ImGui::SameLine();
-
-			clip_input_video_t& current_input = g_clip_current_output->input[ g_clip_current_input ];
-			draw_preset_override( current_input.encode_settings, true );
-		}
-	}
-
-	ImGuiIO&    io           = ImGui::GetIO();
-	ImGuiStyle& style        = ImGui::GetStyle();
-
-	ImDrawList* draw_list    = ImGui::GetWindowDrawList();
-
-	double      duration     = 0;
-	p_mpv_get_property( g_mpv, "duration", MPV_FORMAT_DOUBLE, &duration );
-
-	// TODO: make sure no inputs get captured if focused in a drop down or typing in a text box
-
-	bool        capture_inputs = !io.WantTextInput && !g_preset_combo_open;
-
-	// test WantCaptureMouseUnlessPopupClose?
-
-	// ------------------------------------------------------------------------------------------
-	// Draw tabs on top for which encode preset currently in use and current input video?
-	float       text_height    = ImGui::GetFontSize();
-
-	if ( ImGui::BeginTabBar( "##timeline_tabs" ) )
-	{
-		if ( draw_tabs_and_sections )
-		{
-			for ( u32 input_i = 0; input_i < g_clip_current_output->input_count; input_i++ )
-			{
-				clip_input_video_t& input = g_clip_current_output->input[ input_i ];
-
-				char                title[ 64 ]{};
-				snprintf( title, 64, "Entry %d | %d Sections | %d Presets", input_i, input.time_range_count, input.encode_settings.presets_count );
-
-				bool selected_tab_ref = g_clip_current_input == input_i;
-				bool selected_tab = g_clip_current_input == input_i;
-
-				if ( selected_tab )
-				{
-					ImGui::PushStyleColor( ImGuiCol_Button, style.Colors[ ImGuiCol_ButtonActive ] );
-				}
-
-				// if ( ImGui::TabItemButton( title, selected_tab ? ImGuiTabItemFlags_SetSelected : 0 ) )
-				if ( ImGui::TabItemButton( title ) )
-				{
-					if ( g_clip_current_input != input_i )
-						replay_editor_load_input( g_clip_current_output_index, input_i );
-				}
-
-				if ( selected_tab )
-				{
-					ImGui::PopStyleColor();
-				}
-			}
-		}
-
-		ImGui::EndTabBar();
+		// if ( draw_tabs_and_sections )
+		// {
+		// 	ImGui::SameLine();
+		// 	draw_preset_override( *g_clip_current_output, true );
+		// }
 	}
 
 	// ------------------------------------------------------------------------------------------
 	// Marker controls for creating new sections (Q and W, E to create as a section and clear markers)
 
-	if ( duration && capture_inputs )
+	if ( durations.size() && capture_inputs )
 	{
 		timeline_marker_control( io, ImGuiKey_Q, 0 );
 		timeline_marker_control( io, ImGuiKey_E, 1 );
@@ -211,7 +325,7 @@ void timeline_draw()
 		if ( ImGui::IsKeyPressed( ImGuiKey_R, false ) )
 		{
 			float start_time = g_timeline_marker_active[ 0 ] ? g_timeline_marker_times[ 0 ] : 0.f;
-			float end_time   = g_timeline_marker_active[ 1 ] ? g_timeline_marker_times[ 1 ] : duration;
+			float end_time   = g_timeline_marker_active[ 1 ] ? g_timeline_marker_times[ 1 ] : durations[ focused_source ].duration;
 
 			// can't have this be inverted, flip if needed
 			if ( end_time < start_time )
@@ -235,7 +349,7 @@ void timeline_draw()
 	// ------------------------------------------------------------------------------------------
 	// Use [ and ] keys to jump to start and end points of each section and start/end of video
 	
-	if ( duration && draw_tabs_and_sections && capture_inputs )
+	if ( durations.size() && draw_tabs_and_sections && capture_inputs && preset_out )
 	{
 		if ( ImGui::IsKeyPressed( ImGuiKey_A, false ) )
 		{
@@ -245,17 +359,18 @@ void timeline_draw()
 			// search for the first notable time to snap to
 			float closest_time = 0.f;
 
-			clip_input_video_t& current_input = g_clip_current_output->input[ g_clip_current_input ];
-
-			for ( u32 time_i = 0; time_i < current_input.time_range_count; time_i++ )
+			for ( clip_source_usage_t& source : preset_out->sources )
 			{
-				clip_time_range_t& time_range = current_input.time_range[ time_i ];
+				for ( u32 time_i = 0; time_i < source.time_range.size(); time_i++ )
+				{
+					clip_time_range_t& time_range = source.time_range[ time_i ];
 
-				if ( /*time_range.start < time_pos + 0.05 ||*/ time_range.start < time_pos - 0.15 )
-					closest_time = std::max( closest_time, time_range.start );
+					if ( /*time_range.start < time_pos + 0.05 ||*/ time_range.start < time_pos - 0.15 )
+						closest_time = std::max( closest_time, time_range.start );
 
-				if ( /*time_range.end < time_pos + 0.05 ||*/ time_range.end < time_pos - 0.15 )
-					closest_time = std::max( closest_time, time_range.end );
+					if ( /*time_range.end < time_pos + 0.05 ||*/ time_range.end < time_pos - 0.15 )
+						closest_time = std::max( closest_time, time_range.end );
+				}
 			}
 
 			// check markers
@@ -269,24 +384,24 @@ void timeline_draw()
 			p_mpv_get_property( g_mpv, "time-pos", MPV_FORMAT_DOUBLE, &time_pos );
 
 			// search for the first notable time to snap to
-			float closest_time = duration;
+			float closest_time = durations[ focused_source ].duration;
 
-			clip_input_video_t& current_input = g_clip_current_output->input[ g_clip_current_input ];
-
-			for ( u32 time_i = 0; time_i < current_input.time_range_count; time_i++ )
-			{
-				clip_time_range_t& time_range = current_input.time_range[ time_i ];
-
-				if ( time_range.start > time_pos + 0.15 )
-					closest_time = std::min( closest_time, time_range.start );
-
-				if ( time_range.end > time_pos + 0.15 )
-					closest_time = std::min( closest_time, time_range.end );
-			}
-
-			// check markers
-
-			timeline_set_seek_time( closest_time );
+			// clip_source_t& current_input = g_clip_current_output->source[ g_clip_current_input ];
+			// 
+			// for ( u32 time_i = 0; time_i < current_input.time_range_count; time_i++ )
+			// {
+			// 	clip_time_range_t& time_range = current_input.time_range[ time_i ];
+			// 
+			// 	if ( time_range.start > time_pos + 0.15 )
+			// 		closest_time = std::min( closest_time, time_range.start );
+			// 
+			// 	if ( time_range.end > time_pos + 0.15 )
+			// 		closest_time = std::min( closest_time, time_range.end );
+			// }
+			// 
+			// // check markers
+			// 
+			// timeline_set_seek_time( closest_time );
 		}
 	}
 
@@ -355,86 +470,94 @@ void timeline_draw()
 
 	static bool  just_selected_section = false;
 
-	if ( draw_tabs_and_sections )
+	if ( draw_tabs_and_sections && preset_out )
 	{
-		clip_input_video_t& current_input = g_clip_current_output->input[ g_clip_current_input ];
-
-		for ( u32 time_i = 0; time_i < current_input.time_range_count; time_i++ )
+		for ( size_t source_use_i = 0; source_use_i < preset_out->sources.size(); source_use_i++ )
 		{
-			clip_time_range_t& time_range        = current_input.time_range[ time_i ];
+			clip_source_usage_t& source_use = preset_out->sources[ source_use_i ];
+			clip_source_t&       source     = g_clip_current_output->source[ source_use.source_index ];
 
-			int                section_pos_left  = seek_pos_start + seek_area * ( time_range.start / duration );
-			int                section_pos_right = seek_pos_start + seek_area * ( time_range.end / duration );
-
-			bool               is_selected       = g_selected_section == time_i;
-			ImColor            border_color      = is_selected ? SECTION_COLOR_SELECT_BORDER : SECTION_COLOR_BORDER;
-
-			draw_list->AddRectFilled( ImVec2( section_pos_left, window_area_min.y ), ImVec2( section_pos_right, window_area_max.y ), border_color, style.FrameRounding, ImDrawFlags_RoundCornersAll );
-			draw_list->AddRectFilled( ImVec2( section_pos_left + 1, window_area_min.y + 1 ), ImVec2( section_pos_right - 1, window_area_max.y - 1 ), SECTION_COLOR_BASE, style.FrameRounding, ImDrawFlags_RoundCornersAll );
-
-			char title[ 16 ]{};
-			snprintf( title, 16, "%d", time_i );
-
-			ImVec2 title_text_size = ImGui::CalcTextSize( title );
-
-			ImVec2 title_size      = title_text_size;
-			title_size.x += style.FramePadding.x * 2;
-			title_size.y += style.FramePadding.y * 2;
-
-			ImVec2 title_pos( section_pos_left + style.FramePadding.x, window_area_min.y + style.FramePadding.y );
-
-			// draw titlebar
-			draw_list->AddRectFilled( ImVec2( section_pos_left, window_area_min.y ), ImVec2( section_pos_right, window_area_min.y + title_size.y ), border_color, style.FrameRounding, ImDrawFlags_RoundCornersAll );
-			draw_list->AddText( title_pos, ImColor( 0, 0, 0 ), title );
-
-			// draw grab points
-			//draw_list->AddRectFilled( ImVec2( section_pos_left, window_area_min.y ), ImVec2( section_pos_left + 16, window_area_max.y ), SECTION_COLOR_BORDER );
-			//draw_list->AddRectFilled( ImVec2( section_pos_right - 16, window_area_min.y ), ImVec2( section_pos_right, window_area_max.y ), SECTION_COLOR_BORDER );
-
-			// if ( !capture_inputs )
-			// 	continue;
-
-			// check if we want to select this one
-			if ( io.MouseClicked[ 0 ] && point_in_rect( mouse_pos, ImVec2( section_pos_left, window_area_min.y ), ImVec2( section_pos_right, window_area_max.y ) ) )
+			for ( size_t time_i = 0; time_i < source_use.time_range.size(); time_i++ )
 			{
-				g_selected_section = time_i;
-				just_selected_section = true;
-			}
+				clip_time_range_t& time_range        = source_use.time_range[ time_i ];
 
-			if ( section_resize )
-				continue;
+				int                section_pos_left  = seek_pos_start + seek_area * ( time_range.start / source.metadata.duration );
+				int                section_pos_right = seek_pos_start + seek_area * ( time_range.end / source.metadata.duration );
 
-			// if ( !io.MouseClicked[ 0 ] )
-			// 	continue;
+				bool               is_selected       = g_selected_section == time_i;
+				ImColor            border_color      = is_selected ? SECTION_COLOR_SELECT_BORDER : SECTION_COLOR_BORDER;
 
-			// check left side for hit detection
-			if ( point_in_rect( mouse_pos, ImVec2( section_pos_left, window_area_min.y ), ImVec2( section_pos_left + 4, window_area_max.y ) ) )
-			{
-				ImGui::SetMouseCursor( ImGuiMouseCursor_ResizeEW );
+				draw_list->AddRectFilled( ImVec2( section_pos_left, window_area_min.y ), ImVec2( section_pos_right, window_area_max.y ), border_color, style.FrameRounding, ImDrawFlags_RoundCornersAll );
+				draw_list->AddRectFilled( ImVec2( section_pos_left + 1, window_area_min.y + 1 ), ImVec2( section_pos_right - 1, window_area_max.y - 1 ), SECTION_COLOR_BASE, style.FrameRounding, ImDrawFlags_RoundCornersAll );
 
-				if ( !io.MouseClicked[ 0 ] )
+				char title[ 16 ]{};
+				snprintf( title, 16, "%d", time_i );
+
+				ImVec2 title_text_size = ImGui::CalcTextSize( title );
+
+				ImVec2 title_size      = title_text_size;
+				title_size.x += style.FramePadding.x * 2;
+				title_size.y += style.FramePadding.y * 2;
+
+				ImVec2 title_pos( section_pos_left + style.FramePadding.x, window_area_min.y + style.FramePadding.y );
+
+				// draw titlebar
+				draw_list->AddRectFilled( ImVec2( section_pos_left, window_area_min.y ), ImVec2( section_pos_right, window_area_min.y + title_size.y ), border_color, style.FrameRounding, ImDrawFlags_RoundCornersAll );
+				draw_list->AddText( title_pos, ImColor( 0, 0, 0 ), title );
+
+				// draw grab points
+				//draw_list->AddRectFilled( ImVec2( section_pos_left, window_area_min.y ), ImVec2( section_pos_left + 16, window_area_max.y ), SECTION_COLOR_BORDER );
+				//draw_list->AddRectFilled( ImVec2( section_pos_right - 16, window_area_min.y ), ImVec2( section_pos_right, window_area_max.y ), SECTION_COLOR_BORDER );
+
+				// if ( !capture_inputs )
+				// 	continue;
+
+				#if 0
+
+				// check if we want to select this one
+				if ( io.MouseClicked[ 0 ] && point_in_rect( mouse_pos, ImVec2( section_pos_left, window_area_min.y ), ImVec2( section_pos_right, window_area_max.y ) ) )
+				{
+					g_selected_section    = time_i;
+					just_selected_section = true;
+				}
+
+				if ( section_resize )
 					continue;
 
-				section_resize           = true;
-				section_resize_left      = true;
-				section_resize_index     = time_i;
-				section_resize_seek_time = 0.f;
-			}
+				// if ( !io.MouseClicked[ 0 ] )
+				// 	continue;
 
-			// check right side for hit detection
-			else if ( point_in_rect( mouse_pos, ImVec2( section_pos_right - 4, window_area_min.y ), ImVec2( section_pos_right, window_area_max.y ) ) )
-			{
-				ImGui::SetMouseCursor( ImGuiMouseCursor_ResizeEW );
+				// check left side for hit detection
+				if ( point_in_rect( mouse_pos, ImVec2( section_pos_left, window_area_min.y ), ImVec2( section_pos_left + 4, window_area_max.y ) ) )
+				{
+					ImGui::SetMouseCursor( ImGuiMouseCursor_ResizeEW );
 
-				if ( !io.MouseClicked[ 0 ] )
-					continue;
+					if ( !io.MouseClicked[ 0 ] )
+						continue;
 
-				section_resize           = true;
-				section_resize_index     = time_i;
-				section_resize_seek_time = 0.f;
+					section_resize           = true;
+					section_resize_left      = true;
+					section_resize_index     = time_i;
+					section_resize_seek_time = 0.f;
+				}
+
+				// check right side for hit detection
+				else if ( point_in_rect( mouse_pos, ImVec2( section_pos_right - 4, window_area_min.y ), ImVec2( section_pos_right, window_area_max.y ) ) )
+				{
+					ImGui::SetMouseCursor( ImGuiMouseCursor_ResizeEW );
+
+					if ( !io.MouseClicked[ 0 ] )
+						continue;
+
+					section_resize           = true;
+					section_resize_index     = time_i;
+					section_resize_seek_time = 0.f;
+				}
+				#endif
 			}
 		}
 
+		#if 0
 		// Process section resizing
 		if ( section_resize )
 		{
@@ -481,6 +604,14 @@ void timeline_draw()
 					}
 				}
 
+				constexpr double SEEK_POS_SNAP = 0.5;
+
+				// check if close enough to seek time to snap to
+				if ( MAX( 0, time_pos - SEEK_POS_SNAP ) <= new_time_pos && new_time_pos <= MIN( duration, time_pos + SEEK_POS_SNAP ) )
+				{
+					new_time_pos = time_pos;
+				}
+
 				if ( section_resize_left )
 				{
 					// time_range.start         = std::clamp( std::min( new_time_pos, time_range.end - 0.1f ), min_start_time, time_range.end );
@@ -495,6 +626,7 @@ void timeline_draw()
 				}
 			}
 		}
+		#endif
 	}
 
 	// ------------------------------------------------------------------------------------------
@@ -504,7 +636,7 @@ void timeline_draw()
 	static float new_seek_percent = 0.f;
 	static float new_time_pos     = 0.f;
 
-	if ( duration && capture_inputs /*&& !section_resize*/ )
+	if ( durations.size() && capture_inputs && !section_resize )
 	{
 		if ( mouse_hovered && io.MouseClicked[ 0 ] )
 		{
@@ -520,16 +652,9 @@ void timeline_draw()
 		if ( seek_drag )
 		{
 			new_seek_percent = mouse_pos_local.x / seek_area;
-			new_time_pos     = section_resize ? section_resize_seek_time : duration * new_seek_percent;
+			new_time_pos     = section_resize ? section_resize_seek_time : duration_total * new_seek_percent;
 
 			timeline_set_seek_time( new_time_pos );
-
-			// convert float to string in c
-			// char time_pos_str[ 16 ];
-			// gcvt( new_time_pos, 4, time_pos_str );
-			// 
-			// const char* cmd[]   = { "seek", time_pos_str, "absolute", NULL };
-			// int         cmd_ret = p_mpv_command_async( g_mpv, 0, cmd );
 		}
 		else
 		{
@@ -552,6 +677,7 @@ void timeline_draw()
 	// ------------------------------------------------------------------------------------------
 	// Draw 2 Marker positions
 
+#if 0
 	for ( int marker_i = 0; marker_i < 2; marker_i++ )
 	{
 		if ( !g_timeline_marker_active[ marker_i ] )
@@ -589,21 +715,23 @@ void timeline_draw()
 
 		draw_list->AddText( ImVec2( marker_pos_final - ( style.FramePadding.x - 1 ), window_cursor_pos.y + style.FramePadding.y ), ImColor( 0, 0, 0 ), marker_i == 0 ? "A" : "B" );
 	}
+#endif
 	
 	// ------------------------------------------------------------------------------------------
 	// Draw Seek position on top of everything
 
-	double time_pos_seconds = duration ? duration / time_pos : 0;
-	int    seek_pos_final   = duration ? ( seek_area / time_pos_seconds ) + seek_pos_start : seek_pos_start;
+	double time_pos_seconds = duration_total ? duration_total / time_pos : 0;
+	int    seek_pos_final   = duration_total ? ( seek_area / time_pos_seconds ) + seek_pos_start : seek_pos_start;
 
-	if ( section_resize )
-	{
-		seek_pos_final = seek_area / ( duration / section_resize_seek_time ) + seek_pos_start;
-	}
-	else if ( seek_drag )
+	// if ( section_resize )
+	// {
+	// 	seek_pos_final = seek_area / ( duration / section_resize_seek_time ) + seek_pos_start;
+	// }
+	// else if ( seek_drag )
+	if ( seek_drag && !section_resize )
 	{
 		// use seek drag position instead
-		seek_pos_final = duration ? ( seek_area * new_seek_percent ) + seek_pos_start : seek_pos_start;
+		seek_pos_final = duration_total ? ( seek_area * new_seek_percent ) + seek_pos_start : seek_pos_start;
 	}
 
 	ImColor seek_color = ImColor( style.Colors[ ImGuiCol_Border ].x, style.Colors[ ImGuiCol_Border ].y, style.Colors[ ImGuiCol_Border ].z );

@@ -193,19 +193,6 @@ void draw_playback_controls( int size[ 2 ], bool draw_volume )
 	util_format_time( str_time_pos, time_pos );
 	util_format_time( str_duration, duration );
 
-	ImGui::Text( "%s / %s |", str_time_pos, str_duration );
-	// ImGui::ProgressBar( time_pos / duration );
-
-	ImGui::SameLine();
-	if ( mpv_get_current_video() )
-	{
-		ImGui::TextUnformatted( mpv_get_current_video() );
-	}
-	else
-	{
-		ImGui::TextUnformatted( "[No Video Loaded]" );
-	}
-
 	// draw audio track name
 	// audio track test
 	//char* audio_track       = 0;
@@ -220,8 +207,23 @@ void draw_playback_controls( int size[ 2 ], bool draw_volume )
 	char*        audio_track_name     = 0;
 	audio_ret                         = (mpv_error)p_mpv_get_property( g_mpv, "current-tracks/audio/title", MPV_FORMAT_STRING, &audio_track_name );
 
+	//ImGui::PushStyleVarX( ImGuiStyleVar_ItemSpacing, 0.f );
+
+	ImGui::Text( "%s / %s", str_time_pos, str_duration );
+
 	ImGui::SameLine();
-	ImGui::Text( "| Audio: %s", audio_track_name );
+	ImGui::SeparatorEx( ImGuiSeparatorFlags_Vertical );
+	ImGui::SameLine();
+
+	ImGui::TextUnformatted( mpv_get_current_video() ? mpv_get_current_video() : "No Video Loaded" );
+
+	ImGui::SameLine();
+	ImGui::SeparatorEx( ImGuiSeparatorFlags_Vertical );
+	ImGui::SameLine();
+
+	ImGui::Text( "Audio: %s", audio_track_name ? audio_track_name : "" );
+
+	//ImGui::PopStyleVar();
 
 	ImGui::Separator();
 
@@ -561,10 +563,10 @@ void save_videos()
 	if ( g_clip_load_thread_state != e_clip_parse_state_idle )
 		return;
 
-	if ( clip_save_videos( g_clip_data, g_videos_file_path ) )
-	{
-		g_save_timer = 5000.f;
-	}
+	//if ( clip_save_videos( g_clip_data, g_videos_file_path ) )
+	//{
+	//	g_save_timer = 5000.f;
+	//}
 }
 
 
@@ -1056,7 +1058,7 @@ void update_dpi( float dpi_override )
 
 bool sdl_window_resize_watcher( void* userdata, SDL_Event* event )
 {
-	if ( g_in_drag_drop )
+	if ( g_in_drag_drop || g_pause_window_events )
 		return true;
 
 	if ( SDL_GetWindowFlags( g_main_window ) & SDL_WINDOW_MINIMIZED )
@@ -1293,7 +1295,7 @@ auto main( int argc, char* argv[] ) -> int
 
 	// calculate the size of the mpv window (what about DPI Scale here later?)
 	g_mpv_size[ 0 ] = g_window_size[ 0 ] - 600;  // replay editor/sidebar
-	g_mpv_size[ 1 ] = g_window_size[ 1 ] - 200;   // playback controls
+	g_mpv_size[ 1 ] = g_window_size[ 1 ] - 230;  // playback controls
 
 	g_main_window   = SDL_CreateWindow( "Replay Maker", g_window_size[ 0 ], g_window_size[ 1 ], SDL_WINDOW_RESIZABLE | SDL_WINDOW_OPENGL | SDL_WINDOW_HIGH_PIXEL_DENSITY | SDL_WINDOW_HIDDEN );
 

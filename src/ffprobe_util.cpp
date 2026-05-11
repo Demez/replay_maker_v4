@@ -168,7 +168,7 @@ float get_video_bitrate( const char* path )
 }
 
 
-// makes sure the time range desired is valid for this input video
+// makes sure the time range desired is valid for this source video
 bool valid_time_range( clip_time_range_t& range, video_metadata_t& metadata )
 {
 	if ( range.start > range.end )
