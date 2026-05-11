@@ -668,6 +668,52 @@ void update_recently_opened( const char* clips_file )
 }
 
 
+// ===============================================================================================
+
+
+std::thread*       g_clip_load_thread       = nullptr;
+e_clip_parse_state g_clip_load_thread_state = e_clip_parse_state_idle;
+
+
+// background clip data parsing
+void clip_thread_worker( clip_data_t* data, const char* path )
+{
+	clip_parse_videos( data, path );
+	g_clip_load_thread_state = e_clip_parse_state_finished;
+}
+
+
+void clip_thread_open_file( clip_data_t* data, const char* path )
+{
+	if ( g_clip_load_thread_state != e_clip_parse_state_idle )
+	{
+		return;
+	}
+
+	g_clip_load_thread       = new std::thread( clip_thread_worker, data, path );
+	g_clip_load_thread_state = e_clip_parse_state_running;
+}
+
+
+e_clip_parse_state clip_thread_state()
+{
+	if ( g_clip_load_thread_state == e_clip_parse_state_finished )
+	{
+		g_clip_load_thread->join();
+		delete g_clip_load_thread;
+		g_clip_load_thread       = nullptr;
+
+		g_clip_load_thread_state = e_clip_parse_state_idle;
+		return e_clip_parse_state_finished;
+	}
+
+	return g_clip_load_thread_state;
+}
+
+
+// ===============================================================================================
+
+
 void imgui_set_theme_steam_green()
 {
 	// Classic VGUI2 Style Color Scheme
@@ -1125,6 +1171,7 @@ void style_imgui()
 	style.ScrollbarRounding  = 3;
 }
 
+
 void load_font( const char* path, int size, ImFont*& dst, ImFontConfig& font_cfg, bool load_symbols )
 {
 	font_cfg.FontLoaderFlags |= ImGuiFreeTypeLoaderFlags_LoadColor;
@@ -1156,7 +1203,6 @@ void load_font( const char* path, int size, ImFont*& dst, ImFontConfig& font_cfg
 	}
 #endif
 }
-
 
 
 auto main( int argc, char* argv[] ) -> int
@@ -1371,7 +1417,9 @@ auto main( int argc, char* argv[] ) -> int
 		if ( fs_is_file( argv[ 1 ] ) )
 		{
 			// assume these are clips
-			if ( clip_parse_videos( g_clip_data, argv[ 1 ] ) )
+			// if ( clip_parse_videos( g_clip_data, argv[ 1 ] ) )
+			clip_thread_open_file( g_clip_data, argv[ 1 ] );
+
 			{
 				update_recently_opened( argv[ 1 ] );
 				g_videos_file_path = strdup( argv[ 1 ] );

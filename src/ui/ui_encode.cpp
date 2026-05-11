@@ -3,7 +3,7 @@
 
 #include "imgui_internal.h"
 
-bool used_in_preset( clip_encode_override_t& override, u32 preset_i );
+bool used_in_preset( clip_encode_settings_t& override, u32 preset_i );
 
 // makes sure the time range desired is valid for this input video
 bool valid_time_range( clip_time_range_t& range, video_metadata_t& metadata );
@@ -75,9 +75,6 @@ void encode_draw_sidebar()
 				clip_output_video_t& output     = g_clip_data->output[ vid_i ];
 				enc_output_video_t&  enc_output = g_output_videos[ vid_i ];
 
-				if ( !enc_output.valid )
-					continue;
-
 				u32 preset_idx = g_encoder_data.encode_preset;
 
 				if ( preset_select > -1 )
@@ -93,7 +90,7 @@ void encode_draw_sidebar()
 				{
 					clip_input_video_t& input = output.input[ in_i ];
 
-					if ( used_in_preset( input.encode_overrides, preset_idx ) )
+					if ( used_in_preset( input.encode_settings, preset_idx ) )
 					{
 						is_used_in_preset = true;
 					}
@@ -104,7 +101,7 @@ void encode_draw_sidebar()
 
 					for ( u32 time_i = 0; time_i < input.time_range_count; time_i++ )
 					{
-						if ( !valid_time_range( input.time_range[ time_i ], enc_output.metadata[ in_i ] ) )
+						if ( !valid_time_range( input.time_range[ time_i ], input.metadata ) )
 							duration_invalid = true;
 
 						duration += input.time_range[ time_i ].end - input.time_range[ time_i ].start;
@@ -117,7 +114,7 @@ void encode_draw_sidebar()
 				char name_buf[ 512 ]{};
 				snprintf( name_buf, 512, " %zu - %s", vid_i, output.name );
 
-				bool draw_bg_color = enc_output.state != e_enc_output_state_wait;
+				bool draw_bg_color = output.state != e_output_state_wait;
 
 				if ( draw_bg_color )
 				{
@@ -135,23 +132,24 @@ void encode_draw_sidebar()
 
 					ImColor color = style.Colors[ ImGuiCol_Button ];
 
-					switch ( enc_output.state )
+					switch ( output.state )
 					{
 						default:
-						case e_enc_output_state_running:
-						case e_enc_output_state_count:
+						case e_output_state_running:
+						case e_output_state_count:
 							break;
 
-						case e_enc_output_state_user_skipped:
+						case e_output_state_user_skipped:
 							color = COLOR_PURPLE;
 							break;
 
-						case e_enc_output_state_failed:
+						case e_output_state_failed:
+						case e_output_state_invalid:
 							color = COLOR_BTN_RED;
 							break;
 
-						case e_enc_output_state_finished:
-						case e_enc_output_state_already_finished:
+						case e_output_state_finished:
+						case e_output_state_already_finished:
 							color = COLOR_GREEN;
 							break;
 					}
@@ -283,14 +281,14 @@ void encode_draw_output_info()
 	{
 		clip_input_video_t& input = output.input[ in_i ];
 
-		if ( !used_in_preset( input.encode_overrides, preset_idx ) )
+		if ( !used_in_preset( input.encode_settings, preset_idx ) )
 			continue;
 
 		ImGui::Text( "Source %u: %s", in_i, input.path );
 
 		for ( u32 time_i = 0; time_i < input.time_range_count; time_i++ )
 		{
-			if ( !valid_time_range( input.time_range[ time_i ], enc_output.metadata[ in_i ] ) )
+			if ( !valid_time_range( input.time_range[ time_i ], input.metadata ) )
 			{
 				duration_invalid = true;
 				continue;

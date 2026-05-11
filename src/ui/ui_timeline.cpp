@@ -141,7 +141,7 @@ void timeline_draw()
 			ImGui::SameLine();
 
 			clip_input_video_t& current_input = g_clip_current_output->input[ g_clip_current_input ];
-			draw_preset_override( current_input.encode_overrides, true );
+			draw_preset_override( current_input.encode_settings, true );
 		}
 	}
 
@@ -172,7 +172,7 @@ void timeline_draw()
 				clip_input_video_t& input = g_clip_current_output->input[ input_i ];
 
 				char                title[ 64 ]{};
-				snprintf( title, 64, "Entry %d | %d Sections | %d Presets", input_i, input.time_range_count, input.encode_overrides.presets_count );
+				snprintf( title, 64, "Entry %d | %d Sections | %d Presets", input_i, input.time_range_count, input.encode_settings.presets_count );
 
 				bool selected_tab_ref = g_clip_current_input == input_i;
 				bool selected_tab = g_clip_current_input == input_i;

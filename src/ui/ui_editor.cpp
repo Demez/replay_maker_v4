@@ -20,7 +20,7 @@ u32                            g_clip_delete_input      = UINT32_MAX;
 char                           g_output_name_buf[ 512 ] = { 0 };
 
 
-static clip_encode_override_t* g_encode_override        = nullptr;
+static clip_encode_settings_t* g_encode_override        = nullptr;
 static clip_time_range_t*      g_edit_time_range        = nullptr;
 
 // constexpr ImVec4               g_selected_btn_color( 1.f, 1.f, 1.f, 1.f );
@@ -84,7 +84,7 @@ void draw_replay_info_menu_bar()
 			if ( result == NFD_OKAY )
 			{
 				g_videos_file_path = util_strdup_r( g_videos_file_path, out_path );
-				clip_parse_videos( g_clip_data, out_path );
+				clip_thread_open_file( g_clip_data, out_path );
 				update_recently_opened( out_path );
 				NFD_FreePathU8( out_path );
 			}
@@ -114,7 +114,7 @@ void draw_replay_info_menu_bar()
 				if ( ImGui::MenuItem( file_name ) )
 				{
 					g_videos_file_path = util_strdup_r( g_videos_file_path, g_recently_opened[ i ] );
-					clip_parse_videos( g_clip_data, g_recently_opened[ i ] );
+					clip_thread_open_file( g_clip_data, g_recently_opened[ i ] );
 					update_recently_opened( g_recently_opened[ i ] );
 				}
 
@@ -252,10 +252,11 @@ bool replay_editor_set_video( u32 output_i, u32 input_i )
 
 	clip_output_video_t& output = g_clip_data->output[ output_i ];
 
-	if ( input_i > output.input_count )
+	if ( input_i >= output.input_count )
 	{
+		input_i = 0;
 		printf( "invalid input index\n" );
-		return false;
+		// return false;
 	}
 
 	replay_editor_reset();
@@ -272,12 +273,20 @@ bool replay_editor_set_video( u32 output_i, u32 input_i )
 
 void replay_editor_load_input( u32 output_i, u32 input_i )
 {
-	if ( !replay_editor_set_video( output_i, input_i ) )
-		return;
+	replay_editor_set_video( output_i, input_i );
+	///if ( !replay_editor_set_video( output_i, input_i ) )
+	//	return;
 
 	float cur_start_time = g_time_range_start;
 
 	clip_output_video_t& output = g_clip_data->output[ output_i ];
+
+	if ( output.input_count <= input_i )
+	{
+		mpv_cmd_close_video();
+		g_focus_replay_maker = true;
+		return;
+	}
 
 	clip_input_video_t& input = output.input[ input_i ];
 	g_focus_replay_maker      = true;
@@ -505,9 +514,9 @@ void draw_replay_list_entry( u64& imgui_id, u32 out_i, char* search_box, u32 pre
 
 				clip_input_video_t& input = output.input[ in_i ];
 
-				for ( u32 in_preset_i = 0; in_preset_i < input.encode_overrides.presets_count; in_preset_i++ )
+				for ( u32 in_preset_i = 0; in_preset_i < input.encode_settings.presets_count; in_preset_i++ )
 				{
-					u32 in_preset = input.encode_overrides.presets[ in_preset_i ];
+					u32 in_preset = input.encode_settings.presets[ in_preset_i ];
 
 					if ( in_preset == preset_i )
 					{
@@ -603,16 +612,19 @@ void draw_replay_list_entry( u64& imgui_id, u32 out_i, char* search_box, u32 pre
 	if ( current_output )
 		ImGui::PushStyleColor( ImGuiCol_Header, { 0.28f, 1.f, 0.21f, 0.31f } );
 
+	else if ( output.state == e_output_state_invalid )
+		ImGui::PushStyleColor( ImGuiCol_Header, COLOR_BTN_RED );
+
 	if ( !ImGui::CollapsingHeader( header_name, current_output ? ImGuiTreeNodeFlags_Selected | ImGuiTreeNodeFlags_Framed : 0 ) )
 	{
-		if ( current_output )
+		if ( current_output || output.state == e_output_state_invalid )
 			ImGui::PopStyleColor();
 
 		ImGui::PopID();
 		return;
 	}
 
-	if ( current_output )
+	if ( current_output || output.state == e_output_state_invalid )
 		ImGui::PopStyleColor();
 
 	ImGui::PopID();
@@ -677,6 +689,8 @@ void draw_replay_list( int size[ 2 ] )
 	static char               search_box[ 128 ] = { 0 };
 	static u32                prefix_search     = UINT32_MAX;
 	static std::vector< u32 > preset_search;
+
+	ImGui::BeginDisabled( clip_thread_state() != e_clip_parse_state_idle );
 
 	if ( ImGui::BeginChild( "clip_filtering", {}, ImGuiChildFlags_Borders | ImGuiChildFlags_AutoResizeY ) )
 	{
@@ -1008,7 +1022,7 @@ void draw_replay_list( int size[ 2 ] )
 
 	// ===================================================================================
 
-	if ( g_clip_reorder_drag.active && ImGui::IsMouseReleased( ImGuiMouseButton_Left ) )
+	if ( clip_thread_state() == e_clip_parse_state_idle && g_clip_reorder_drag.active && ImGui::IsMouseReleased( ImGuiMouseButton_Left ) )
 	{
 		g_clip_reorder_drag.active = false;
 		clip_move_output( g_clip_data, g_clip_reorder_drag.clip_id, g_clip_reorder_drag.target_id );
@@ -1040,10 +1054,12 @@ void draw_replay_list( int size[ 2 ] )
 	}
 
 	g_clip_reorder_drag.just_selected = false;
+
+	ImGui::EndDisabled();
 }
 
 
-void draw_preset_override_single( clip_encode_override_t& override )
+void draw_preset_override_single( clip_encode_settings_t& override )
 {
 	u32 selected = override.presets_count ? override.presets[ 0 ] : UINT32_MAX;
 
@@ -1059,7 +1075,7 @@ void draw_preset_override_single( clip_encode_override_t& override )
 }
 
 
-void draw_preset_override( clip_encode_override_t& override, bool edit )
+void draw_preset_override( clip_encode_settings_t& override, bool edit )
 {
 	ImGuiStyle& style = ImGui::GetStyle();
 
@@ -1186,7 +1202,7 @@ void draw_edit_override_button( T*& selected, T* item, const char* name )
 }
 
 
-void draw_preset_override_button( clip_encode_override_t* override, const char* name )
+void draw_preset_override_button( clip_encode_settings_t* override, const char* name )
 {
 	draw_edit_override_button( g_encode_override, override, name );
 }
@@ -1258,7 +1274,7 @@ void draw_input_video_edit( u32 input_i, clip_input_video_t* input, bool edit )
 
 	ImGui::Separator();
 
-	draw_preset_override( input->encode_overrides, edit );
+	draw_preset_override( input->encode_settings, edit );
 
 	// display input video times
 	if ( input->time_range_count == 0 )

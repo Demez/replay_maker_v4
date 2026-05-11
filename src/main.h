@@ -3,10 +3,10 @@
 #include "util.h"
 #include "logging.h"
 #include "imgui.h"
-#include "glad.h"
 #include "encoder/encoder.h"
 #include "clip/clip.h"
 
+#include "glad.h"
 #include "SDL3/SDL.h"
 
 #include "mpv/client.h"
@@ -17,6 +17,14 @@
 
 
 // --------------------------------------------------------------------------------------------------------
+
+
+enum e_clip_parse_state
+{
+	e_clip_parse_state_idle,
+	e_clip_parse_state_running,
+	e_clip_parse_state_finished,
+};
 
 
 // metadata grabbed on video load from mpv
@@ -120,6 +128,7 @@ void                               mpv_draw_frame();
 void                               mpv_window_resize();
 
 void                               mpv_cmd_loadfile( const char* file );
+void                               mpv_cmd_close_video();
 void                               mpv_cmd_toggle_playback();
 void                               mpv_cmd_seek_offset( double seconds );
 
@@ -156,7 +165,14 @@ constexpr e_mod_mask               e_mod_mask_count = 8;
 
 void                               handle_keybinds();
 
+
 // --------------------------------------------------------------------------------------------------------
+
+// ffprobe stuff
+bool                               get_video_metadata( const char* path, video_metadata_t& metadata );
+float                              get_video_bitrate( const char* path );
+
+bool                               valid_time_range( clip_time_range_t& range, video_metadata_t& metadata );
 
 void                               calc_imgui_window_size( int index, ivec2& size );
 void                               calc_playback_window_size( ivec2& size );
@@ -171,11 +187,15 @@ void                               draw_playback_controls( int window_size[ 2 ],
 void                               replay_editor_load_input( u32 output_i, u32 input_i );
 void                               replay_editor_reset();
 
-void                               draw_preset_override( clip_encode_override_t& override, bool edit );
+void                               draw_preset_override( clip_encode_settings_t& override, bool edit );
 
 void                               enable_sidebar( bool enabled );
 void                               window_on_resize();
 void                               window_render_all();
+
+// background clip data parsing
+void                               clip_thread_open_file( clip_data_t* data, const char* path );
+e_clip_parse_state                 clip_thread_state();
 
 // save encode presets and video prefixes
 void                               save_settings();

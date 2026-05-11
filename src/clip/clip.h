@@ -3,6 +3,8 @@
 #include "util.h"
 #include "clip/json5.h"
 
+#include <unordered_map>
+
 
 constexpr size_t MAX_LEN_EXT           = 5;
 constexpr size_t MAX_LEN_PRESET_NAME   = 64;
@@ -21,8 +23,36 @@ enum e_encode_preset
 };
 
 
+enum e_output_state
+{
+	e_output_state_invalid,  // there is something wrong with the video in some way that prevents us from processing it
+	e_output_state_wait,
+	e_output_state_running,
+	e_output_state_finished,
+	e_output_state_already_finished,
+	e_output_state_user_skipped,
+	e_output_state_failed,
+
+	e_output_state_count,
+};
+
+
+struct video_metadata_t
+{
+	int   width    = 0.f;
+	int   height   = 0.f;
+	float bitrate  = 0.f;
+	float duration = 0.f;
+	float fps      = 0.f;
+
+	// stored as 24/1 fps
+	float fps_num  = 0.f;
+	float fps_den  = 0.f;
+};
+
+
 // controls how to use parts of videos in a encode preset
-struct clip_encode_override_t
+struct clip_encode_settings_t
 {
 	// TODO: implement this! this will only be allowed with one encode preset being used, and still needs a preset active to override
 	// or, should this just be global for the whole video? probably not imo
@@ -35,11 +65,8 @@ struct clip_encode_override_t
 
 struct clip_time_range_t
 {
-	float                  start;
-	float                  end;
-
-	// TODO: remove this, just makes things overly complicated
-	clip_encode_override_t encode_overrides;
+	float start;
+	float end;
 };
 
 
@@ -49,8 +76,11 @@ struct clip_input_video_t
 
 	clip_time_range_t*     time_range;
 	u32                    time_range_count;
+	bool                   file_missing;
 
-	clip_encode_override_t encode_overrides;
+	clip_encode_settings_t encode_settings;
+
+	video_metadata_t       metadata;
 };
 
 
@@ -62,6 +92,8 @@ struct clip_output_video_t
 	u32                    input_count;
 
 	u32                    prefix;
+
+	e_output_state         state;
 	bool                   enabled;  // if false, don't encode this video
 };
 
@@ -123,6 +155,10 @@ void                  clip_free( clip_data_t* data );
 bool                  clip_parse_settings( clip_data_t* data, const char* path );
 bool                  clip_parse_videos( clip_data_t* data, const char* path );
 
+void                  clip_get_video_metadata( clip_input_video_t& input );
+void                  clip_check_video( clip_data_t* data, clip_output_video_t& output );
+void                  clip_check_videos( clip_data_t* data );
+
 void                  clip_save_settings( clip_data_t* data, const char* path );
 bool                  clip_save_videos( clip_data_t* data, const char* path );
 
@@ -149,8 +185,8 @@ void                  clip_add_time_range( clip_output_video_t* output, u32 inpu
 void                  clip_remove_time_range( clip_output_video_t* output, u32 input_i, u32 time_range );
 void                  clip_duplicate_time_range( clip_output_video_t* output, u32 input_i, u32 time_range );
 
-void                  clip_add_preset_to_encode_override( clip_data_t* data, clip_encode_override_t& override, const char* preset_name );
-void                  clip_add_preset_to_encode_override( clip_data_t* data, clip_encode_override_t& override, u32 preset_index );
+void                  clip_add_preset_to_encode_override( clip_data_t* data, clip_encode_settings_t& override, const char* preset_name );
+void                  clip_add_preset_to_encode_override( clip_data_t* data, clip_encode_settings_t& override, u32 preset_index );
 
 void                  clip_move_output( clip_data_t* data, u32 output_id, u32 insert_position );
 

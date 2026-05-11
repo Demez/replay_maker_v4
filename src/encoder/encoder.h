@@ -14,49 +14,14 @@ enum e_target_size_state
 };
 
 
-enum e_enc_output_state
-{
-	e_enc_output_state_wait,
-	e_enc_output_state_running,
-	e_enc_output_state_finished,
-	e_enc_output_state_already_finished,
-	e_enc_output_state_user_skipped,
-	e_enc_output_state_failed,
-
-	e_enc_output_state_count,
-};
-
-
-struct video_metadata_t
-{
-	int   width    = 0.f;
-	int   height   = 0.f;
-	float bitrate  = 0.f;
-	float duration = 0.f;
-	float fps      = 0.f;
-
-	// stored as 24/1 fps
-	float fps_num  = 0.f;
-	float fps_den  = 0.f;
-};
-
-
 // encoder output video
 struct enc_output_video_t
 {
 	clip_output_video_t* output;
 
-	bool*                missing_inputs;
-
-	// array of video metadata, index is equal to input video index in output
-	video_metadata_t*    metadata;
-
 	// presets this output video uses
 	u32*                 presets;
 	u32                  presets_count;
-
-	bool                 valid;
-	e_enc_output_state   state;
 
 	// ffmpeg output
 	std::mutex           ffmpeg_output_lock;

@@ -432,19 +432,76 @@ void mpv_cmd_add_video_zoom( float zoom )
 
 void mpv_cmd_loadfile( const char* file )
 {
+	if ( !g_mpv )
+		return;
+
 	printf( "loading file: %s\n", file );
 
 	const char* cmd[]   = { "loadfile", file, NULL };
-	int         cmd_ret = p_mpv_command( g_mpv, cmd );
+	int         cmd_ret = p_mpv_command_async( g_mpv, NULL, cmd );
 
-	mpv_event*  event   = p_mpv_wait_event( g_mpv, 0.01f );
+	//g_mpv_video_ready   = false;
 
-	if ( g_current_video != nullptr )
-		free( g_current_video );
+	// mpv_event*  event   = p_mpv_wait_event( g_mpv, 0.1f );
+	// mpv_handle_wait_event( g_mpv, 0.1f );
 
+	free( g_current_video );
+	g_current_video  = nullptr;
+
+	mpv_event* event = p_mpv_wait_event( g_mpv, -1 );
+
+	while ( event->event_id != MPV_EVENT_NONE )
+	{
+		if ( event->event_id == MPV_EVENT_LOG_MESSAGE )
+		{
+			struct mpv_event_log_message* msg = (struct mpv_event_log_message*)event->data;
+			printf( "[%s] %s: %s", msg->prefix, msg->level, msg->text );
+		}
+		else if ( event->event_id == MPV_EVENT_COMMAND_REPLY )
+		{
+			if ( event->error != 0 )
+			{
+				printf( "failed to load video - %d\n", event->error );
+				return;
+			}
+
+			// Video Loaded
+			//break;
+		}
+		else if ( event->event_id == MPV_EVENT_PLAYBACK_RESTART )
+		{
+			// Video Loaded
+			break;
+		}
+
+		event = p_mpv_wait_event( g_mpv, -1 );
+	}
+
+	// Video Loaded
 	g_current_video = util_strdup( file );
 
 	get_media_info();
+
+	// or use video-params?
+	//	p_mpv_get_property( g_mpv, "width", MPV_FORMAT_INT64, &g_video_width );
+	//	p_mpv_get_property( g_mpv, "height", MPV_FORMAT_INT64, &g_video_height );
+	//
+	//	p_mpv_get_property( g_mpv, "height", MPV_FORMAT_INT64, &g_video_height );
+}
+
+
+void mpv_cmd_close_video()
+{
+	if ( !g_mpv )
+		return;
+
+	const char* cmd[]   = { "stop", NULL };
+	int         cmd_ret = p_mpv_command_async( g_mpv, NULL, cmd );
+
+	free( g_current_video );
+	g_current_video   = nullptr;
+
+	// g_mpv_video_ready = false;
 }
 
 

@@ -1,5 +1,9 @@
 #include "clip.h"
 #include "logging.h"
+#include "main.h"
+
+
+std::unordered_map< std::string, video_metadata_t > g_video_metadata_map;
 
 
 // --------------------------------------------------------------------------------------------------------
@@ -238,7 +242,7 @@ bool clip_parse_settings( clip_data_t* data, const char* path )
 // ============================================================================================================================
 
 
-void clip_parse_encode_override( clip_data_t* data, clip_encode_override_t& override, json_object_t& root )
+void clip_parse_encode_override( clip_data_t* data, clip_encode_settings_t& override, json_object_t& root )
 {
 	if ( root.aType != e_json_type_object )
 	{
@@ -373,7 +377,7 @@ bool clip_parse_input( clip_data_t* data, clip_output_video_t& output, json_obje
 		}
 		else if ( util_strncmp( "encode_overrides", 16, object.aName.data, object.aName.size ) )
 		{
-			clip_parse_encode_override( data, input.encode_overrides, object );
+			clip_parse_encode_override( data, input.encode_settings, object );
 		}
 		else if ( util_strncmp( "time_ranges", 11, object.aName.data, object.aName.size ) )
 		{
@@ -404,7 +408,8 @@ bool clip_parse_input( clip_data_t* data, clip_output_video_t& output, json_obje
 
 						if ( util_strncmp( time_entry.aName.data, time_entry.aName.size, "encode_overrides", 16 ) )
 						{
-							clip_parse_encode_override( data, time_range.encode_overrides, time_entry );
+							log_printf( log_error, "ENCODE OVERRIDES IN TIME RANGE - OBSOLETE\n" );
+							// clip_parse_encode_override( data, time_range.encode_settings, time_entry );
 						}
 						else if ( util_strncmp( time_entry.aName.data, time_entry.aName.size, "start", 5 ) )
 						{
@@ -435,6 +440,8 @@ bool clip_parse_input( clip_data_t* data, clip_output_video_t& output, json_obje
 			log_printf( "unknown input video property: \"%s\"\n", object.aName.data );
 		}
 	}
+
+	clip_get_video_metadata( input );
 
 	return true;
 }
@@ -496,6 +503,8 @@ void clip_parse_video( clip_data_t* data, json_object_t& root, u32 output_i )
 			log_printf( "unknown video property: \"%s\"\n", object.aName.data );
 		}
 	}
+
+	clip_check_video( data, output );
 }
 
 
@@ -594,12 +603,45 @@ bool clip_parse_videos( clip_data_t* data, const char* path )
 
 	json_free( root );
 	free( file );
+
+	// scan videos
+	clip_check_videos( data );
+
 	return true;
 
 fail:
 	json_free( root );
 	free( file );
 	return false;
+}
+
+
+void clip_get_video_metadata( clip_input_video_t& input )
+{
+	std::string path = input.path;
+	auto        it   = g_video_metadata_map.find( path );
+
+	if ( it != g_video_metadata_map.end() )
+	{
+		input.metadata = it->second;
+	}
+
+	get_video_metadata( input.path, input.metadata );
+	g_video_metadata_map[ path ] = input.metadata;
+}
+
+
+void clip_check_video( clip_data_t* data, clip_output_video_t& output )
+{
+	// TODO: check input time ranges and make sure it's valid
+
+	output.state = e_output_state_wait;
+}
+
+
+void clip_check_videos( clip_data_t* data )
+{
+
 }
 
 
@@ -638,7 +680,7 @@ static bool clip_save_encode_override( clip_data_t* data, clip_encode_override_t
 	return true;
 }
 #else
-static bool clip_save_encode_override( clip_data_t* data, clip_encode_override_t& encode_override, json_object_t& root )
+static bool clip_save_encode_override( clip_data_t* data, clip_encode_settings_t& encode_override, json_object_t& root )
 {
 	root.aName          = json_strn( "encode_overrides", 16 );
 	root.aType          = e_json_type_object;
@@ -770,7 +812,7 @@ bool clip_save_videos( clip_data_t* data, const char* path )
 				input_json.aObjects.data[ 0 ].aString = json_str( input.path );
 
 				// encode_overrides
-				if ( !clip_save_encode_override( data, input.encode_overrides, input_json.aObjects.data[ 1 ] ) )
+				if ( !clip_save_encode_override( data, input.encode_settings, input_json.aObjects.data[ 1 ] ) )
 				{
 					json_free( root );
 					return false;
@@ -999,11 +1041,13 @@ u32 clip_add_input( clip_output_video_t* output, const char* path )
 	strcpy( input->path, path );
 	input->path[ strlen( path ) ] = 0;
 
+	clip_get_video_metadata( *input );
+
 	return output->input_count++;
 }
 
 
-void duplicate_encode_overrides( clip_encode_override_t& src, clip_encode_override_t& dst )
+void duplicate_encode_overrides( clip_encode_settings_t& src, clip_encode_settings_t& dst )
 {
 	if ( src.presets )
 	{
@@ -1033,6 +1077,7 @@ u32 clip_duplicate_input( clip_output_video_t* output, u32 input_i )
 
 	clip_input_video_t& input_src = output->input[ input_i ];
 	clip_input_video_t& input_dst = output->input[ input_dst_i ];
+	input_dst.metadata            = input_src.metadata;
 
 	if ( input_src.time_range_count )
 	{
@@ -1043,12 +1088,10 @@ u32 clip_duplicate_input( clip_output_video_t* output, u32 input_i )
 		{
 			input_dst.time_range[ i ].start = input_src.time_range[ i ].start;
 			input_dst.time_range[ i ].end   = input_src.time_range[ i ].end;
-
-			duplicate_encode_overrides( input_src.time_range[ i ].encode_overrides, input_dst.time_range[ i ].encode_overrides );
 		}
 	}
 
-	duplicate_encode_overrides( input_src.encode_overrides, input_dst.encode_overrides );
+	duplicate_encode_overrides( input_src.encode_settings, input_dst.encode_settings );
 
 	return input_dst_i;
 }
@@ -1095,7 +1138,7 @@ void clip_remove_output( clip_data_t* data, u32 output_i )
 	{
 		free( output.input[ i ].path );
 		free( output.input[ i ].time_range );
-		free( output.input[ i ].encode_overrides.presets );
+		free( output.input[ i ].encode_settings.presets );
 	}
 
 	free( output.input );
@@ -1119,7 +1162,7 @@ void clip_remove_input( clip_output_video_t* output, u32 input_i )
 	
 	free( input.path );
 	free( input.time_range );
-	free( input.encode_overrides.presets );
+	free( input.encode_settings.presets );
 
 	util_array_remove_element( output->input, output->input_count, input_i );
 }
@@ -1197,12 +1240,10 @@ void clip_duplicate_time_range( clip_output_video_t* output, u32 input_i, u32 sr
 
 	dst_time.start              = src_time.start;
 	dst_time.end                = src_time.end;
-	
-	duplicate_encode_overrides( src_time.encode_overrides, dst_time.encode_overrides );
 }
 
 
-void clip_add_preset_to_encode_override( clip_data_t* data, clip_encode_override_t& override, u32 preset_index )
+void clip_add_preset_to_encode_override( clip_data_t* data, clip_encode_settings_t& override, u32 preset_index )
 {
 	if ( !data )
 		return;
@@ -1214,7 +1255,7 @@ void clip_add_preset_to_encode_override( clip_data_t* data, clip_encode_override
 }
 
 
-void clip_add_preset_to_encode_override( clip_data_t* data, clip_encode_override_t& override, const char* preset_name )
+void clip_add_preset_to_encode_override( clip_data_t* data, clip_encode_settings_t& override, const char* preset_name )
 {
 	if ( !data )
 		return;
