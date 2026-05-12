@@ -140,6 +140,17 @@ void handle_keybinds()
 	// Pause
 	else if ( ImGui::IsKeyPressed( ImGuiKey_Space, false ) )
 	{
+		double duration = 0;
+		double time_pos = 0;
+		p_mpv_get_property( g_mpv, "duration", MPV_FORMAT_DOUBLE, &duration );
+		p_mpv_get_property( g_mpv, "time-pos", MPV_FORMAT_DOUBLE, &time_pos );
+
+		if ( duration - 0.15 < time_pos )
+		{
+			// try to seek to next vid
+			timeline_advance();
+		}
+
 		mpv_cmd_toggle_playback();
 	}
 	else if ( ImGui::IsKeyPressed( ImGuiKey_MouseLeft, false ) )
@@ -149,11 +160,11 @@ void handle_keybinds()
 	}
 	else if ( ImGui::IsKeyPressed( ImGuiKey_LeftArrow, true ) )
 	{
-		mpv_cmd_seek_offset( -5.0 );
+		timeline_seek( -5.0 );
 	}
 	else if ( ImGui::IsKeyPressed( ImGuiKey_RightArrow, true ) )
 	{
-		mpv_cmd_seek_offset( 5.0 );
+		timeline_seek( 5.0 );
 	}
 
 	// Video Cropping/Panning Adjustments

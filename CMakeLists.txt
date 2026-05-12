@@ -180,6 +180,7 @@ set(
     src/encoder/encoder.h
     src/encoder/encoder_main.cpp
 	
+    src/clip/clip_parser.cpp
     src/clip/clip.cpp
     src/clip/clip.h
     src/clip/json5.cpp

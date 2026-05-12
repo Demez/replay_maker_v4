@@ -40,6 +40,7 @@ bool                g_running             = true;
 bool                g_fullscreen          = false;
 bool                g_in_window_drag      = false;
 bool                g_in_drag_drop        = false;
+bool                g_in_draw             = false;
 bool                g_pause_window_events = false;
 float               g_dpi                 = 1.f;
 
@@ -169,8 +170,11 @@ void draw_playback_controls( int size[ 2 ], bool draw_volume )
 	// is there a video playing?
 	
 	// HACK
-	if ( g_video_media_info.track_count == 0 )
+	if ( mpv_get_current_video() && g_video_media_info.track_count == 0 )
+	{
+		printf( "NO MEDIA INFO!\n" );
 		get_media_info();
+	}
 
 	// time-pos
 	double time_pos = 0;
@@ -235,33 +239,7 @@ void draw_playback_controls( int size[ 2 ], bool draw_volume )
 
 	ImGuiStyle&  style           = ImGui::GetStyle();
 
-	const ImVec2 seek_text_size  = ImGui::CalcTextSize( "Seek", NULL, true );
-	const ImVec2 vol_text_size   = ImGui::CalcTextSize( "Volume", NULL, true );
-
-	float        avaliable_width = size[ 0 ] - ( style.ItemSpacing.x * 2 );
-	float        vol_bar_width   = vol_text_size.x * 3;
-	float        seek_bar_width  = ( avaliable_width - seek_text_size.x );
-
 	timeline_draw();
-
-#if 0
-	if ( draw_volume )
-		seek_bar_width -= ( vol_bar_width + vol_text_size.x + ( style.ItemSpacing.x * 2 ) );
-
-	ImGui::SetNextItemWidth( seek_bar_width );
-
-	float time_pos_f = (float)time_pos;
-	if ( ImGui::SliderFloat( "Seek", &time_pos_f, 0.f, (float)duration ) )
-	{
-		// convert float to string in c
-		char time_pos_str[ 16 ];
-		gcvt( time_pos_f, 4, time_pos_str );
-
-		const char* cmd[]   = { "seek", time_pos_str, "absolute", NULL };
-		int         cmd_ret = p_mpv_command_async( g_mpv, 0, cmd );
-		printf( "seek - %d\n", cmd_ret );
-	}
-#endif
 
 	const ImVec2     label_size    = ImGui::CalcTextSize( "Pause", NULL, true );
 	ImVec2           play_btn_size = ImGui::CalcItemSize( { 0, 0 }, label_size.x + style.FramePadding.x * 2.0f, label_size.y + style.FramePadding.y * 2.0f );
@@ -270,6 +248,12 @@ void draw_playback_controls( int size[ 2 ], bool draw_volume )
 	{
 		if ( ImGui::Button( "Play", play_btn_size ) )
 		{
+			if ( duration - 0.15 < time_pos )
+			{
+				// try to seek to next vid
+				timeline_advance();
+			}
+
 			const char* cmd[]   = { "set", "pause", "no", NULL };
 			int         cmd_ret = p_mpv_command_async( g_mpv, 0, cmd );
 			printf( "play- %d\n", cmd_ret );
@@ -397,7 +381,7 @@ void draw_playback_controls( int size[ 2 ], bool draw_volume )
 		p_mpv_get_property( g_mpv, "volume", MPV_FORMAT_DOUBLE, &volume );
 
 		ImGui::SameLine();
-		ImGui::SetNextItemWidth( vol_bar_width );
+		ImGui::SetNextItemWidth( 130.f );
 
 		float volume_f = volume;
 		if ( ImGui::SliderFloat( "Volume", &volume_f, 0.f, 130.f ) )
@@ -883,6 +867,8 @@ void update_dividers()
 
 void window_render_all()
 {
+	g_in_draw = true;
+
 	if ( !g_fullscreen )
 	{
 		if ( !g_encode_running )
@@ -900,6 +886,8 @@ void window_render_all()
 
 		mpv_draw_frame();
 	}
+
+	g_in_draw = false;
 }
 
 
@@ -1058,7 +1046,7 @@ void update_dpi( float dpi_override )
 
 bool sdl_window_resize_watcher( void* userdata, SDL_Event* event )
 {
-	if ( g_in_drag_drop || g_pause_window_events )
+	if ( g_in_draw || g_in_drag_drop || g_pause_window_events )
 		return true;
 
 	if ( SDL_GetWindowFlags( g_main_window ) & SDL_WINDOW_MINIMIZED )
@@ -1118,6 +1106,9 @@ void main_loop()
 
 	while ( g_running )
 	{
+		g_mouse_delta[ 0 ] = 0;
+		g_mouse_delta[ 1 ] = 0;
+
 		// Handle Events
 		SDL_Event event;
 		while ( SDL_PollEvent( &event ) )
@@ -1180,6 +1171,8 @@ void main_loop()
 		current_time = sys_get_time_ms();
 		g_frame_time = ( current_time / 1000.f ) - ( start_time / 1000.f );
 
+		start_time   = current_time;
+
 		// don't let the time go too crazy, usually happens when in a breakpoint
 		// time                 = std::min( real_time, 0.1f );
 
@@ -1192,7 +1185,12 @@ void main_loop()
 			break;
 
 		// called so mpv doesn't get flooded with too many events, and becomes unresponsive
-		mpv_event* video_event = p_mpv_wait_event( g_mpv, 0.01f );
+		mpv_event* mpv_event = p_mpv_wait_event( g_mpv, 0 );
+
+		while ( mpv_event && mpv_event->event_id != MPV_EVENT_NONE )
+		{
+			mpv_event = p_mpv_wait_event( g_mpv, 0 );
+		}
 
 		// is the window minimized
 		if ( SDL_GetWindowFlags( g_main_window ) & SDL_WINDOW_MINIMIZED )
@@ -1295,7 +1293,7 @@ auto main( int argc, char* argv[] ) -> int
 
 	// calculate the size of the mpv window (what about DPI Scale here later?)
 	g_mpv_size[ 0 ] = g_window_size[ 0 ] - 600;  // replay editor/sidebar
-	g_mpv_size[ 1 ] = g_window_size[ 1 ] - 230;  // playback controls
+	g_mpv_size[ 1 ] = g_window_size[ 1 ] - 240;  // playback controls
 
 	g_main_window   = SDL_CreateWindow( "Replay Maker", g_window_size[ 0 ], g_window_size[ 1 ], SDL_WINDOW_RESIZABLE | SDL_WINDOW_OPENGL | SDL_WINDOW_HIGH_PIXEL_DENSITY | SDL_WINDOW_HIDDEN );
 
@@ -1324,6 +1322,8 @@ auto main( int argc, char* argv[] ) -> int
 		printf( "Failed to load GL\n" );
 		return 1;
 	}
+
+	// SDL_GL_SetSwapInterval( 0 );
 	
 	// ------------------------------------------
 	// init imgui

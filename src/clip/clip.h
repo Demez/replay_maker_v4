@@ -75,6 +75,7 @@ struct clip_time_range_t
 struct clip_source_t
 {
 	char*                  path;
+	char*                  filename;
 
 	//clip_time_range_t*     time_range;        // OBSOLETE
 	//u32                    time_range_count;  // OBSOLETE
@@ -93,32 +94,28 @@ struct clip_source_usage_t
 };
 
 
-struct clip_preset_output_t
+struct clip_output_group_t
 {
 	ChVector< clip_source_usage_t > sources;
-	u32                             preset;
+	ChVector< u32 >                 presets;
 };
 
 
 // RENAME FROM OUTPUT TO SOMETHING ELSE, LIKE VIDEO GROUP?
 struct clip_output_video_t
 {
-	char*                               name;
+	char*                           name;
 
-	clip_source_t*                      source;
-	u32                                 source_count;
+	clip_source_t*                  source;
+	u32                             source_count;
 
-	u32                                 prefix;
+	u32                             prefix;
 
 	// these are the real outputs this video has, use for format 4
-	// u32*                                presets;
-	// u32                                 presets_count;
+	ChVector< clip_output_group_t > groups;
 
-	ChVector< clip_preset_output_t >    presets;
-	// u32                                 preset_count;
-
-	e_output_state                      state;
-	bool                                enabled;  // if false, don't encode this video
+	e_output_state                  state;
+	bool                            enabled;  // if false, don't encode this video
 };
 
 
@@ -201,9 +198,22 @@ clip_encode_preset_t* clip_add_encode_preset( clip_data_t* data, const char* nam
 clip_output_video_t*  clip_add_output( clip_data_t* data, const char* name );
 u32                   clip_add_input( clip_output_video_t* output, const char* path );
 
+// u32                   clip_add_source_to_preset( clip_output_video_t* output, u32 preset_index, const char* path );
+// void                  clip_remove_source_from_preset( clip_output_video_t* output, u32 preset_index, u32 preset_src_i );
+// void                  clip_remove_source_from_preset( clip_output_video_t* output, u32 preset_index, const char* path );
+
+u32                   clip_group_add_source( clip_output_video_t* output, u32 group_index, const char* path );
+void                  clip_group_remove_source( clip_output_video_t* output, u32 group_index, u32 group_src_i );
+// void                  clip_group_remove_source( clip_output_video_t* output, u32 group_index, const char* path );
+
+void                  clip_group_add_preset( clip_output_group_t& group, u32 preset_i );
+
+void                  clip_group_remove_preset( clip_output_group_t& group, u32 preset_i );
+void                  clip_group_remove_preset( clip_output_video_t* output, u32 group_index, u32 preset_i );
+
 u32                   clip_duplicate_input( clip_output_video_t* output, u32 input_i );
 
-void                  clip_remove_output( clip_data_t* data, clip_output_video_t* );
+void                  clip_remove_output( clip_data_t* data, clip_output_video_t* output );
 void                  clip_remove_output( clip_data_t* data, u32 output_i );
 void                  clip_remove_input( clip_output_video_t* output, u32 input_i );
 
@@ -217,7 +227,7 @@ void                  clip_add_preset_to_encode_override( clip_data_t* data, cli
 void                  clip_add_preset( clip_data_t* data, clip_output_video_t& output, u32 preset_index );
 void                  clip_remove_preset( clip_data_t* data, clip_output_video_t& output, u32 preset_index );
 
-clip_preset_output_t* clip_get_preset_output( clip_output_video_t* output, u32 preset_index );
+clip_output_group_t*  clip_get_group( clip_output_video_t* output, u32 group_index );
 
 void                  clip_move_output( clip_data_t* data, u32 output_id, u32 insert_position );
 

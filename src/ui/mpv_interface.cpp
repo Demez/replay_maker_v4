@@ -354,7 +354,7 @@ bool start_mpv()
 	// request a new frame to be rendered.
 	// (Separate from the normal event handling mechanism for the sake of
 	//  users which run OpenGL on a different thread.)
-	p_mpv_render_context_set_update_callback( g_mpv_gl, on_mpv_render_update, nullptr );
+	// p_mpv_render_context_set_update_callback( g_mpv_gl, on_mpv_render_update, nullptr );
 
 	// When normal mpv events are available.
 	p_mpv_set_wakeup_callback( g_mpv, on_mpv_events, NULL );
@@ -385,6 +385,15 @@ void mpv_window_resize()
 char* mpv_get_current_video()
 {
 	return g_current_video;
+}
+
+
+// TODO: this should return the currently used mpv handle
+// will be used for videos with multiple sources for faster switching
+// how much ram will this use though...
+mpv_handle* get_mpv()
+{
+	return g_mpv;
 }
 
 

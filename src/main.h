@@ -136,7 +136,6 @@ void                               mpv_handle_error();
 
 extern mpv_handle*                 g_mpv;
 extern mpv_render_context*         g_mpv_gl;
-extern bool                        g_wakeup_on_mpv_render_update, g_wakeup_on_mpv_events;
 
 // --------------------------------------------------------------------------------------------------------
 // Keybindings
@@ -181,10 +180,11 @@ void                               draw_imgui_window( int window_size[ 2 ] );
 void                               draw_replay_editor_window( int window_size[ 2 ] );
 void                               draw_playback_controls( int window_size[ 2 ], bool draw_volume );
 
-void                               replay_editor_load_input( u32 output_i, u32 input_i );
+// void                               replay_editor_load_input( u32 output_i, u32 input_i );
+void                               replay_editor_set_group( u32 output_i, u32 group_i, u32 group_src_i );
 void                               replay_editor_reset();
 
-void                               draw_preset_override( clip_output_video_t& output, bool edit );
+void                               draw_preset_dropdown( clip_output_video_t& output, clip_output_group_t& group, bool edit );
 
 void                               enable_sidebar( bool enabled );
 void                               window_on_resize();
@@ -212,6 +212,7 @@ extern bool                        g_running;
 extern bool                        g_fullscreen;
 extern bool                        g_in_window_drag;
 extern bool                        g_in_drag_drop;
+extern bool                        g_in_draw;
 extern bool                        g_pause_window_events;
 extern float                       g_dpi;
 
@@ -247,6 +248,9 @@ constexpr int                      DIVIDER_SIZE = 5;  // multiplied by 2
 
 void          timeline_reset();
 void          timeline_draw();
+
+void          timeline_seek( float seconds );
+void          timeline_advance( bool prev = false );
 
 extern ImVec2 g_timeline_size;
 extern ImVec2 g_timeline_pos;
