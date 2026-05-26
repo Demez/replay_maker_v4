@@ -41,7 +41,7 @@ void encode_thread_start()
 	g_fullscreen              = false;
 
 	const char* cmd[]         = { "set", "pause", "yes", NULL };
-	int         cmd_ret       = p_mpv_command_async( g_mpv, 0, cmd );
+	int         cmd_ret       = p_mpv_command_async( get_mpv(), 0, cmd );
 
 	g_encode_thread = new std::thread( encode_worker );
 }

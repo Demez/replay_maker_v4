@@ -56,8 +56,9 @@ void timeline_set_seek_time_fast( float seconds )
 	char time_pos_str[ 16 ];
 	gcvt( seconds, 4, time_pos_str );
 
-	const char* cmd[] = { "seek", time_pos_str, "absolute", "keyframes", NULL };
-	int         cmd_ret = p_mpv_command_async( g_mpv, 0, cmd );
+	// const char* cmd[] = { "seek", time_pos_str, "absolute", "keyframes", NULL };
+	const char* cmd[] = { "seek", time_pos_str, "absolute", NULL };
+	int         cmd_ret = p_mpv_command_async( get_mpv(), 0, cmd );
 }
 
 
@@ -67,14 +68,14 @@ void timeline_set_seek_time( float seconds )
 	gcvt( seconds, 4, time_pos_str );
 
 	const char* cmd[]   = { "seek", time_pos_str, "absolute", NULL };
-	int         cmd_ret = p_mpv_command_async( g_mpv, 0, cmd );
+	int         cmd_ret = p_mpv_command_async( get_mpv(), 0, cmd );
 }
 
 
 void timeline_pause()
 {
 	const char* cmd[]   = { "set", "pause", "yes", NULL };
-	int         cmd_ret = p_mpv_command_async( g_mpv, 0, cmd );
+	int         cmd_ret = p_mpv_command_async( get_mpv(), 0, cmd );
 }
 
 
@@ -107,8 +108,8 @@ void timeline_seek( float seconds )
 {
 	double duration = 0;
 	double time_pos = 0;
-	p_mpv_get_property( g_mpv, "time-pos", MPV_FORMAT_DOUBLE, &time_pos );
-	p_mpv_get_property( g_mpv, "duration", MPV_FORMAT_DOUBLE, &duration );
+	p_mpv_get_property( get_mpv(), "time-pos", MPV_FORMAT_DOUBLE, &time_pos );
+	p_mpv_get_property( get_mpv(), "duration", MPV_FORMAT_DOUBLE, &duration );
 
 	float new_time_pos = time_pos + seconds;
 
@@ -121,7 +122,7 @@ void timeline_seek( float seconds )
 			replay_editor_set_group( g_clip_current_output_index, g_clip_current_group, g_clip_current_group_source );
 
 			double duration = 0;
-			p_mpv_get_property( g_mpv, "duration", MPV_FORMAT_DOUBLE, &duration );
+			p_mpv_get_property( get_mpv(), "duration", MPV_FORMAT_DOUBLE, &duration );
 
 			new_time_pos = duration + new_time_pos;
 			timeline_set_seek_time_fast( new_time_pos );
@@ -183,7 +184,7 @@ void timeline_marker_control( ImGuiIO& io, ImGuiKey key, int marker )
 		{
 			// set marker
 			double time_pos = 0;
-			p_mpv_get_property( g_mpv, "time-pos", MPV_FORMAT_DOUBLE, &time_pos );
+			p_mpv_get_property( get_mpv(), "time-pos", MPV_FORMAT_DOUBLE, &time_pos );
 
 			g_timeline_marker_active[ marker ] = true;
 			g_timeline_marker_times[ marker ]  = time_pos;
@@ -194,7 +195,7 @@ void timeline_marker_control( ImGuiIO& io, ImGuiKey key, int marker )
 
 void timeline_draw()
 {
-	p_mpv_set_option_string( g_mpv, "start", "0%" );
+	p_mpv_set_option_string( get_mpv(), "start", "0%" );
 
 	g_preset_combo_open             = false;
 
@@ -221,7 +222,7 @@ void timeline_draw()
 	u32          change_to_source_i = UINT32_MAX;
 
 	s32          paused             = 0;
-	p_mpv_get_property( g_mpv, "pause", MPV_FORMAT_FLAG, &paused );
+	p_mpv_get_property( get_mpv(), "pause", MPV_FORMAT_FLAG, &paused );
 
 	std::vector< duration_t > durations;
 
@@ -288,10 +289,7 @@ void timeline_draw()
 				{
 					if ( g_clip_current_group != group_i )
 					{
-						g_clip_current_group = group_i;
-
-						if ( group.sources.size() )
-							replay_editor_set_group( g_clip_current_output_index, group_i, 0 );
+						replay_editor_set_group( g_clip_current_output_index, group_i, 0 );
 					}
 				}
 
@@ -314,10 +312,10 @@ void timeline_draw()
 
 			if ( ImGui::TabItemButton( "New Group" ) )
 			{
-				g_clip_current_group = g_clip_current_output->groups.size();
+				u32 new_group = g_clip_current_output->groups.size();
 				g_clip_current_output->groups.emplace_back();
 
-				replay_editor_set_group( g_clip_current_output_index, g_clip_current_group, 0 );
+				replay_editor_set_group( g_clip_current_output_index, new_group, 0 );
 			}
 
 			ImGui::PopStyleColor( 3 );
@@ -430,6 +428,20 @@ void timeline_draw()
 		}
 	}
 
+	if ( g_mpv_extra_vid_on )
+	{
+		mpv_data_t* mpv = get_mpv_data( EXTRA_VID_ID );
+
+		if ( mpv )
+		{
+			double duration = 0;
+			p_mpv_get_property( mpv->mpv, "duration", MPV_FORMAT_DOUBLE, &duration );
+
+			durations.emplace_back( duration, duration_total );
+			duration_total += duration;
+		}
+	}
+
 	if ( durations.size() && capture_inputs )
 	{
 		timeline_marker_control( io, ImGuiKey_Q, 0 );
@@ -470,7 +482,7 @@ void timeline_draw()
 		if ( ImGui::IsKeyPressed( ImGuiKey_A, false ) )
 		{
 			double time_pos = 0;
-			p_mpv_get_property( g_mpv, "time-pos", MPV_FORMAT_DOUBLE, &time_pos );
+			p_mpv_get_property( get_mpv(), "time-pos", MPV_FORMAT_DOUBLE, &time_pos );
 
 			// search for the first notable time to snap to
 			float closest_time = 0.f;
@@ -517,7 +529,7 @@ void timeline_draw()
 		if ( ImGui::IsKeyPressed( ImGuiKey_D, false ) )
 		{
 			double time_pos = 0;
-			p_mpv_get_property( g_mpv, "time-pos", MPV_FORMAT_DOUBLE, &time_pos );
+			p_mpv_get_property( get_mpv(), "time-pos", MPV_FORMAT_DOUBLE, &time_pos );
 
 			// search for the first notable time to snap to
 			float closest_time = durations[ focused_source ].duration;
@@ -660,17 +672,64 @@ void timeline_draw()
 			draw_list->AddText( title_pos, ImColor( 255, 255, 255 ), source.filename );
 
 			// check if we want to select this one
-			if ( ImGui::IsMouseDoubleClicked( ImGuiMouseButton_Left ) && point_in_rect( mouse_pos, vid_area_min, title_max ) )
-			{
-				change_to_source_i = source_use_i;
-			}
+			// if ( ImGui::IsMouseDoubleClicked( ImGuiMouseButton_Left ) && point_in_rect( mouse_pos, vid_area_min, title_max ) )
+			// {
+			// 	change_to_source_i = source_use_i;
+			// }
+		}
+
+		if ( g_mpv_extra_vid_on )
+		{
+			mpv_data_t* mpv               = get_mpv_data( EXTRA_VID_ID );
+			duration_t  duration          = durations[ group->sources.size() ];
+
+			ImColor     main_border_color = COLOR_GREEN_HOVER;
+			ImColor     main_bg_color     = COLOR_GREEN;
+
+			// if ( g_clip_current_group_source != source_use_i )
+			// {
+			// 	main_bg_color.Value.x *= style.DisabledAlpha;
+			// 	main_bg_color.Value.y *= style.DisabledAlpha;
+			// 	main_bg_color.Value.z *= style.DisabledAlpha;
+			// 
+			// 	main_border_color.Value.x *= style.DisabledAlpha;
+			// 	main_border_color.Value.y *= style.DisabledAlpha;
+			// 	main_border_color.Value.z *= style.DisabledAlpha;
+			// }
+			// main_bg_color.Value.w *= style.DisabledAlpha;
+
+			ImVec2 vid_area_min    = window_area_min;
+			ImVec2 vid_area_max    = window_area_max;
+
+			float  total_area      = window_area_max.x - window_area_min.x;
+
+			float  percent_of_area = duration.duration / duration_total;
+			float  offset          = timeline_size.x / duration_total;
+
+			vid_area_min.x         = window_area_min.x + total_area * ( last_percent );
+			vid_area_max.x         = window_area_min.x + total_area * ( percent_of_area + last_percent );
+
+			last_percent += percent_of_area;
+
+			// draw border and background on top
+			draw_list->AddRectFilled( vid_area_min, vid_area_max, main_bg_color, style.FrameRounding, ImDrawFlags_RoundCornersAll );
+			draw_list->AddRect( vid_area_min, vid_area_max, main_border_color, style.FrameRounding, ImDrawFlags_RoundCornersAll );
+
+			float  title_size = ImGui::GetFrameHeight();
+
+			ImVec2 title_pos( vid_area_min.x + style.FramePadding.x, vid_area_min.y + style.FramePadding.y );
+			ImVec2 title_max( vid_area_max.x, vid_area_min.y + title_size );
+
+			// draw titlebar
+			draw_list->AddRectFilled( vid_area_min, title_max, main_border_color, style.FrameRounding, ImDrawFlags_RoundCornersAll );
+			draw_list->AddText( title_pos, ImColor( 255, 255, 255 ), mpv->current_video );
 		}
 	}
 
 	// draw_list->AddText( window_cursor_pos, ImColor( 0, 255, 0 ), "TEST" );
 
 	double time_pos = 0;
-	p_mpv_get_property( g_mpv, "time-pos", MPV_FORMAT_DOUBLE, &time_pos );
+	p_mpv_get_property( get_mpv(), "time-pos", MPV_FORMAT_DOUBLE, &time_pos );
 
 	// int          seek_pos_start = window_cursor_pos.x + TIMELINE_BORDER_SIZE;
 	// int          seek_pos_end   = timeline_size.x - TIMELINE_BORDER_SIZE;
@@ -701,26 +760,24 @@ void timeline_draw()
 	{
 		float last_percent = 0.f;
 
-		for ( size_t source_use_i = 0; source_use_i < group->sources.size(); source_use_i++ )
+		for ( size_t video_i = 0; video_i < get_mpv_count_plus(); video_i++ )
 		{
-			clip_source_usage_t& source_use      = group->sources[ source_use_i ];
-			clip_source_t&       source          = g_clip_current_output->source[ source_use.source_index ];
-			duration_t           duration        = durations[ source_use_i ];
+			duration_t duration        = durations[ video_i ];
 
-			float                total_area      = window_area_max.x - window_area_min.x;
+			float      total_area      = window_area_max.x - window_area_min.x;
 
-			float                percent_of_area = duration.duration / duration_total;
-			float                offset          = timeline_size.x / duration_total;
+			float      percent_of_area = duration.duration / duration_total;
+			float      offset          = timeline_size.x / duration_total;
 
-			ImVec2               vid_area_min    = window_area_min;
-			ImVec2               vid_area_max    = window_area_max;
+			ImVec2     vid_area_min    = window_area_min;
+			ImVec2     vid_area_max    = window_area_max;
 
-			vid_area_min.x                       = window_area_min.x + total_area * ( last_percent );
-			vid_area_max.x                       = window_area_min.x + total_area * ( percent_of_area + last_percent );
+			vid_area_min.x             = window_area_min.x + total_area * ( last_percent );
+			vid_area_max.x             = window_area_min.x + total_area * ( percent_of_area + last_percent );
 
-			int    seek_pos_start                = vid_area_min.x;
-			int    seek_pos_end                  = vid_area_max.x;
-			int    seek_area                     = seek_pos_end - seek_pos_start;
+			int    seek_pos_start      = vid_area_min.x;
+			int    seek_pos_end        = vid_area_max.x;
+			int    seek_area           = seek_pos_end - seek_pos_start;
 
 			// mouse position local to inside timeline window
 			ImVec2 mouse_pos_local( mouse_pos.x - seek_pos_start, mouse_pos.y - timeline_size.y );
@@ -728,154 +785,160 @@ void timeline_draw()
 			area_percents.push_back( last_percent );
 			last_percent += percent_of_area;
 
-			bool mouse_hovered_area = point_in_rect( mouse_pos, vid_area_min, vid_area_max );
+			bool                 mouse_hovered_area = point_in_rect( mouse_pos, vid_area_min, vid_area_max );
 
-			for ( size_t time_i = 0; time_i < source_use.time_range.size(); time_i++ )
+			if ( video_i < group->sources.size() )
 			{
-				clip_time_range_t& time_range        = source_use.time_range[ time_i ];
+				clip_source_usage_t& source_use         = group->sources[ video_i ];
+				clip_source_t&       source             = g_clip_current_output->source[ source_use.source_index ];
 
-				int                section_pos_left  = seek_pos_start + seek_area * ( time_range.start / source.metadata.duration );
-				int                section_pos_right = seek_pos_start + seek_area * ( time_range.end / source.metadata.duration );
-
-				bool               is_selected       = g_selected_section == time_i;
-				ImColor            border_color      = is_selected ? SECTION_COLOR_SELECT_BORDER : SECTION_COLOR_BORDER;
-
-				float              height_min        = window_area_min.y + ImGui::GetFrameHeight();
-
-				draw_list->AddRectFilled( ImVec2( section_pos_left, height_min ), ImVec2( section_pos_right, window_area_max.y ), border_color, style.FrameRounding, ImDrawFlags_RoundCornersAll );
-				draw_list->AddRectFilled( ImVec2( section_pos_left + 1, height_min + 1 ), ImVec2( section_pos_right - 1, window_area_max.y - 1 ), SECTION_COLOR_BASE, style.FrameRounding, ImDrawFlags_RoundCornersAll );
-
-				char title[ 16 ]{};
-				snprintf( title, 16, "%d", time_i );
-
-				float  title_size = ImGui::GetFrameHeight();
-
-				ImVec2 title_pos( section_pos_left + style.FramePadding.x, height_min + style.FramePadding.y );
-
-				// draw titlebar
-				draw_list->AddRectFilled( ImVec2( section_pos_left, height_min ), ImVec2( section_pos_right, height_min + title_size ), border_color, style.FrameRounding, ImDrawFlags_RoundCornersAll );
-				draw_list->AddText( title_pos, ImColor( 0, 0, 0 ), title );
-
-				// draw grab points
-				//draw_list->AddRectFilled( ImVec2( section_pos_left, window_area_min.y ), ImVec2( section_pos_left + 16, window_area_max.y ), SECTION_COLOR_BORDER );
-				//draw_list->AddRectFilled( ImVec2( section_pos_right - 16, window_area_min.y ), ImVec2( section_pos_right, window_area_max.y ), SECTION_COLOR_BORDER );
-
-				// if ( !capture_inputs )
-				// 	continue;
-
-#if 0
-
-				// check if we want to select this one
-				if ( io.MouseClicked[ 0 ] && point_in_rect( mouse_pos, ImVec2( section_pos_left, window_area_min.y ), ImVec2( section_pos_right, window_area_max.y ) ) )
+				for ( size_t time_i = 0; time_i < source_use.time_range.size(); time_i++ )
 				{
-					g_selected_section    = time_i;
-					just_selected_section = true;
-				}
+					clip_time_range_t& time_range        = source_use.time_range[ time_i ];
 
-				if ( section_resize )
-					continue;
+					int                section_pos_left  = seek_pos_start + seek_area * ( time_range.start / source.metadata.duration );
+					int                section_pos_right = seek_pos_start + seek_area * ( time_range.end / source.metadata.duration );
 
-				// if ( !io.MouseClicked[ 0 ] )
-				// 	continue;
+					bool               is_selected       = g_selected_section == time_i;
+					ImColor            border_color      = is_selected ? SECTION_COLOR_SELECT_BORDER : SECTION_COLOR_BORDER;
 
-				// check left side for hit detection
-				if ( point_in_rect( mouse_pos, ImVec2( section_pos_left, window_area_min.y ), ImVec2( section_pos_left + 4, window_area_max.y ) ) )
-				{
-					ImGui::SetMouseCursor( ImGuiMouseCursor_ResizeEW );
+					float              height_min        = window_area_min.y + ImGui::GetFrameHeight();
 
-					if ( !io.MouseClicked[ 0 ] )
-						continue;
+					draw_list->AddRectFilled( ImVec2( section_pos_left, height_min ), ImVec2( section_pos_right, window_area_max.y ), border_color, style.FrameRounding, ImDrawFlags_RoundCornersAll );
+					draw_list->AddRectFilled( ImVec2( section_pos_left + 1, height_min + 1 ), ImVec2( section_pos_right - 1, window_area_max.y - 1 ), SECTION_COLOR_BASE, style.FrameRounding, ImDrawFlags_RoundCornersAll );
 
-					section_resize           = true;
-					section_resize_left      = true;
-					section_resize_index     = time_i;
-					section_resize_seek_time = 0.f;
-				}
+					char title[ 16 ]{};
+					snprintf( title, 16, "%u", time_i );
 
-				// check right side for hit detection
-				else if ( point_in_rect( mouse_pos, ImVec2( section_pos_right - 4, window_area_min.y ), ImVec2( section_pos_right, window_area_max.y ) ) )
-				{
-					ImGui::SetMouseCursor( ImGuiMouseCursor_ResizeEW );
+					float  title_size = ImGui::GetFrameHeight();
 
-					if ( !io.MouseClicked[ 0 ] )
-						continue;
+					ImVec2 title_pos( section_pos_left + style.FramePadding.x, height_min + style.FramePadding.y );
 
-					section_resize           = true;
-					section_resize_index     = time_i;
-					section_resize_seek_time = 0.f;
-				}
-#endif
+					// draw titlebar
+					draw_list->AddRectFilled( ImVec2( section_pos_left, height_min ), ImVec2( section_pos_right, height_min + title_size ), border_color, style.FrameRounding, ImDrawFlags_RoundCornersAll );
+					draw_list->AddText( title_pos, ImColor( 0, 0, 0 ), title );
 
-#if 0
-			// Process section resizing
-				if ( section_resize )
-				{
-					static float min_start_time = 0.f;
-					static float max_end_time   = duration.duration;
-					static bool  calc_times     = true;
+					// draw grab points
+					//draw_list->AddRectFilled( ImVec2( section_pos_left, window_area_min.y ), ImVec2( section_pos_left + 16, window_area_max.y ), SECTION_COLOR_BORDER );
+					//draw_list->AddRectFilled( ImVec2( section_pos_right - 16, window_area_min.y ), ImVec2( section_pos_right, window_area_max.y ), SECTION_COLOR_BORDER );
 
-					ImGui::SetMouseCursor( ImGuiMouseCursor_ResizeEW );
+					// if ( !capture_inputs )
+					// 	continue;
 
-					if ( io.MouseReleased[ 0 ] )
+	#if 0
+
+					// check if we want to select this one
+					if ( io.MouseClicked[ 0 ] && point_in_rect( mouse_pos, ImVec2( section_pos_left, window_area_min.y ), ImVec2( section_pos_right, window_area_max.y ) ) )
 					{
-						section_resize           = false;
-						section_resize_left      = false;
+						g_selected_section    = time_i;
+						just_selected_section = true;
+					}
 
-						min_start_time           = 0.f;
-						max_end_time             = duration.duration;
-						calc_times               = true;
+					if ( section_resize )
+						continue;
+
+					// if ( !io.MouseClicked[ 0 ] )
+					// 	continue;
+
+					// check left side for hit detection
+					if ( point_in_rect( mouse_pos, ImVec2( section_pos_left, window_area_min.y ), ImVec2( section_pos_left + 4, window_area_max.y ) ) )
+					{
+						ImGui::SetMouseCursor( ImGuiMouseCursor_ResizeEW );
+
+						if ( !io.MouseClicked[ 0 ] )
+							continue;
+
+						section_resize           = true;
+						section_resize_left      = true;
+						section_resize_index     = time_i;
 						section_resize_seek_time = 0.f;
 					}
-					else
+
+					// check right side for hit detection
+					else if ( point_in_rect( mouse_pos, ImVec2( section_pos_right - 4, window_area_min.y ), ImVec2( section_pos_right, window_area_max.y ) ) )
 					{
-						new_seek_percent              = mouse_pos_local.x / seek_area;
-						new_time_pos                  = duration.duration * new_seek_percent;
+						ImGui::SetMouseCursor( ImGuiMouseCursor_ResizeEW );
 
-						clip_time_range_t& time_range       = source_use.time_range[ section_resize_index ];
+						if ( !io.MouseClicked[ 0 ] )
+							continue;
 
-						// get earliest start time and latest end time for other sections around this one
-						if ( calc_times )
+						section_resize           = true;
+						section_resize_index     = time_i;
+						section_resize_seek_time = 0.f;
+					}
+	#endif
+
+	#if 0
+				// Process section resizing
+					if ( section_resize )
+					{
+						static float min_start_time = 0.f;
+						static float max_end_time   = duration.duration;
+						static bool  calc_times     = true;
+
+						ImGui::SetMouseCursor( ImGuiMouseCursor_ResizeEW );
+
+						if ( io.MouseReleased[ 0 ] )
 						{
-							calc_times = false;
+							section_resize           = false;
+							section_resize_left      = false;
 
-							for ( u32 time_i = 0; time_i < source_use.time_range.size(); time_i++ )
-							{
-								if ( time_i == section_resize_index )
-									continue;
-
-								clip_time_range_t& scan_time = source_use.time_range[ time_i ];
-
-								if ( scan_time.end <= time_range.start )
-									min_start_time = std::max( scan_time.end, min_start_time );
-
-								if ( scan_time.start >= time_range.end )
-									max_end_time = std::min( scan_time.start, max_end_time );
-							}
-						}
-
-						constexpr double SEEK_POS_SNAP = 0.5;
-
-						// check if close enough to seek time to snap to
-						if ( MAX( 0, time_pos - SEEK_POS_SNAP ) <= new_time_pos && new_time_pos <= MIN( duration.duration, time_pos + SEEK_POS_SNAP ) )
-						{
-							new_time_pos = time_pos;
-						}
-
-						if ( section_resize_left )
-						{
-							// time_range.start         = std::clamp( std::min( new_time_pos, time_range.end - 0.1f ), min_start_time, time_range.end );
-							time_range.start         = std::max( std::min( new_time_pos, time_range.end - 0.1f ), min_start_time );
-							section_resize_seek_time = time_range.start;
+							min_start_time           = 0.f;
+							max_end_time             = duration.duration;
+							calc_times               = true;
+							section_resize_seek_time = 0.f;
 						}
 						else
 						{
-							// time_range.end           = std::clamp( std::max( new_time_pos, time_range.start + 0.1f ), time_range.start, max_end_time );
-							time_range.end           = std::min( std::max( new_time_pos, time_range.start + 0.1f ), max_end_time );
-							section_resize_seek_time = time_range.end;
+							new_seek_percent              = mouse_pos_local.x / seek_area;
+							new_time_pos                  = duration.duration * new_seek_percent;
+
+							clip_time_range_t& time_range       = source_use.time_range[ section_resize_index ];
+
+							// get earliest start time and latest end time for other sections around this one
+							if ( calc_times )
+							{
+								calc_times = false;
+
+								for ( u32 time_i = 0; time_i < source_use.time_range.size(); time_i++ )
+								{
+									if ( time_i == section_resize_index )
+										continue;
+
+									clip_time_range_t& scan_time = source_use.time_range[ time_i ];
+
+									if ( scan_time.end <= time_range.start )
+										min_start_time = std::max( scan_time.end, min_start_time );
+
+									if ( scan_time.start >= time_range.end )
+										max_end_time = std::min( scan_time.start, max_end_time );
+								}
+							}
+
+							constexpr double SEEK_POS_SNAP = 0.5;
+
+							// check if close enough to seek time to snap to
+							if ( MAX( 0, time_pos - SEEK_POS_SNAP ) <= new_time_pos && new_time_pos <= MIN( duration.duration, time_pos + SEEK_POS_SNAP ) )
+							{
+								new_time_pos = time_pos;
+							}
+
+							if ( section_resize_left )
+							{
+								// time_range.start         = std::clamp( std::min( new_time_pos, time_range.end - 0.1f ), min_start_time, time_range.end );
+								time_range.start         = std::max( std::min( new_time_pos, time_range.end - 0.1f ), min_start_time );
+								section_resize_seek_time = time_range.start;
+							}
+							else
+							{
+								// time_range.end           = std::clamp( std::max( new_time_pos, time_range.start + 0.1f ), time_range.start, max_end_time );
+								time_range.end           = std::min( std::max( new_time_pos, time_range.start + 0.1f ), max_end_time );
+								section_resize_seek_time = time_range.end;
+							}
 						}
 					}
+	#endif
 				}
-#endif
 			}
 
 			// ------------------------------------------------------------------------------------------
@@ -903,9 +966,9 @@ void timeline_draw()
 
 					if ( seek_drag )
 					{
-						if ( mouse_hovered_area && g_clip_current_group_source != source_use_i )
+						if ( mouse_hovered_area && g_clip_current_group_source != video_i )
 						{
-							change_to_source_i = source_use_i;
+							change_to_source_i = video_i;
 						}
 
 						new_seek_percent  = mouse_pos_local.x / seek_area;
@@ -915,9 +978,12 @@ void timeline_draw()
 
 						if ( mouse_moving || io.MouseClicked[ 0 ] )
 						{
+							if ( mouse_moving )
+								printf( "MOUSE MOVE\n" );
+
 							// ui actually feels worse with this lol
 							// timeline_set_seek_time_fast( new_time_pos );
-							timeline_set_seek_time( new_time_pos );
+							// timeline_set_seek_time( new_time_pos );
 						}
 					}
 				}
@@ -1032,12 +1098,16 @@ void timeline_draw()
 		}
 	}
 
+	if ( g_clip_current_output && change_to_source_i == g_clip_current_output->groups.size() )
+	{
+	}
+
 	if ( change_to_source_i != UINT32_MAX )
 	{
-		char time_pos_str[ 16 ];
-		gcvt( new_time_pos, 4, time_pos_str );
-
-		int ret = p_mpv_set_option_string( g_mpv, "start", time_pos_str );
+		// char time_pos_str[ 16 ];
+		// gcvt( new_time_pos, 4, time_pos_str );
+		// 
+		// int ret = p_mpv_set_option_string( get_mpv(), "start", time_pos_str );
 
 		// TODO: what if you had multiple mpv clients open, one for each source video....
 		// then you could hot swap to a different one quickly
@@ -1050,14 +1120,31 @@ void timeline_draw()
 		// it looks a bit odd, but works
 		update_time_next_draw = true;
 
-		if ( !stay_paused && !seek_drag && was_playing && paused )
+		mpv_data_t* mpv       = get_mpv_data( change_to_source_i );
+
+		if ( mpv && !stay_paused && !seek_drag && was_playing && paused )
 		{
 			const char* cmd[]   = { "set", "pause", "no", NULL };
-			int         cmd_ret = p_mpv_command_async( g_mpv, 0, cmd );
+			int         cmd_ret = p_mpv_command_async( mpv->mpv, 0, cmd );
 		}
 
 		if ( stay_paused )
 			stay_paused = false;
+	}
+
+	if ( seek_drag )
+	{
+		bool mouse_moving = g_mouse_delta[ 0 ] != 0 || g_mouse_delta[ 1 ] != 0;
+
+		if ( mouse_moving || io.MouseClicked[ 0 ] )
+		{
+			if ( mouse_moving )
+				printf( "MOUSE MOVE\n" );
+
+			// ui actually feels worse with this lol
+			// timeline_set_seek_time_fast( new_time_pos );
+			timeline_set_seek_time( new_time_pos );
+		}
 	}
 
 	was_playing = !paused;

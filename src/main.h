@@ -27,18 +27,6 @@ enum e_clip_parse_state
 };
 
 
-// metadata grabbed on video load from mpv
-struct video_media_info_t
-{
-	s64 track_count = 0;
-	s64 track_count_video = 0;
-	s64 track_count_audio = 0;
-};
-
-
-extern video_media_info_t g_video_media_info;
-
-
 // editor commands
 enum e_cmd : u8
 {
@@ -93,6 +81,26 @@ namespace font
 }
 
 
+struct mpv_data_t
+{
+	mpv_handle*         mpv               = nullptr;
+	mpv_render_context* gl                = nullptr;
+
+	char*               current_video     = nullptr;
+
+	// metadata grabbed on video load from mpv
+	s64                 track_count       = 0;
+	s64                 track_count_video = 0;
+	s64                 track_count_audio = 0;
+};
+
+
+extern mpv_data_t             g_mpv_extra_vid;
+extern bool                   g_mpv_extra_vid_on;
+
+constexpr u32                 EXTRA_VID_ID = UINT32_MAX - 1;
+
+
 // --------------------------------------------------------------------------------------------------------
 // system stuff
 
@@ -117,15 +125,30 @@ bool                               mouse_in_rect( ImVec2 min_size, ImVec2 max_si
 bool                               load_mpv_dll();
 void                               unload_mpv_dll();
 
-bool                               start_mpv();
 void                               stop_mpv();
+
+mpv_data_t*                        get_mpv_data( u32 index = UINT32_MAX );
+mpv_handle*                        get_mpv();
+mpv_render_context*                get_mpv_gl();
+u32                                get_mpv_count();
+void                               set_mpv_index( u32 index );
+void                               set_mpv_count( u32 count );
+
+// adds the extra video index if loaded
+u32                                get_mpv_count_plus();
+
+// for loose videos
+void                               set_mpv_extra_video();
+void                               remove_mpv_extra_video();
 
 char*                              mpv_get_current_video();
 void                               mpv_draw_frame();
 void                               mpv_window_resize();
 
-void                               mpv_cmd_loadfile( const char* file );
-void                               mpv_cmd_close_video();
+void                               get_media_info( u32 index = UINT32_MAX );
+
+void                               mpv_cmd_loadfile( const char* file, u32 index = UINT32_MAX );
+void                               mpv_cmd_close_video( u32 index = UINT32_MAX );
 void                               mpv_cmd_toggle_playback();
 void                               mpv_cmd_seek_offset( double seconds );
 
@@ -133,9 +156,6 @@ void                               mpv_cmd_hook_window( void* window );
 void                               mpv_cmd_hook_window_mpv();
 
 void                               mpv_handle_error();
-
-extern mpv_handle*                 g_mpv;
-extern mpv_render_context*         g_mpv_gl;
 
 // --------------------------------------------------------------------------------------------------------
 // Keybindings
@@ -174,13 +194,12 @@ void                               calc_imgui_window_size( int index, ivec2& siz
 void                               calc_playback_window_size( ivec2& size );
 void                               calc_replay_window_size( ivec2& size );
 
-void                               get_media_info();
-
 void                               draw_imgui_window( int window_size[ 2 ] );
 void                               draw_replay_editor_window( int window_size[ 2 ] );
 void                               draw_playback_controls( int window_size[ 2 ], bool draw_volume );
 
 // void                               replay_editor_load_input( u32 output_i, u32 input_i );
+void                               replay_editor_load_loose_video( const char* path );
 void                               replay_editor_set_group( u32 output_i, u32 group_i, u32 group_src_i );
 void                               replay_editor_reset();
 

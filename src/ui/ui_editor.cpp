@@ -19,6 +19,7 @@ u32                            g_clip_current_input         = 0;
 u32                            g_clip_current_group_source = 0;
 u32                            g_clip_current_group        = 0;
 u32                            g_clip_delete_input          = UINT32_MAX;
+
 char                           g_output_name_buf[ 512 ]     = { 0 };
 
 
@@ -43,7 +44,7 @@ void on_file_dialog_open()
 {
 	// pause mpv
 	int pause   = 1;
-	int cmd_ret = p_mpv_set_property( g_mpv, "pause", MPV_FORMAT_FLAG, &pause );
+	int cmd_ret           = p_mpv_set_property( get_mpv(), "pause", MPV_FORMAT_FLAG, &pause );
 
 	g_pause_window_events = true;
 }
@@ -313,8 +314,38 @@ bool replay_editor_set_video( u32 output_i, u32 input_i )
 }
 
 
+void replay_editor_close_loose_video()
+{
+	if ( g_loose_video )
+	{
+		mpv_cmd_close_video( EXTRA_VID_ID );
+		free( g_loose_video );
+		g_loose_video = nullptr;
+
+		remove_mpv_extra_video();
+		set_mpv_index( get_mpv_count() - 1 );
+	}
+}
+
+
+void replay_editor_load_loose_video( const char* path )
+{
+	replay_editor_close_loose_video();
+	set_mpv_extra_video();
+
+	mpv_cmd_loadfile( path, EXTRA_VID_ID );
+	set_mpv_index( EXTRA_VID_ID );
+}
+
+
 void replay_editor_set_group( u32 output_i, u32 group_i, u32 group_src_i )
 {
+	if ( group_src_i == EXTRA_VID_ID )
+	{
+		set_mpv_index( EXTRA_VID_ID );
+		return;
+	}
+
 	if ( output_i >= g_clip_data->output_count )
 		return;
 
@@ -337,8 +368,17 @@ void replay_editor_set_group( u32 output_i, u32 group_i, u32 group_src_i )
 	if ( output.source_count <= source_use.source_index )
 	{
 		mpv_cmd_close_video();
+		set_mpv_index( 0 );
 		g_focus_replay_maker = true;
 		return;
+	}
+
+	bool swapping_group_or_output = g_clip_current_output_index != output_i || g_clip_current_group != group_i;
+	bool pause_video              = swapping_group_or_output;
+
+	if ( g_mpv_extra_vid_on || swapping_group_or_output )
+	{
+		replay_editor_close_loose_video();
 	}
 
 	g_clip_current_group        = group_i;
@@ -347,7 +387,48 @@ void replay_editor_set_group( u32 output_i, u32 group_i, u32 group_src_i )
 	clip_source_t& source = output.source[ source_use.source_index ];
 	g_focus_replay_maker  = true;
 
-	mpv_cmd_loadfile( source.path );
+	// check current mpv instance for playback state
+	s32 paused                  = 0;
+	p_mpv_get_property( get_mpv(), "pause", MPV_FORMAT_FLAG, &paused );
+
+	// load all mpv instances
+	set_mpv_count( output.source_count );
+
+	for ( u32 i = 0; i < output.source_count; i++ )
+	{
+		mpv_cmd_loadfile( output.source[ i ].path, i );
+
+		mpv_data_t* mpv = get_mpv_data( i );
+
+		if ( mpv && mpv->mpv )
+		{
+			// if the video was playing, pause the other mpv clients and play the one we swapped to
+			if ( i != source_use.source_index || pause_video )
+			{
+				const char* cmd[]   = { "set", "pause", "yes", NULL };
+				int         cmd_ret = p_mpv_command_async( mpv->mpv, 0, cmd );
+			}
+			else if ( !paused )
+			{
+				const char* cmd[]   = { "set", "pause", "no", NULL };
+				int         cmd_ret = p_mpv_command_async( mpv->mpv, 0, cmd );
+			}
+		}
+	}
+
+	// mpv has an extra video if it's loose
+	if ( g_mpv_extra_vid_on && swapping_group_or_output )
+	{
+		mpv_data_t* mpv = get_mpv_data( EXTRA_VID_ID );
+
+		if ( mpv )
+		{
+			const char* cmd[]   = { "set", "pause", "yes", NULL };
+			int         cmd_ret = p_mpv_command_async( mpv->mpv, 0, cmd );
+		}
+	}
+
+	set_mpv_index( source_use.source_index );
 }
 
 

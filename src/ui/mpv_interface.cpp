@@ -3,18 +3,17 @@
 // some reference here
 // https://github.com/mpv-player/mpv-examples/blob/master/libmpv/sdl/main.c
 
-void*               g_mpv_module  = nullptr;
-mpv_handle*         g_mpv         = nullptr;
-mpv_render_context* g_mpv_gl      = nullptr;
-GLuint              g_mpv_fbo     = 0;
-GLuint              g_mpv_fbo_tex = 0;
-GLuint              g_mpv_rbo     = 0;
+void*                         g_mpv_module = nullptr;
 
-bool                g_wakeup_on_mpv_render_update, g_wakeup_on_mpv_events;
+static ChVector< mpv_data_t > g_mpv;
+static u32                    g_mpv_index = 0;
 
-static char*        g_current_video = nullptr;
+mpv_data_t                    g_mpv_extra_vid{};
+bool                          g_mpv_extra_vid_on = false;
 
-s64                 g_video_width = 0, g_video_height = 0;
+GLuint                        g_fbo              = 0;
+GLuint                        g_fbo_tex          = 0;
+
 
 #define FUNC_PTR( func ) func##_t p_##func = nullptr
 
@@ -161,8 +160,7 @@ bool load_mpv_dll()
 
 void unload_mpv_dll()
 {
-	p_mpv_destroy( g_mpv );
-	g_mpv                    = nullptr;
+	stop_mpv();
 
 	// clear mpv function pointers
 	p_mpv_create             = nullptr;
@@ -172,16 +170,21 @@ void unload_mpv_dll()
 }
 
 
-static void on_mpv_events( void* ctx )
-{
-	g_wakeup_on_mpv_events = true;
-}
-
-
 void mpv_draw_frame()
 {
-	p_mpv_get_property( g_mpv, "dwidth", MPV_FORMAT_INT64, &g_video_width );
-	p_mpv_get_property( g_mpv, "dheight", MPV_FORMAT_INT64, &g_video_height );
+	// mpv_handle*         mpv = get_mpv();
+	// mpv_render_context* gl  = get_mpv_gl();
+
+	mpv_handle*         mpv = g_mpv[ g_mpv_index ].mpv;
+	mpv_render_context* gl  = g_mpv[ g_mpv_index ].gl;
+
+	if ( !mpv )
+		return;
+
+	s64    video_width = 0, video_height = 0;
+
+	p_mpv_get_property( mpv, "dwidth", MPV_FORMAT_INT64, &video_width );
+	p_mpv_get_property( mpv, "dheight", MPV_FORMAT_INT64, &video_height );
 
 	s64   window_scale;
 	//	p_mpv_get_property( g_mpv, "current-window-scale", MPV_FORMAT_INT64, &window_scale );
@@ -189,13 +192,13 @@ void mpv_draw_frame()
 	// Fit image in window size
 	float factor[ 2 ] = { 1.f, 1.f };
 
-	factor[ 0 ]       = (float)g_mpv_size[ 0 ] / (float)g_video_width;
-	factor[ 1 ]       = (float)g_mpv_size[ 1 ] / (float)g_video_height;
+	factor[ 0 ]       = (float)g_mpv_size[ 0 ] / (float)video_width;
+	factor[ 1 ]       = (float)g_mpv_size[ 1 ] / (float)video_height;
 
 	float zoom_level = std::min( factor[ 0 ], factor[ 1 ] );
 
-	int   new_width  = g_video_width * zoom_level;
-	int   new_height = g_video_height * zoom_level;
+	int   new_width  = video_width * zoom_level;
+	int   new_height = video_height * zoom_level;
 
 	int   pos_x       = g_mpv_size[ 0 ] / 2 - ( new_width / 2 );
 	int   pos_y       = g_mpv_size[ 1 ] / 2 - ( new_height / 2 );
@@ -203,14 +206,14 @@ void mpv_draw_frame()
 	int   offset_x    = g_mpv_size[ 0 ] - new_width;
 	int   offset_y    = g_mpv_size[ 1 ] - new_height;
 
-	glBindFramebuffer( GL_FRAMEBUFFER, g_mpv_fbo );
+	glBindFramebuffer( GL_FRAMEBUFFER, g_fbo );
 	////glBindRenderbuffer( GL_RENDERBUFFER, g_mpv_rbo );
 	//
 	glViewport( 0, 0, g_mpv_size[ 0 ], g_mpv_size[ 1 ] );
 	// glClearColor( 0.15, 0.15, 0.15, 1.0 );
 	// glClear( GL_COLOR_BUFFER_BIT );
 
-	mpv_opengl_fbo   fbo{ g_mpv_fbo, g_mpv_size[ 0 ], g_mpv_size[ 1 ], GL_RGB };
+	mpv_opengl_fbo   fbo{ g_fbo, g_mpv_size[ 0 ], g_mpv_size[ 1 ], GL_RGB };
 	// mpv_opengl_fbo   fbo{ g_mpv_fbo, g_window_size[ 0 ], g_window_size[ 1 ], GL_RGB };
 	int              yes  = 1;
 
@@ -220,7 +223,7 @@ void mpv_draw_frame()
 		{ MPV_RENDER_PARAM_INVALID, NULL },
 	};
 
-	p_mpv_render_context_render( g_mpv_gl, rp );
+	int err = p_mpv_render_context_render( gl, rp );
 
 	// glFramebufferRenderbuffer( GL_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT, GL_RENDERBUFFER, g_mpv_rbo );
 
@@ -242,7 +245,7 @@ void mpv_draw_frame()
 	glClear( GL_COLOR_BUFFER_BIT );
 
 	glEnable( GL_TEXTURE_2D );
-	glBindTexture( GL_TEXTURE_2D, g_mpv_fbo_tex );
+	glBindTexture( GL_TEXTURE_2D, g_fbo_tex );
 
 	glMatrixMode( GL_PROJECTION );
 	glLoadIdentity();
@@ -270,16 +273,19 @@ void mpv_draw_frame()
 
 void mpv_update_texture()
 {
-	if ( !g_mpv_fbo_tex )
+	if ( g_mpv.empty() )
 		return;
 
-	glBindTexture( GL_TEXTURE_2D, g_mpv_fbo_tex );
+	if ( !g_fbo_tex )
+		return;
+
+	glBindTexture( GL_TEXTURE_2D, g_fbo_tex );
 	glTexImage2D( GL_TEXTURE_2D, 0, GL_RGB, g_mpv_size[ 0 ], g_mpv_size[ 1 ], 0, GL_RGB, GL_UNSIGNED_BYTE, nullptr );
 	// glTexImage2D( GL_TEXTURE_2D, 0, GL_RGB, g_window_size[ 0 ], g_window_size[ 1 ], 0, GL_RGB, GL_UNSIGNED_BYTE, nullptr );
 
 	glTexParameteri( GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR );
 	glTexParameteri( GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR );
-	glFramebufferTexture2D( GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, g_mpv_fbo_tex, 0 );
+	glFramebufferTexture2D( GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, g_fbo_tex, 0 );
 
 	if ( glCheckFramebufferStatus( GL_FRAMEBUFFER ) != GL_FRAMEBUFFER_COMPLETE )
 		printf( "FBO incomplete!\n" );
@@ -291,16 +297,16 @@ void mpv_update_texture()
 
 void mpv_create_texture()
 {
+	if ( g_fbo_tex )
+		return;
+
+	glGenFramebuffers( 1, &g_fbo );
+	glBindFramebuffer( GL_FRAMEBUFFER, g_fbo );
+
 	//glGenRenderbuffers( 1, &g_mpv_rbo );
-	glGenTextures( 1, &g_mpv_fbo_tex );
+	glGenTextures( 1, &g_fbo_tex );
 
 	mpv_update_texture();
-}
-
-
-static void on_mpv_render_update( void* ctx )
-{
-	g_wakeup_on_mpv_render_update = true;
 }
 
 
@@ -310,28 +316,31 @@ static void* mpv_get_proc( void* ctx, const char* name )
 }
 
 
-bool start_mpv()
+bool start_mpv( mpv_data_t& mpv )
 {
 	// get the mpv version
 	unsigned long mpv_version = p_mpv_client_api_version();
 	printf( "mpv version: %lu\n", mpv_version );
 
-	g_mpv = p_mpv_create();
+	mpv.mpv = p_mpv_create();
 
-	if ( g_mpv == nullptr )
+	if ( mpv.mpv == nullptr )
 	{
 		printf( "mpv_create failed!\n" );
 		return false;
 	}
 
 	// Disable VO
-	p_mpv_set_option_string( g_mpv, "vo", "libmpv" );
+	p_mpv_set_option_string( mpv.mpv, "vo", "libmpv" );
 
 	// Stops the main thread from being blocked somehow
 	// https://github.com/celluloid-player/celluloid/pull/982
-	p_mpv_set_option_string( g_mpv, "video-timing-offset", "0" );
+	p_mpv_set_option_string( mpv.mpv, "video-timing-offset", "0" );
 
-	if ( p_mpv_initialize( g_mpv ) < 0 )
+	// Start Paused
+	p_mpv_set_option_string( mpv.mpv, "pause", "" );
+
+	if ( p_mpv_initialize( mpv.mpv ) < 0 )
 	{
 		printf( "mpv_initialize failed!\n" );
 		return false;
@@ -348,7 +357,7 @@ bool start_mpv()
 		{ MPV_RENDER_PARAM_INVALID, NULL },
 	};
 
-	p_mpv_render_context_create( &g_mpv_gl, g_mpv, params );
+	p_mpv_render_context_create( &mpv.gl, mpv.mpv, params );
 
 	// When there is a need to call mpv_render_context_update(), which can
 	// request a new frame to be rendered.
@@ -357,15 +366,13 @@ bool start_mpv()
 	// p_mpv_render_context_set_update_callback( g_mpv_gl, on_mpv_render_update, nullptr );
 
 	// When normal mpv events are available.
-	p_mpv_set_wakeup_callback( g_mpv, on_mpv_events, NULL );
+	// p_mpv_set_wakeup_callback( mpv.mpv, on_mpv_events, NULL );
 
 	// Create Framebuffer to draw on
-	glGenFramebuffers( 1, &g_mpv_fbo );
-	glBindFramebuffer( GL_FRAMEBUFFER, g_mpv_fbo );
 
 	mpv_create_texture();
 
-	p_mpv_set_property_string( g_mpv, "keep-open", "always" );
+	p_mpv_set_property_string( mpv.mpv, "keep-open", "always" );
 
 	return true;
 }
@@ -373,7 +380,149 @@ bool start_mpv()
 
 void stop_mpv()
 {
+	for ( mpv_data_t& mpv : g_mpv )
+	{
+		p_mpv_free( mpv.mpv );
+	}
+
+	g_mpv.clear();
 }
+
+
+// ----------------------------------------------------
+
+
+mpv_data_t* get_mpv_data( u32 index )
+{
+	if ( index == UINT32_MAX )
+		index = g_mpv_index;
+
+	else if ( g_mpv_extra_vid_on && index == EXTRA_VID_ID )
+		return &g_mpv_extra_vid;
+
+	else if ( g_mpv.empty() )
+		return nullptr;
+
+	if ( index >= g_mpv.size() )
+		return nullptr;
+
+	return &g_mpv[ index ];
+}
+
+
+// this returns the currently used mpv handle
+// will be used for videos with multiple sources for faster switching
+mpv_handle* get_mpv()
+{
+	mpv_data_t* mpv = get_mpv_data( g_mpv_index );
+
+	if ( !mpv )
+		return nullptr;
+
+	return mpv->mpv;
+}
+
+
+mpv_render_context* get_mpv_gl()
+{
+	mpv_data_t* mpv = get_mpv_data( g_mpv_index );
+
+	if ( !mpv )
+		return nullptr;
+
+	return mpv->gl;
+}
+
+
+u32 get_mpv_count()
+{
+	return g_mpv.size();
+}
+
+
+u32 get_mpv_count_plus()
+{
+	if ( g_mpv_extra_vid_on )
+		return g_mpv.size() + 1;
+
+	return g_mpv.size();
+}
+
+
+void set_mpv_index( u32 index )
+{
+	if ( index != EXTRA_VID_ID && index >= g_mpv.size() )
+		return;
+
+	g_mpv_index = index;
+}
+
+
+void set_mpv_count( u32 count )
+{
+	if ( count == g_mpv.size() )
+		return;
+
+	u32 size = g_mpv.size();
+
+	if ( count > size )
+	{
+		g_mpv.resize( count );
+
+		for ( u32 i = size; i < count; i++ )
+		{
+			start_mpv( g_mpv[ i ] );
+		}
+	}
+	else
+	{
+		for ( u32 i = size; i != count; i-- )
+		{
+			p_mpv_free( g_mpv[ i - 1 ].mpv );
+		}
+
+		g_mpv.resize( count );
+	}
+}
+
+
+char* mpv_get_current_video()
+{
+	if ( g_mpv.empty() )
+		return nullptr;
+
+	if ( g_mpv_index >= g_mpv.size() )
+	{
+		g_mpv_index = 0;
+		return nullptr;
+	}
+
+	return g_mpv[ g_mpv_index ].current_video;
+}
+
+
+void set_mpv_extra_video()
+{
+	if ( !g_mpv_extra_vid_on )
+		start_mpv( g_mpv_extra_vid );
+
+	g_mpv_extra_vid_on = true;
+}
+
+
+void remove_mpv_extra_video()
+{
+	if ( g_mpv_extra_vid_on )
+	{
+		p_mpv_free( g_mpv_extra_vid.mpv );
+		memset( &g_mpv_extra_vid, 0, sizeof( mpv_data_t ) );
+	}
+
+	g_mpv_extra_vid_on = false;
+}
+
+
+// ----------------------------------------------------
 
 
 void mpv_window_resize()
@@ -382,18 +531,39 @@ void mpv_window_resize()
 }
 
 
-char* mpv_get_current_video()
+void get_media_info( u32 index )
 {
-	return g_current_video;
-}
+	mpv_data_t* mpv = get_mpv_data( index );
 
+	if ( !mpv )
+		return;
 
-// TODO: this should return the currently used mpv handle
-// will be used for videos with multiple sources for faster switching
-// how much ram will this use though...
-mpv_handle* get_mpv()
-{
-	return g_mpv;
+	if ( !mpv->current_video )
+		return;
+
+	mpv->track_count       = 0;
+	mpv->track_count_audio = 0;
+	mpv->track_count_video = 0;
+
+	mpv_error ret          = (mpv_error)p_mpv_get_property( mpv->mpv, "track-list/count", MPV_FORMAT_INT64, &mpv->track_count );
+
+	for ( s32 i = 0; i < mpv->track_count; i++ )
+	{
+		char cmd[ 64 ] = { 0 };
+		snprintf( cmd, 64, "track-list/%d/type", i );
+
+		char* type = nullptr;
+		ret        = (mpv_error)p_mpv_get_property( mpv->mpv, cmd, MPV_FORMAT_STRING, &type );
+
+		if ( !type )
+			continue;
+
+		if ( strcmp( type, "video" ) == 0 )
+			mpv->track_count_video++;
+
+		else if ( strcmp( type, "audio" ) == 0 )
+			mpv->track_count_audio++;
+	}
 }
 
 
@@ -407,7 +577,7 @@ void mpv_cmd_set_video_zoom( float zoom )
 	gcvt( zoom, 4, zoom_str );
 
 	const char* cmd[]   = { "set", "video-zoom", zoom_str, nullptr };
-	int         cmd_ret = p_mpv_command_async( g_mpv, 0, cmd );
+	int         cmd_ret = p_mpv_command_async( get_mpv(), 0, cmd );
 }
 
 
@@ -418,35 +588,37 @@ void mpv_cmd_add_video_zoom( float zoom )
 	gcvt( zoom, 4, zoom_str );
 
 	const char* cmd[]   = { "set", "video-zoom", zoom_str, nullptr };
-	int         cmd_ret = p_mpv_command_async( g_mpv, 0, cmd );
+	int         cmd_ret = p_mpv_command_async( get_mpv(), 0, cmd );
 }
 
 
-void mpv_cmd_loadfile( const char* file )
+void mpv_cmd_loadfile( const char* file, u32 index )
 {
-	if ( !g_mpv )
-		return;
-
 	if ( !file )
 		return;
 
-	if ( strlen( file ) == 0 )
+	mpv_data_t* mpv = get_mpv_data( index );
+
+	if ( !mpv || !mpv->mpv )
+		return;
+
+	if ( mpv->current_video && strcmp( file, mpv->current_video ) == 0 )
 		return;
 
 	printf( "Loading Video: %s\n", file );
 
 	const char* cmd[]   = { "loadfile", file, NULL };
-	int         cmd_ret = p_mpv_command_async( g_mpv, NULL, cmd );
+	int         cmd_ret = p_mpv_command_async( mpv->mpv, NULL, cmd );
 
 	//g_mpv_video_ready   = false;
 
 	// mpv_event*  event   = p_mpv_wait_event( g_mpv, 0.1f );
 	// mpv_handle_wait_event( g_mpv, 0.1f );
 
-	free( g_current_video );
-	g_current_video  = nullptr;
+	free( mpv->current_video );
+	mpv->current_video = nullptr;
 
-	mpv_event* event = p_mpv_wait_event( g_mpv, -1 );
+	mpv_event* event  = p_mpv_wait_event( mpv->mpv, -1 );
 
 	while ( event->event_id != MPV_EVENT_NONE )
 	{
@@ -469,11 +641,11 @@ void mpv_cmd_loadfile( const char* file )
 			break;
 		}
 
-		event = p_mpv_wait_event( g_mpv, -1 );
+		event = p_mpv_wait_event( mpv->mpv, -1 );
 	}
 
 	// Video Loaded
-	g_current_video = util_strdup( file );
+	mpv->current_video = util_strdup( file );
 
 	get_media_info();
 	
@@ -481,25 +653,25 @@ void mpv_cmd_loadfile( const char* file )
 }
 
 
-void mpv_cmd_close_video()
+void mpv_cmd_close_video( u32 index )
 {
-	if ( !g_mpv )
+	mpv_data_t* mpv = get_mpv_data( index );
+
+	if ( !mpv || !mpv->mpv )
 		return;
 
 	const char* cmd[]   = { "stop", NULL };
-	int         cmd_ret = p_mpv_command_async( g_mpv, NULL, cmd );
+	int         cmd_ret = p_mpv_command_async( mpv->mpv, NULL, cmd );
 
-	free( g_current_video );
-	g_current_video   = nullptr;
-
-	// g_mpv_video_ready = false;
+	free( mpv->current_video );
+	mpv->current_video = nullptr;
 }
 
 
 void mpv_cmd_toggle_playback()
 {
 	const char* cmd[]   = { "cycle", "pause", NULL };
-	int         cmd_ret = p_mpv_command_async( g_mpv, 0, cmd );
+	int         cmd_ret = p_mpv_command_async( get_mpv(), 0, cmd );
 }
 
 
@@ -507,8 +679,8 @@ void mpv_cmd_seek_offset( double seconds )
 {
 	double duration = 0;
 	double time_pos = 0;
-	p_mpv_get_property( g_mpv, "duration", MPV_FORMAT_DOUBLE, &duration );
-	p_mpv_get_property( g_mpv, "time-pos", MPV_FORMAT_DOUBLE, &time_pos );
+	p_mpv_get_property( get_mpv(), "duration", MPV_FORMAT_DOUBLE, &duration );
+	p_mpv_get_property( get_mpv(), "time-pos", MPV_FORMAT_DOUBLE, &time_pos );
 
 	double new_time = time_pos + seconds;
 	new_time        = std::max( 0.0, std::min( duration, new_time ) );
@@ -517,7 +689,7 @@ void mpv_cmd_seek_offset( double seconds )
 	gcvt( new_time, 4, time_pos_str );
 
 	const char* cmd[]   = { "seek", time_pos_str, "absolute", NULL };
-	int         cmd_ret = p_mpv_command_async( g_mpv, 0, cmd );
+	int         cmd_ret = p_mpv_command_async( get_mpv(), 0, cmd );
 }
 
 

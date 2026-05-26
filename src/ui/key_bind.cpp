@@ -96,12 +96,12 @@ static std::unordered_map< button_list_t, key_cmd_t > g_key_binds;
 mpv_cmd_t*                                            g_mpv_cmd;
 
 
-#define MPV_CMD( ... )                                              \
-	{                                                               \
-		const char* cmd[]   = { __VA_ARGS__, NULL };                \
-		int         cmd_ret = p_mpv_command_async( g_mpv, 0, cmd ); \
-		if ( cmd_ret != 0 )                                         \
-			printf( "MPV CMD Error: %d", cmd_ret );                 \
+#define MPV_CMD( ... )                                                  \
+	{                                                                   \
+		const char* cmd[]   = { __VA_ARGS__, NULL };                    \
+		int         cmd_ret = p_mpv_command_async( get_mpv(), 0, cmd ); \
+		if ( cmd_ret != 0 )                                             \
+			printf( "MPV CMD Error: %d", cmd_ret );                     \
 	}
 
 
@@ -142,8 +142,8 @@ void handle_keybinds()
 	{
 		double duration = 0;
 		double time_pos = 0;
-		p_mpv_get_property( g_mpv, "duration", MPV_FORMAT_DOUBLE, &duration );
-		p_mpv_get_property( g_mpv, "time-pos", MPV_FORMAT_DOUBLE, &time_pos );
+		p_mpv_get_property( get_mpv(), "duration", MPV_FORMAT_DOUBLE, &duration );
+		p_mpv_get_property( get_mpv(), "time-pos", MPV_FORMAT_DOUBLE, &time_pos );
 
 		if ( duration - 0.15 < time_pos )
 		{

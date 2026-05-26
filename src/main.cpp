@@ -58,8 +58,6 @@ extern clip_data_t* g_clip_data;
 
 char*               g_videos_file_path;
 
-video_media_info_t  g_video_media_info;
-
 float               g_save_timer             = -1.f;
 
 float               g_frame_time             = 0.f;
@@ -136,56 +134,27 @@ void calc_replay_window_size( ivec2& size )
 }
 
 
-void get_media_info()
-{
-	if ( !mpv_get_current_video() )
-		return;
-
-	memset( &g_video_media_info, 0, sizeof( video_media_info_t ) );
-	
-	mpv_error ret = (mpv_error)p_mpv_get_property( g_mpv, "track-list/count", MPV_FORMAT_INT64, &g_video_media_info.track_count );
-
-	for ( s32 i = 0; i < g_video_media_info.track_count; i++ )
-	{
-		char cmd[ 64 ] = { 0 };
-		snprintf( cmd, 64, "track-list/%d/type", i );
-
-		char* type = nullptr;
-		ret = (mpv_error)p_mpv_get_property( g_mpv, cmd, MPV_FORMAT_STRING, &type );
-
-		if ( !type )
-			continue;
-
-		if ( strcmp( type, "video" ) == 0 )
-			g_video_media_info.track_count_video++;
-
-		else if ( strcmp( type, "audio" ) == 0 )
-			g_video_media_info.track_count_audio++;
-	}
-}
-
-
 void draw_playback_controls( int size[ 2 ], bool draw_volume )
 {
 	// is there a video playing?
 	
 	// HACK
-	if ( mpv_get_current_video() && g_video_media_info.track_count == 0 )
-	{
-		printf( "NO MEDIA INFO!\n" );
-		get_media_info();
-	}
+	// if ( mpv_get_current_video() && g_video_media_info.track_count == 0 )
+	// {
+	// 	printf( "NO MEDIA INFO!\n" );
+	// 	get_media_info();
+	// }
 
 	// time-pos
 	double time_pos = 0;
 	double duration = 0;
-	p_mpv_get_property( g_mpv, "time-pos", MPV_FORMAT_DOUBLE, &time_pos );
-	p_mpv_get_property( g_mpv, "duration", MPV_FORMAT_DOUBLE, &duration );
+	p_mpv_get_property( get_mpv(), "time-pos", MPV_FORMAT_DOUBLE, &time_pos );
+	p_mpv_get_property( get_mpv(), "duration", MPV_FORMAT_DOUBLE, &duration );
 
 	// volume
 
 	s32 paused = 0;
-	p_mpv_get_property( g_mpv, "pause", MPV_FORMAT_FLAG, &paused );
+	p_mpv_get_property( get_mpv(), "pause", MPV_FORMAT_FLAG, &paused );
 
 	// seek bar
 
@@ -202,14 +171,14 @@ void draw_playback_controls( int size[ 2 ], bool draw_volume )
 	//char* audio_track       = 0;
 	char*        audio_track     = 0;
 	// mpv_error audio_ret         = (mpv_error)p_mpv_get_property( g_mpv, "audio", MPV_FORMAT_NONE, &audio_track );
-	mpv_error    audio_ret       = (mpv_error)p_mpv_get_property( g_mpv, "audio", MPV_FORMAT_STRING, &audio_track );
+	mpv_error    audio_ret            = (mpv_error)p_mpv_get_property( get_mpv(), "audio", MPV_FORMAT_STRING, &audio_track );
 	// mpv_error audio_ret         = (mpv_error)p_mpv_get_property( g_mpv, "track-list/audio/id", MPV_FORMAT_STRING, &audio_track );
 
 	char         track_name_buf[ 32 ] = { 0 };
 	// snprintf( track_name_buf, 32, "track-list/%s/title", audio_track );
 
 	char*        audio_track_name     = 0;
-	audio_ret                         = (mpv_error)p_mpv_get_property( g_mpv, "current-tracks/audio/title", MPV_FORMAT_STRING, &audio_track_name );
+	audio_ret                         = (mpv_error)p_mpv_get_property( get_mpv(), "current-tracks/audio/title", MPV_FORMAT_STRING, &audio_track_name );
 
 	//ImGui::PushStyleVarX( ImGuiStyleVar_ItemSpacing, 0.f );
 
@@ -255,7 +224,7 @@ void draw_playback_controls( int size[ 2 ], bool draw_volume )
 			}
 
 			const char* cmd[]   = { "set", "pause", "no", NULL };
-			int         cmd_ret = p_mpv_command_async( g_mpv, 0, cmd );
+			int         cmd_ret = p_mpv_command_async( get_mpv(), 0, cmd );
 			printf( "play- %d\n", cmd_ret );
 		}
 	}
@@ -264,7 +233,7 @@ void draw_playback_controls( int size[ 2 ], bool draw_volume )
 		if ( ImGui::Button( "Pause", play_btn_size ) )
 		{
 			const char* cmd[]   = { "set", "pause", "yes", NULL };
-			int         cmd_ret = p_mpv_command_async( g_mpv, 0, cmd );
+			int         cmd_ret = p_mpv_command_async( get_mpv(), 0, cmd );
 			printf( "pause- %d\n", cmd_ret );
 		}
 	}
@@ -276,7 +245,7 @@ void draw_playback_controls( int size[ 2 ], bool draw_volume )
 	if ( ImGui::Button( "<|" ) )
 	{
 		const char* cmd[]   = { "seek", "0", "absolute", NULL };
-		int         cmd_ret = p_mpv_command_async( g_mpv, 0, cmd );
+		int         cmd_ret = p_mpv_command_async( get_mpv(), 0, cmd );
 	}
 
 	ImGui::SameLine();
@@ -287,7 +256,7 @@ void draw_playback_controls( int size[ 2 ], bool draw_volume )
 
 		// const char* cmd[]   = { "seek", duration_str, "absolute", NULL };
 		const char* cmd[]   = { "seek", "100", "absolute-percent+exact", NULL };
-		int         cmd_ret = p_mpv_command_async( g_mpv, 0, cmd );
+		int         cmd_ret = p_mpv_command_async( get_mpv(), 0, cmd );
 	}
 
 	ImGui::SameLine();
@@ -297,14 +266,14 @@ void draw_playback_controls( int size[ 2 ], bool draw_volume )
 	if ( ImGui::Button( "<" ) )
 	{
 		const char* cmd[]   = { "frame-back-step", NULL };
-		int         cmd_ret = p_mpv_command_async( g_mpv, 0, cmd );
+		int         cmd_ret = p_mpv_command_async( get_mpv(), 0, cmd );
 	}
 
 	ImGui::SameLine();
 	if ( ImGui::Button( ">" ) )
 	{
 		const char* cmd[]   = { "frame-step", NULL };
-		int         cmd_ret = p_mpv_command_async( g_mpv, 0, cmd );
+		int         cmd_ret = p_mpv_command_async( get_mpv(), 0, cmd );
 	}
 
 	// TODO: add speed controls here
@@ -317,26 +286,31 @@ void draw_playback_controls( int size[ 2 ], bool draw_volume )
 	ImGui::SameLine();
 
 	// audio track selection
-	char audio_btn[ 16 ] = { 0 };
+	char        audio_btn[ 16 ] = { 0 };
 
-	if ( audio_track )
+	mpv_data_t* mpv             = get_mpv_data();
+
+	if ( audio_track && mpv )
 	{
+
 		/*if ( strcmp( audio_track, "auto" ) == 0 )
 		{
 			snprintf( audio_btn, 16, "Audio: auto/%d", g_video_media_info.track_count_audio );
 		}
 		else*/ if ( strcmp( audio_track, "no" ) == 0 )
 		{
-			snprintf( audio_btn, 16, "Audio: -/%d", g_video_media_info.track_count_audio );
+			snprintf( audio_btn, 16, "Audio: -/%d", mpv->track_count_audio );
 		}
 		else
 		{
-			snprintf( audio_btn, 16, "Audio: %s/%d", audio_track, g_video_media_info.track_count_audio );
+			snprintf( audio_btn, 16, "Audio: %s/%d", audio_track, mpv->track_count_audio );
 		}
 	}
 
 	char   temp_test[ 16 ] = { 0 };
-	snprintf( temp_test, 16, "Audio: auto/%d", g_video_media_info.track_count_audio );
+	if ( mpv )
+		snprintf( temp_test, 16, "Audio: auto/%d", mpv->track_count_audio );
+
 	ImVec2 audio_btn_text = ImGui::CalcTextSize( temp_test );
 
 	audio_btn_text.x += style.FramePadding.x * 2;
@@ -345,7 +319,7 @@ void draw_playback_controls( int size[ 2 ], bool draw_volume )
 	if ( ImGui::Button( audio_btn, audio_btn_text ) )
 	{
 		const char* cmd[]   = { "cycle", "audio", NULL };
-		int         cmd_ret = p_mpv_command_async( g_mpv, 0, cmd );
+		int         cmd_ret = p_mpv_command_async( get_mpv(), 0, cmd );
 		printf( "cycle audio ret - %d\n", cmd_ret );
 	}
 
@@ -378,7 +352,7 @@ void draw_playback_controls( int size[ 2 ], bool draw_volume )
 	if ( draw_volume )
 	{
 		double volume = 0;
-		p_mpv_get_property( g_mpv, "volume", MPV_FORMAT_DOUBLE, &volume );
+		p_mpv_get_property( get_mpv(), "volume", MPV_FORMAT_DOUBLE, &volume );
 
 		ImGui::SameLine();
 		ImGui::SetNextItemWidth( 130.f );
@@ -391,7 +365,7 @@ void draw_playback_controls( int size[ 2 ], bool draw_volume )
 			gcvt( volume_f, 4, volume_str );
 
 			const char* cmd[]   = { "set", "volume", volume_str, NULL };
-			int         cmd_ret = p_mpv_command_async( g_mpv, 0, cmd );
+			int         cmd_ret = p_mpv_command_async( get_mpv(), 0, cmd );
 		}
 	}
 }
@@ -1130,7 +1104,7 @@ void main_loop()
 					if ( g_in_drag_drop )
 						break;
 
-					mpv_cmd_loadfile( drop_file.c_str() );
+					replay_editor_load_loose_video( drop_file.c_str() );
 					SDL_RaiseWindow( g_main_window );
 					drop_file.clear();
 					break;
@@ -1185,11 +1159,11 @@ void main_loop()
 			break;
 
 		// called so mpv doesn't get flooded with too many events, and becomes unresponsive
-		mpv_event* mpv_event = p_mpv_wait_event( g_mpv, 0 );
+		mpv_event* mpv_event = p_mpv_wait_event( get_mpv(), 0 );
 
 		while ( mpv_event && mpv_event->event_id != MPV_EVENT_NONE )
 		{
-			mpv_event = p_mpv_wait_event( g_mpv, 0 );
+			mpv_event = p_mpv_wait_event( get_mpv(), 0 );
 		}
 
 		// is the window minimized
@@ -1391,11 +1365,7 @@ auto main( int argc, char* argv[] ) -> int
 	// ------------------------------------------
 	// Startup and Load MPV
 
-	if ( !start_mpv() )
-	{
-		printf( "start_mpv failed!\n" );
-		return 1;
-	}
+	set_mpv_count( 1 );
 
 	// ------------------------------------------
 
@@ -1486,7 +1456,7 @@ auto main( int argc, char* argv[] ) -> int
 	sys_shutdown();
 
 	// close mpv
-	stop_mpv();
+	unload_mpv_dll();
 
 	for ( u8 i = 0; i < g_recently_opened_count; i++ )
 		free( g_recently_opened[ i ] );

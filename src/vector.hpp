@@ -200,19 +200,23 @@ struct ChVector
 		remove( index );
 	}
 
-	// void insert( const T& sItem, uint32_t sIndex )
-	// {
-	// 	resize( aSize + 1, true );
-	//
-	// 	// shift all memory after this index by one index
-	// 	if ( aSize > 1 )
-	// 	{
-	// 		uint32_t sSize = aSize - sIndex;
-	// 		memcpy( &apData[ sIndex + 1 ], &apData[ sIndex ], sSize * sizeof( T ) );
-	// 	}
-	//
-	// 	apData[ sIndex ] = std::move( sItem );
-	// }
+	void insert( uint32_t sIndex )
+	{
+		resize( aSize + 1 );
+	
+		// shift all memory after this index by one index
+		if ( aSize > sIndex + 1 )
+		{
+			uint32_t sSize = aSize - sIndex;
+			memcpy( &apData[ sIndex + 1 ], &apData[ sIndex ], sSize * sizeof( T ) );
+		}
+	}
+
+	void insert( const T& sItem, uint32_t sIndex )
+	{
+		insert( sIndex );
+		apData[ sIndex ] = std::move( sItem );
+	}
 
 	// Index into the buffer
 	T& operator[]( uint32_t sIndex ) const
