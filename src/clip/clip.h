@@ -4,6 +4,7 @@
 #include "clip/json5.h"
 
 #include <unordered_map>
+#include <string>
 
 
 constexpr size_t MAX_LEN_EXT               = 5;
@@ -154,6 +155,8 @@ struct clip_prefix_t
 };
 
 
+// TODO: probably get rid of this, we never have multple of these stored in memory
+// make it a namespace instead
 struct clip_data_t
 {
 	u32                   version = 0;
@@ -202,14 +205,15 @@ u32                   clip_add_input( clip_output_video_t* output, const char* p
 // void                  clip_remove_source_from_preset( clip_output_video_t* output, u32 preset_index, u32 preset_src_i );
 // void                  clip_remove_source_from_preset( clip_output_video_t* output, u32 preset_index, const char* path );
 
+std::string           clip_group_get_name( clip_output_group_t& group );
 u32                   clip_group_add_source( clip_output_video_t* output, u32 group_index, const char* path );
 void                  clip_group_remove_source( clip_output_video_t* output, u32 group_index, u32 group_src_i );
 // void                  clip_group_remove_source( clip_output_video_t* output, u32 group_index, const char* path );
 
-void                  clip_group_add_preset( clip_output_group_t& group, u32 preset_i );
+void                  clip_group_add_preset( clip_output_video_t& output, clip_output_group_t& group, u32 preset_i );
 
-void                  clip_group_remove_preset( clip_output_group_t& group, u32 preset_i );
-void                  clip_group_remove_preset( clip_output_video_t* output, u32 group_index, u32 preset_i );
+void                  clip_group_remove_preset( clip_output_video_t& output, clip_output_group_t& group, u32 preset_i );
+void                  clip_group_remove_preset( clip_output_video_t& output, u32 group_index, u32 preset_i );
 
 u32                   clip_duplicate_input( clip_output_video_t* output, u32 input_i );
 

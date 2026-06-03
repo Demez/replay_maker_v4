@@ -175,11 +175,13 @@ void mpv_draw_frame()
 	// mpv_handle*         mpv = get_mpv();
 	// mpv_render_context* gl  = get_mpv_gl();
 
-	mpv_handle*         mpv = g_mpv[ g_mpv_index ].mpv;
-	mpv_render_context* gl  = g_mpv[ g_mpv_index ].gl;
+	mpv_data_t* mpv_data = get_mpv_data();
 
-	if ( !mpv )
+	if ( !mpv_data )
 		return;
+
+	mpv_handle*         mpv = mpv_data->mpv;
+	mpv_render_context* gl  = mpv_data->gl;
 
 	s64    video_width = 0, video_height = 0;
 
@@ -397,10 +399,10 @@ mpv_data_t* get_mpv_data( u32 index )
 	if ( index == UINT32_MAX )
 		index = g_mpv_index;
 
-	else if ( g_mpv_extra_vid_on && index == EXTRA_VID_ID )
+	if ( g_mpv_extra_vid_on && index == EXTRA_VID_ID )
 		return &g_mpv_extra_vid;
 
-	else if ( g_mpv.empty() )
+	if ( g_mpv.empty() )
 		return nullptr;
 
 	if ( index >= g_mpv.size() )
@@ -455,6 +457,39 @@ void set_mpv_index( u32 index )
 		return;
 
 	g_mpv_index = index;
+
+	for ( u32 i = 0; i < g_mpv.size(); i++ )
+	{
+		mpv_data_t* mpv = get_mpv_data( i );
+
+		if ( mpv && mpv->mpv )
+		{
+			// if the video was playing, pause the other mpv clients and play the one we swapped to
+			if ( i != g_mpv_index )
+			{
+				const char* cmd[]   = { "set", "pause", "yes", NULL };
+				int         cmd_ret = p_mpv_command_async( mpv->mpv, 0, cmd );
+			}
+		}
+	}
+
+	// mpv has an extra video if it's loose
+	if ( g_mpv_extra_vid_on && g_mpv_index != EXTRA_VID_ID )
+	{
+		mpv_data_t* mpv = get_mpv_data( EXTRA_VID_ID );
+
+		if ( mpv )
+		{
+			const char* cmd[]   = { "set", "pause", "yes", NULL };
+			int         cmd_ret = p_mpv_command_async( mpv->mpv, 0, cmd );
+		}
+	}
+}
+
+
+u32 get_mpv_index()
+{
+	return g_mpv_index;
 }
 
 
@@ -488,16 +523,12 @@ void set_mpv_count( u32 count )
 
 char* mpv_get_current_video()
 {
-	if ( g_mpv.empty() )
+	mpv_data_t* mpv = get_mpv_data( g_mpv_index );
+
+	if ( !mpv )
 		return nullptr;
 
-	if ( g_mpv_index >= g_mpv.size() )
-	{
-		g_mpv_index = 0;
-		return nullptr;
-	}
-
-	return g_mpv[ g_mpv_index ].current_video;
+	return mpv->current_video;
 }
 
 

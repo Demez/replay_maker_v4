@@ -13,6 +13,8 @@ char**                         g_recently_opened            = nullptr;
 u8                             g_recently_opened_count      = 0;
 
 clip_data_t*                   g_clip_data                  = nullptr;
+
+// TODO: move below into clip data namespace
 clip_output_video_t*           g_clip_current_output        = nullptr;
 u32                            g_clip_current_output_index  = UINT32_MAX;
 u32                            g_clip_current_input         = 0;
@@ -310,19 +312,19 @@ bool replay_editor_set_video( u32 output_i, u32 input_i )
 
 	memcpy( g_output_name_buf, output.name, strlen( output.name ) * sizeof( char ) );
 	g_focus_replay_maker = true;
+
+	set_mpv_index( input_i );
+	
 	return true;
 }
 
 
 void replay_editor_close_loose_video()
 {
-	if ( g_loose_video )
+	if ( g_mpv_extra_vid_on )
 	{
 		mpv_cmd_close_video( EXTRA_VID_ID );
-		free( g_loose_video );
-		g_loose_video = nullptr;
-
-		remove_mpv_extra_video();
+		//remove_mpv_extra_video();
 		set_mpv_index( get_mpv_count() - 1 );
 	}
 }
@@ -331,7 +333,7 @@ void replay_editor_close_loose_video()
 void replay_editor_load_loose_video( const char* path )
 {
 	replay_editor_close_loose_video();
-	set_mpv_extra_video();
+	// set_mpv_extra_video();
 
 	mpv_cmd_loadfile( path, EXTRA_VID_ID );
 	set_mpv_index( EXTRA_VID_ID );
@@ -357,7 +359,11 @@ void replay_editor_set_group( u32 output_i, u32 group_i, u32 group_src_i )
 	clip_output_group_t& group = output.groups[ group_i ];
 
 	if ( group_src_i >= group.sources.size() )
+	{
+		g_clip_current_group        = group_i;
+		g_clip_current_group_source = group_src_i;
 		return;
+	}
 
 	clip_source_usage_t& source_use = group.sources[ group_src_i ];
 
@@ -376,9 +382,9 @@ void replay_editor_set_group( u32 output_i, u32 group_i, u32 group_src_i )
 	bool swapping_group_or_output = g_clip_current_output_index != output_i || g_clip_current_group != group_i;
 	bool pause_video              = swapping_group_or_output;
 
-	if ( g_mpv_extra_vid_on || swapping_group_or_output )
+	if ( g_mpv_extra_vid_on && g_clip_current_output_index != output_i )
 	{
-		replay_editor_close_loose_video();
+		// replay_editor_close_loose_video();
 	}
 
 	g_clip_current_group        = group_i;
@@ -444,23 +450,60 @@ void replay_editor_load( clip_output_video_t* output )
 }
 
 
-void draw_replay_edit_creation_info( int size[ 2 ] )
+void draw_replay_edit_creation_info()
 {
 	// select default prefix
 	if ( g_default_prefix >= g_clip_data->prefix_count )
 		g_default_prefix = 0;
 
-	if ( !ImGui::BeginChild( "clip_creation", {}, ImGuiChildFlags_Borders | ImGuiChildFlags_AutoResizeY ) )
+	// ImGui::TextUnformatted( "TODO: Default Encode Presets Here" );
+
+	if ( ImGui::Button( "New Video" ) )
 	{
-		ImGui::EndChild();
-		return;
+		// create a new output video based on the filename of the playing video
+		mpv_data_t* mpv           = get_mpv_data();
+
+		if ( mpv && mpv->current_video )
+		{
+			replay_editor_reset();
+
+			clip_output_video_t* output = clip_add_output( g_clip_data, mpv->current_video );
+			g_clip_current_output       = output;
+
+			if ( output )
+			{
+				u32 new_group = g_clip_current_output->groups.size();
+				g_clip_current_output->groups.emplace_back();
+
+				// Copy seek time and pause
+				double time_pos = 0;
+				s32    paused   = 0;
+				p_mpv_get_property( mpv->mpv, "time-pos", MPV_FORMAT_DOUBLE, &time_pos );
+				p_mpv_get_property( mpv->mpv, "pause", MPV_FORMAT_FLAG, &paused );
+
+				clip_group_add_source( output, new_group, mpv->current_video );
+				replay_editor_set_group( g_clip_data->output_count - 1, new_group, 0 );
+				output->prefix = g_default_prefix;
+
+				p_mpv_set_property( get_mpv(), "time-pos", MPV_FORMAT_DOUBLE, &time_pos );
+				// p_mpv_set_property( get_mpv(), "pause", MPV_FORMAT_FLAG, &paused );
+
+				const char* cmd[]   = { "set", "pause", paused ? "yes" : "no", NULL };
+				int         cmd_ret = p_mpv_command_async( get_mpv(), 0, cmd );
+
+				// close loose video
+				mpv_cmd_close_video( EXTRA_VID_ID );
+			}
+		}
 	}
 
-	ImGui::TextUnformatted( "Default Prefix" );
 	ImGui::SameLine();
-	ImGui::SetNextItemWidth( -FLT_MIN );
 
-	if ( ImGui::BeginCombo( "##default_prefix", g_clip_data->prefix[ g_default_prefix ].name ) )
+	// ImGui::TextUnformatted( "Default Prefix" );
+	// ImGui::SameLine();
+	// ImGui::SetNextItemWidth( -FLT_MIN );
+
+	if ( ImGui::BeginCombo( "Default Prefix", g_clip_data->prefix[ g_default_prefix ].name, ImGuiComboFlags_WidthFitPreview ) )
 	{
 		for ( u32 i = 0; i < g_clip_data->prefix_count; i++ )
 		{
@@ -473,38 +516,38 @@ void draw_replay_edit_creation_info( int size[ 2 ] )
 		ImGui::EndCombo();
 	}
 
-	// ImGui::TextUnformatted( "TODO: Default Encode Presets Here" );
+	ImGui::Separator();
 
-	if ( ImGui::Button( "New Video" ) )
+	if ( g_clip_current_output )
 	{
-		// create a new output video based on the filename of the playing video
-		char* current_video = mpv_get_current_video();
+		ImGui::TextUnformatted( "Add Video to Group" );
 
-		if ( current_video )
+		for ( clip_output_group_t& group : g_clip_current_output->groups )
 		{
-			replay_editor_reset();
+			std::string group_name = clip_group_get_name( group );
 
-			clip_output_video_t* output = clip_add_output( g_clip_data, current_video );
-			g_clip_current_output       = output;
-
-			if ( output )
+			ImGui::SameLine();
+			if ( ImGui::Button( group_name.c_str() ) )
 			{
-				clip_add_input( output, current_video );
-
-				replay_editor_set_video( g_clip_data->output_count - 1, 0 );
-
-				output->prefix = g_default_prefix;
 			}
 		}
-	}
 
-	if ( !g_clip_current_output )
+		ImGui::Separator();
+	}
+}
+
+
+void draw_replay_edit_video_info( int size[ 2 ] )
+{
+	if ( !ImGui::BeginChild( "##clip_info_edit", {}, ImGuiChildFlags_Borders | ImGuiChildFlags_AutoResizeY ) )
 	{
 		ImGui::EndChild();
 		return;
 	}
 
-	ImGui::SameLine();
+	ImGui::TextUnformatted( "Output Video Info" );
+
+	ImGui::BeginDisabled( !g_clip_current_output );
 
 	ImGuiStyle& style         = ImGui::GetStyle();
 
@@ -517,18 +560,19 @@ void draw_replay_edit_creation_info( int size[ 2 ] )
 
 	spacing_width = MAX( -style.ItemSpacing.x, spacing_width );
 
-	ImGui::Dummy( { spacing_width, 0.f } );
-	ImGui::SameLine();
-
-	if ( ImGui::Button( "Delete" ) )
-	{
-		clip_remove_output( g_clip_data, g_clip_current_output );
-		replay_editor_reset();
-		ImGui::EndChild();
-		return;
-	}
-
-	ImGui::Separator();
+//	ImGui::Dummy( { spacing_width, 0.f } );
+//	ImGui::SameLine();
+//
+//	if ( ImGui::Button( "Delete" ) )
+//	{
+//		clip_remove_output( g_clip_data, g_clip_current_output );
+//		replay_editor_reset();
+//		ImGui::EndDisabled();
+//		ImGui::EndChild();
+//		return;
+//	}
+//
+//	ImGui::Separator();
 
 	const ImVec2 name_text_size   = ImGui::CalcTextSize( "Name" );
 	const ImVec2 prefix_text_size = ImGui::CalcTextSize( "Prefix" );
@@ -559,13 +603,16 @@ void draw_replay_edit_creation_info( int size[ 2 ] )
 	// combo box to select prefix
 	char* current_prefix = nullptr;
 
-	if ( g_clip_current_output->prefix >= g_clip_data->prefix_count )
+	if ( g_clip_current_output )
 	{
-		// reset to general profile
-		g_clip_current_output->prefix = 0;
-	}
+		if ( g_clip_current_output->prefix >= g_clip_data->prefix_count )
+		{
+			// reset to general profile
+			g_clip_current_output->prefix = 0;
+		}
 
-	current_prefix = g_clip_data->prefix[ g_clip_current_output->prefix ].name;
+		current_prefix = g_clip_data->prefix[ g_clip_current_output->prefix ].name;
+	}
 
 	ImGui::SetNextItemWidth( name_bar_width );
 
@@ -585,6 +632,7 @@ void draw_replay_edit_creation_info( int size[ 2 ] )
 		ImGui::EndCombo();
 	}
 
+	ImGui::EndDisabled();
 	ImGui::EndChild();
 }
 
@@ -815,7 +863,7 @@ void draw_replay_list( int size[ 2 ] )
 
 	ImGuiStyle& style = ImGui::GetStyle();
 
-	draw_replay_edit_creation_info( size );
+	// draw_replay_edit_video_info( size );
 
 	bool                      collapse_all      = false;
 	static bool               sort_newest_top   = true;
@@ -823,7 +871,22 @@ void draw_replay_list( int size[ 2 ] )
 	static u32                prefix_search     = UINT32_MAX;
 	static std::vector< u32 > preset_search;
 
-	if ( ImGui::BeginChild( "clip_filtering", {}, ImGuiChildFlags_Borders | ImGuiChildFlags_AutoResizeY ) )
+	static float              source_videos_height = ImGui::GetFrameHeightWithSpacing();
+	static float              export_area_height   = ImGui::GetFrameHeightWithSpacing() * 2;
+
+	{
+		//float min_height = 0.f;
+		//min_height += ImGui::GetFrameHeightWithSpacing() * 4.f;
+
+		//region_avail.y -= ImGui::GetFrameHeightWithSpacing() * 2.f;
+
+		// ImGui::SetNextWindowSizeConstraints( { -1, min_height }, { -1, region_avail.y } );
+
+		//video_list_size -= ( ImGui::GetFrameHeightWithSpacing() * 2 + style.ItemSpacing.y * 2 );
+		//ImGui::SetNextWindowSize( { -1, video_list_size } );
+	}
+
+	if ( ImGui::BeginChild( "clip_filtering", {}, ImGuiChildFlags_Borders | ImGuiChildFlags_AutoResizeY, ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse ) )
 	{
 		ImGui::BeginDisabled( clip_thread_loading() );
 
@@ -970,150 +1033,228 @@ void draw_replay_list( int size[ 2 ] )
 		ImGui::Text( "%d Entries", result_count );
 
 
-	ImGui::Separator();
+		// ImGui::Separator();
 
-	float      video_list_size{};
+		float video_list_size{};
 
+		{
+			ImVec2 cursor_screen_pos = ImGui::GetCursorScreenPos();
+			ImVec2 region_avail      = ImGui::GetContentRegionAvail();
+			// video_list_size          = region_avail;
+			video_list_size          = size[ 1 ] - cursor_screen_pos[ 1 ];
+
+			//video_list_size -= ( ImGui::GetFrameHeightWithSpacing() * 2 + style.ItemSpacing.y * 2 );
+		}
+
+		//ImGui::SetNextWindowSize( { -1, video_list_size } );
+
+		ImGui::EndDisabled();
+
+	}
+	ImGui::EndChild();
+
+	
+
+	ImVec2 region_avail = ImGui::GetContentRegionAvail();
+
+	// ImGui::SetNextWindowSizeConstraints( { -1, ImGui::GetFrameHeightWithSpacing() }, { -1, region_avail.y - ( source_videos_height + export_area_height ) } );
+
+	float bottom_area_height = source_videos_height + ( style.ItemSpacing.y * 1 );
+	bottom_area_height += ImGui::GetFrameHeightWithSpacing();      // source videos text
+	bottom_area_height += ImGui::GetFrameHeightWithSpacing() * 2;  // encode section
+	bottom_area_height += ImGui::GetFrameHeightWithSpacing() * 2;  // video name and prefix field
+	bottom_area_height += ImGui::GetFrameHeightWithSpacing();      // output vid section title
+	
+		//if ( !ImGui::BeginChild( "##video_list", {}, ImGuiChildFlags_Border ) )
+	if ( ImGui::BeginChild( "##video_list", { -1, region_avail.y - bottom_area_height }, ImGuiChildFlags_Border ) )
 	{
-		
-		ImVec2 cursor_screen_pos = ImGui::GetCursorScreenPos();
+		//ImGui::EndChild();
+		//ImGui::EndChild();
+		//return;
+
+		//	ImGui::Text( "SELECTED ID: %d", g_clip_reorder_drag.clip_id );
+		//	ImGui::Text( "TARGET ID: %d", g_clip_reorder_drag.target_id );
+
 		ImVec2 region_avail      = ImGui::GetContentRegionAvail();
-		// video_list_size          = region_avail;
-		video_list_size          = size[ 1 ] - cursor_screen_pos[ 1 ];
+		ImVec2 cursor_screen_pos = ImGui::GetCursorScreenPos();
+		ImVec2 cursor_pos        = ImGui::GetCursorPos();
+		ImVec2 mouse_pos         = ImGui::GetMousePos();
 
-		video_list_size -= ( ImGui::GetFrameHeightWithSpacing() * 2 + style.ItemSpacing.y * 2 );
-	}
+		ImGui::BeginDisabled( clip_thread_loading() );
 
-	ImGui::SetNextWindowSize( { -1, video_list_size } );
+		float entry_height = ImGui::GetFontSize() + ( style.FramePadding.y * 2 );
 
-	ImGui::EndDisabled();
+		if ( g_clip_reorder_drag.active )
+		{
+			ImGui::SetMouseCursor( ImGuiMouseCursor_ResizeNS );
 
-	//if ( !ImGui::BeginChild( "##video_list", {}, ImGuiChildFlags_Border ) )
-	if ( !ImGui::BeginChild( "##video_list" ) )
-	{
-		ImGui::EndChild();
-		ImGui::EndChild();
-		return;
-	}
+			u32         out_i     = sort_newest_top ? g_clip_data->output_count - 1 : 0;
 
-//	ImGui::Text( "SELECTED ID: %d", g_clip_reorder_drag.clip_id );
-//	ImGui::Text( "TARGET ID: %d", g_clip_reorder_drag.target_id );
+			ImDrawList* draw_list = ImGui::GetWindowDrawList();
 
-	ImVec2 region_avail      = ImGui::GetContentRegionAvail();
-	ImVec2 cursor_screen_pos = ImGui::GetCursorScreenPos();
-	ImVec2 cursor_pos        = ImGui::GetCursorPos();
-	ImVec2 mouse_pos         = ImGui::GetMousePos();
+			// for ( u32 out_i = g_clip_data->output_count; out_i > 0; --out_i )
+			for ( u32 loop_index = 0; loop_index < g_clip_data->output_count; loop_index++ )
+			{
+				// check if point is in rect here
+				ImVec2 insert_area_min( cursor_screen_pos.x, cursor_screen_pos.y + ( loop_index * ( entry_height + style.ItemSpacing.y ) ) );
+				// ImVec2 insert_area_max( cursor_screen_pos.x + drag_text_size.x + ( style.FramePadding.x * 2 ), ( cursor_screen_pos.y + entry_height + ( loop_index * ( entry_height + style.ItemSpacing.y ) ) ) );
+				ImVec2 insert_area_max( cursor_screen_pos.x + region_avail.x * ( style.FramePadding.x * 1 ), ( cursor_screen_pos.y + entry_height + ( loop_index * ( entry_height + style.ItemSpacing.y ) ) ) );
 
-	ImGui::BeginDisabled( clip_thread_loading() );
+				//			draw_list->AddRectFilled( insert_area_min, insert_area_max, ImColor( 180, 0, 160 ) );
+				//			char temp_test[ 8 ]{};
+				//			snprintf( temp_test, 8, "%d", out_i );
+				//			draw_list->AddText( insert_area_min, ImColor( 255, 255, 255 ),  temp_test );
 
-	float entry_height = ImGui::GetFontSize() + ( style.FramePadding.y * 2 );
+				if ( point_in_rect( mouse_pos, insert_area_min, insert_area_max ) )
+					g_clip_reorder_drag.target_id = out_i;
 
-	if ( g_clip_reorder_drag.active )
-	{
-		ImGui::SetMouseCursor( ImGuiMouseCursor_ResizeNS );
+				out_i += sort_newest_top ? -1 : 1;
+			}
+		}
 
-		u32 out_i = sort_newest_top ? g_clip_data->output_count - 1 : 0;
+		u64    imgui_id        = 1;
 
-		ImDrawList* draw_list    = ImGui::GetWindowDrawList();
+		ImVec2 prev_cursor_pos = ImGui::GetCursorPos();
+		u32    out_i           = sort_newest_top ? g_clip_data->output_count - 1 : 0;
 
 		// for ( u32 out_i = g_clip_data->output_count; out_i > 0; --out_i )
 		for ( u32 loop_index = 0; loop_index < g_clip_data->output_count; loop_index++ )
 		{
-			// check if point is in rect here
-			ImVec2 insert_area_min( cursor_screen_pos.x, cursor_screen_pos.y + ( loop_index * ( entry_height + style.ItemSpacing.y ) ) );
-			// ImVec2 insert_area_max( cursor_screen_pos.x + drag_text_size.x + ( style.FramePadding.x * 2 ), ( cursor_screen_pos.y + entry_height + ( loop_index * ( entry_height + style.ItemSpacing.y ) ) ) );
-			ImVec2 insert_area_max( cursor_screen_pos.x + region_avail.x * ( style.FramePadding.x * 1 ), ( cursor_screen_pos.y + entry_height + ( loop_index * ( entry_height + style.ItemSpacing.y ) ) ) );
-
-//			draw_list->AddRectFilled( insert_area_min, insert_area_max, ImColor( 180, 0, 160 ) );
-//			char temp_test[ 8 ]{};
-//			snprintf( temp_test, 8, "%d", out_i );
-//			draw_list->AddText( insert_area_min, ImColor( 255, 255, 255 ),  temp_test );
-
-			if ( point_in_rect( mouse_pos, insert_area_min, insert_area_max ) )
-				g_clip_reorder_drag.target_id = out_i;
-
-			out_i += sort_newest_top ? -1 : 1;
-		}
-	}
-
-	u64 imgui_id = 1;
-
-	ImVec2 prev_cursor_pos = ImGui::GetCursorPos();
-	u32 out_i = sort_newest_top ? g_clip_data->output_count - 1 : 0;
-
-	// for ( u32 out_i = g_clip_data->output_count; out_i > 0; --out_i )
-	for ( u32 loop_index = 0; loop_index < g_clip_data->output_count; loop_index++ )
-	{
-		if ( g_clip_reorder_drag.active && !g_clip_reorder_drag.just_selected )
-		{
-			if ( out_i == g_clip_reorder_drag.clip_id )
+			if ( g_clip_reorder_drag.active && !g_clip_reorder_drag.just_selected )
 			{
-				// Follow mouse cursor
-				ImGui::SetCursorScreenPos( ImVec2( cursor_screen_pos.x, mouse_pos.y + mouse_pos_diff.y ) );
-			}
-
-			// if ( !sort_newest_top && out_i == 0 && out_i == g_clip_reorder_drag.target_id )
-			if ( g_clip_reorder_drag.clip_id != out_i && loop_index == 0 && out_i == g_clip_reorder_drag.target_id )
-			{
-				ImGui::SetCursorPos( ImVec2( prev_cursor_pos.x, prev_cursor_pos.y + entry_height + style.ItemSpacing.y ) );
-			}
-		}
-
-		draw_replay_list_entry( imgui_id, out_i, search_box, prefix_search, collapse_all, preset_search );
-
-		if ( g_clip_reorder_drag.active && !g_clip_reorder_drag.just_selected )
-		{
-			if ( out_i == g_clip_reorder_drag.clip_id )
-			{
-				if ( out_i == g_clip_reorder_drag.target_id )
+				if ( out_i == g_clip_reorder_drag.clip_id )
 				{
-					// Reset cursor
+					// Follow mouse cursor
+					ImGui::SetCursorScreenPos( ImVec2( cursor_screen_pos.x, mouse_pos.y + mouse_pos_diff.y ) );
+				}
+
+				// if ( !sort_newest_top && out_i == 0 && out_i == g_clip_reorder_drag.target_id )
+				if ( g_clip_reorder_drag.clip_id != out_i && loop_index == 0 && out_i == g_clip_reorder_drag.target_id )
+				{
 					ImGui::SetCursorPos( ImVec2( prev_cursor_pos.x, prev_cursor_pos.y + entry_height + style.ItemSpacing.y ) );
+				}
+			}
+
+			draw_replay_list_entry( imgui_id, out_i, search_box, prefix_search, collapse_all, preset_search );
+
+			if ( g_clip_reorder_drag.active && !g_clip_reorder_drag.just_selected )
+			{
+				if ( out_i == g_clip_reorder_drag.clip_id )
+				{
+					if ( out_i == g_clip_reorder_drag.target_id )
+					{
+						// Reset cursor
+						ImGui::SetCursorPos( ImVec2( prev_cursor_pos.x, prev_cursor_pos.y + entry_height + style.ItemSpacing.y ) );
+					}
+					else
+					{
+						// Reset cursor
+						ImGui::SetCursorPos( ImVec2( prev_cursor_pos.x, prev_cursor_pos.y ) );
+					}
+				}
+
+				// this is stupid lmao
+				if ( sort_newest_top )
+				{
+					// if the next one is the target id, move that one down twice
+					if ( out_i < g_clip_reorder_drag.clip_id && out_i == g_clip_reorder_drag.target_id )
+					{
+						ImGui::SetCursorPos( ImVec2( prev_cursor_pos.x, prev_cursor_pos.y + ( 2 * ( entry_height + style.ItemSpacing.y ) ) ) );
+					}
+					// behavior for moving back on the list
+					else if ( out_i - 1 > g_clip_reorder_drag.clip_id && out_i - 1 == g_clip_reorder_drag.target_id )
+					{
+						ImGui::SetCursorPos( ImVec2( prev_cursor_pos.x, prev_cursor_pos.y + ( 2 * ( entry_height + style.ItemSpacing.y ) ) ) );
+					}
 				}
 				else
 				{
-					// Reset cursor
-					ImGui::SetCursorPos( ImVec2( prev_cursor_pos.x, prev_cursor_pos.y ) );
+					// if the next one is the target id, move that one down twice
+					if ( out_i > g_clip_reorder_drag.clip_id && out_i == g_clip_reorder_drag.target_id )
+					{
+						ImGui::SetCursorPos( ImVec2( prev_cursor_pos.x, prev_cursor_pos.y + ( 2 * ( entry_height + style.ItemSpacing.y ) ) ) );
+					}
+					// behavior for moving back on the list
+					else if ( out_i + 1 < g_clip_reorder_drag.clip_id && out_i + 1 == g_clip_reorder_drag.target_id )
+					{
+						ImGui::SetCursorPos( ImVec2( prev_cursor_pos.x, prev_cursor_pos.y + ( 2 * ( entry_height + style.ItemSpacing.y ) ) ) );
+					}
 				}
 			}
 
-			// this is stupid lmao
-			if ( sort_newest_top )
-			{
-				// if the next one is the target id, move that one down twice
-				if ( out_i < g_clip_reorder_drag.clip_id && out_i == g_clip_reorder_drag.target_id )
-				{
-					ImGui::SetCursorPos( ImVec2( prev_cursor_pos.x, prev_cursor_pos.y + ( 2 * ( entry_height + style.ItemSpacing.y ) ) ) );
-				}
-				// behavior for moving back on the list
-				else if ( out_i - 1 > g_clip_reorder_drag.clip_id && out_i - 1 == g_clip_reorder_drag.target_id )
-				{
-					ImGui::SetCursorPos( ImVec2( prev_cursor_pos.x, prev_cursor_pos.y + ( 2 * ( entry_height + style.ItemSpacing.y ) ) ) );
-				}
-			}
-			else
-			{
-				// if the next one is the target id, move that one down twice
-				if ( out_i > g_clip_reorder_drag.clip_id && out_i == g_clip_reorder_drag.target_id )
-				{
-					ImGui::SetCursorPos( ImVec2( prev_cursor_pos.x, prev_cursor_pos.y + ( 2 * ( entry_height + style.ItemSpacing.y ) ) ) );
-				}
-				// behavior for moving back on the list
-				else if ( out_i + 1 < g_clip_reorder_drag.clip_id && out_i + 1 == g_clip_reorder_drag.target_id )
-				{
-					ImGui::SetCursorPos( ImVec2( prev_cursor_pos.x, prev_cursor_pos.y + ( 2 * ( entry_height + style.ItemSpacing.y ) ) ) );
-				}
-			}
+			prev_cursor_pos = ImGui::GetCursorPos();
+			out_i += sort_newest_top ? -1 : 1;
 		}
 
-		prev_cursor_pos = ImGui::GetCursorPos();
-		out_i += sort_newest_top ? -1 : 1;
-	}
+		ImGui::EndDisabled();
 
-	ImGui::EndDisabled();
+		//ImGui::EndChild();
+	}
 
 	ImGui::EndChild();
+
+	// ===================================================================================
+	// Output Source List
+
+	draw_replay_edit_video_info( size );
+
+	ImGui::TextUnformatted( "Source Videos" );
+
+	ImGui::SetNextWindowSizeConstraints( { -1, ImGui::GetFrameHeightWithSpacing() }, { -1, ImGui::GetFrameHeightWithSpacing() * 8.f } );
+
+	if ( ImGui::BeginChild( "source_list", {}, ImGuiChildFlags_Borders | ImGuiChildFlags_AutoResizeY ) )
+	{
+		if ( g_clip_current_output )
+		{
+			for ( u32 source_i = 0; source_i < g_clip_current_output->source_count; source_i++ )
+			{
+				clip_source_t& source = g_clip_current_output->source[ source_i ];
+
+				// Check if this source is used in the current group
+				bool           source_used_in_group = false;
+
+				if ( g_clip_current_group != UINT32_MAX && g_clip_current_group < g_clip_current_output->groups.size() )
+				{
+					clip_output_group_t& group = g_clip_current_output->groups[ g_clip_current_group ];
+
+					for ( u32 source_use_i = 0; source_use_i < group.sources.size(); source_use_i++ )
+					{
+						clip_source_usage_t& source_use = group.sources[ source_use_i ];
+
+						if ( source_i != source_use.source_index )
+							continue;
+
+						source_used_in_group = true;
+						break;
+					}
+				}
+
+				if ( ImGui::BeginChild( source_i + 1, {}, ImGuiChildFlags_Borders | ImGuiChildFlags_AutoResizeY | ImGuiChildFlags_FrameStyle ) )
+				{
+					ImGui::TextUnformatted( source.path );
+					ImGui::Separator();
+
+					if ( ImGui::Button( "Add to Current Group" ) )
+					{
+						u32 i = clip_group_add_source( g_clip_current_output, g_clip_current_group, source.path );
+						replay_editor_set_group( g_clip_current_output_index, g_clip_current_group, i );
+					}
+
+					ImGui::SameLine();
+
+					if ( ImGui::Button( "Preview Video" ) )
+					{
+						// Set to MPV Loose video
+						replay_editor_load_loose_video( source.path );
+					}
+				}
+
+				ImGui::EndChild();
+			}
+		}
 	}
+
+	source_videos_height = ImGui::GetWindowHeight();
 	ImGui::EndChild();
 
 	// ===================================================================================
@@ -1123,7 +1264,7 @@ void draw_replay_list( int size[ 2 ] )
 
 	ImGui::BeginDisabled( clip_thread_loading() );
 
-	if ( ImGui::BeginChild( "##export", {}, ImGuiChildFlags_None, ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse | ImGuiWindowFlags_NoSavedSettings ) )
+	//if ( ImGui::BeginChild( "##export", {}, ImGuiChildFlags_None, ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse | ImGuiWindowFlags_NoSavedSettings ) )
 	{
 		ImGui::InputText( "Output Path", g_output_dir, 512 );
 		// ImGui::InputText( "Temp Path", g_temp_video_dir, 512 );
@@ -1163,7 +1304,8 @@ void draw_replay_list( int size[ 2 ] )
 		}
 	}
 
-	ImGui::EndChild();
+	//export_area_height = ImGui::GetWindowHeight();
+	//ImGui::EndChild();
 
 	// ===================================================================================
 
@@ -1228,8 +1370,6 @@ void draw_preset_dropdown( clip_output_video_t& output, clip_output_group_t& gro
 	{
 		if ( ImGui::BeginCombo( "##presets", "Presets", ImGuiComboFlags_HeightLargest | ImGuiComboFlags_WidthFitPreview ) )
 		{
-			g_preset_combo_open = true;
-
 			for ( u32 i = 0; i < g_clip_data->preset_count; i++ )
 			{
 				// lmao what the fuck
@@ -1256,7 +1396,7 @@ void draw_preset_dropdown( clip_output_video_t& output, clip_output_group_t& gro
 
 				if ( ImGui::Selectable( g_clip_data->preset[ i ].name ) )
 				{
-					clip_group_add_preset( group, i );
+					clip_group_add_preset( output, group, i );
 				}
 			}
 
@@ -1290,7 +1430,7 @@ void draw_preset_dropdown( clip_output_video_t& output, clip_output_group_t& gro
 
 	if ( preset_remove != UINT32_MAX )
 	{
-		clip_group_remove_preset( group, preset_remove );
+		clip_group_remove_preset( output, group, preset_remove );
 	}
 }
 

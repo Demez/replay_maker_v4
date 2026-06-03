@@ -196,6 +196,8 @@ clip_output_video_t* clip_add_output( clip_data_t* data, const char* name )
 
 	data->output_count++;
 
+	// add a group to it
+
 	return output;
 }
 
@@ -228,6 +230,7 @@ u32 clip_add_input( clip_output_video_t* output, const char* path )
 
 	strcpy( source->path, path );
 	source->path[ strlen( path ) ] = 0;
+	source->filename                = fs_get_filename( source->path );
 
 	clip_get_video_metadata( *source );
 
@@ -297,6 +300,36 @@ void clip_remove_source_from_preset( clip_output_video_t* output, u32 preset_ind
 #endif
 
 
+std::string clip_group_get_name( clip_output_group_t& group )
+{
+	// collect presets used
+	char title[ 128 ]{};
+	snprintf( title, 128, "Group: " );
+
+	if ( group.presets.size() )
+	{
+		for ( u32 preset_i = 0; preset_i < group.presets.size(); preset_i++ )
+		{
+			clip_encode_preset_t& preset = g_clip_data->preset[ group.presets[ preset_i ] ];
+			strcat( title, preset.name );
+
+			if ( preset_i + 1 < group.presets.size() )
+				strcat( title, ", " );
+		}
+	}
+	else
+	{
+		strcat( title, "[NO PRESETS]" );
+
+		ImGui::PushStyleColor( ImGuiCol_Tab, COLOR_BTN_RED );
+		ImGui::PushStyleColor( ImGuiCol_TabHovered, COLOR_BTN_RED_HOVER );
+		ImGui::PushStyleColor( ImGuiCol_TabSelected, COLOR_BTN_RED_ACTIVE );
+	}
+
+	return title;
+}
+
+
 u32  clip_group_add_source( clip_output_video_t* output, u32 group_index, const char* path )
 {
 	if ( !output )
@@ -314,6 +347,9 @@ u32  clip_group_add_source( clip_output_video_t* output, u32 group_index, const 
 
 	clip_source_usage_t& source = group.sources.emplace_back();
 	source.source_index         = source_i;
+
+	clip_check_video( g_clip_data, *output );
+
 	return group.sources.size() - 1;
 }
 
@@ -332,6 +368,8 @@ void clip_group_remove_source( clip_output_video_t* output, u32 group_index, u32
 		return;
 
 	group.sources.remove( group_src_i );
+
+	clip_check_video( g_clip_data, *output );
 }
 
 
@@ -350,38 +388,37 @@ void clip_group_remove_source( clip_output_video_t* output, u32 group_index, con
 }
 
 
-void clip_group_add_preset( clip_output_group_t& group, u32 preset_i )
+void clip_group_add_preset( clip_output_video_t& output, clip_output_group_t& group, u32 preset_i )
 {
 	if ( group.presets.index( preset_i ) != UINT32_MAX )
 		return;
 
 	group.presets.push_back( preset_i );
+	clip_check_video( g_clip_data, output );
 }
 
 
-void clip_group_remove_preset( clip_output_group_t& group, u32 preset_i )
+void clip_group_remove_preset( clip_output_video_t& output, clip_output_group_t& group, u32 preset_i )
 {
 	for ( u32 i = 0; i < group.presets.size(); i++ )
 	{
 		if ( group.presets[ i ] == preset_i )
 		{
 			group.presets.remove( i );
+			clip_check_video( g_clip_data, output );
 			break;
 		}
 	}
 }
 
 
-void clip_group_remove_preset( clip_output_video_t* output, u32 group_index, u32 preset_i )
+void clip_group_remove_preset( clip_output_video_t& output, u32 group_index, u32 preset_i )
 {
-	if ( !output )
+	if ( group_index >= output.groups.size() )
 		return;
 
-	if ( group_index >= output->groups.size() )
-		return;
-
-	clip_output_group_t& group = output->groups[ group_index ];
-	clip_group_remove_preset( group, preset_i );
+	clip_output_group_t& group = output.groups[ group_index ];
+	clip_group_remove_preset( output, group, preset_i );
 }
 
 

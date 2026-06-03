@@ -741,6 +741,25 @@ void clip_get_video_metadata( clip_source_t& source )
 
 void clip_check_video( clip_data_t* data, clip_output_video_t& output )
 {
+	if ( output.name == nullptr )
+	{
+		output.state = e_output_state_invalid;
+		return;
+	}
+
+	if ( output.source_count == 0 || output.source == nullptr )
+	{
+		output.state = e_output_state_invalid;
+		return;
+	}
+
+	if ( output.groups.empty() )
+	{
+		output.state = e_output_state_invalid;
+		return;
+	}
+
+
 #if 0
 	// ----------------------------------------------------------------------------------------
 	// determine encode presets for this output video

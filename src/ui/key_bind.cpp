@@ -1,5 +1,6 @@
 #include "main.h"
 #include "imgui.h"
+#include "imgui_internal.h"
 
 #include <unordered_map>
 
@@ -155,7 +156,9 @@ void handle_keybinds()
 	}
 	else if ( ImGui::IsKeyPressed( ImGuiKey_MouseLeft, false ) )
 	{
-		if ( !g_preset_combo_open && !g_hovered_divider && mouse_in_rect( { 0.f, 0.f }, { (float)g_mpv_size[ 0 ], (float)g_mpv_size[ 1 ] } ) )
+		bool video_area_hovered = mouse_hovering_area( { 0.f, 0.f }, { (float)g_mpv_size[ 0 ], (float)g_mpv_size[ 1 ] } );
+
+		if ( !g_hovered_divider && video_area_hovered )
 			mpv_cmd_toggle_playback();
 	}
 	else if ( ImGui::IsKeyPressed( ImGuiKey_LeftArrow, true ) )

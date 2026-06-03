@@ -119,6 +119,9 @@ void                               sys_set_window( SDL_Window* window );
 bool                               point_in_rect( ImVec2 point, ImVec2 min_size, ImVec2 max_size );
 bool                               mouse_in_rect( ImVec2 min_size, ImVec2 max_size );
 
+// Checks for any popup menus drawing over the window
+bool                               mouse_hovering_area( ImVec2 min_size, ImVec2 max_size );
+
 // --------------------------------------------------------------------------------------------------------
 // MPV
 
@@ -130,6 +133,7 @@ void                               stop_mpv();
 mpv_data_t*                        get_mpv_data( u32 index = UINT32_MAX );
 mpv_handle*                        get_mpv();
 mpv_render_context*                get_mpv_gl();
+u32                                get_mpv_index();
 u32                                get_mpv_count();
 void                               set_mpv_index( u32 index );
 void                               set_mpv_count( u32 count );
@@ -203,6 +207,8 @@ void                               replay_editor_load_loose_video( const char* p
 void                               replay_editor_set_group( u32 output_i, u32 group_i, u32 group_src_i );
 void                               replay_editor_reset();
 
+void                               draw_replay_edit_creation_info();
+
 void                               draw_preset_dropdown( clip_output_video_t& output, clip_output_group_t& group, bool edit );
 
 void                               enable_sidebar( bool enabled );
@@ -249,8 +255,6 @@ extern char*                       g_videos_file_path;
 extern char*                       g_recently_opened_path;
 extern char**                      g_recently_opened;
 extern u8                          g_recently_opened_count;
-
-extern bool                        g_preset_combo_open;
 
 extern float                       g_frame_time;
 
