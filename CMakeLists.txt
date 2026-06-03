@@ -159,6 +159,7 @@ set(
     src/vector.hpp
 
     src/ui/mpv_interface.cpp
+    src/ui/ui_main.cpp
     src/ui/ui_encode.cpp
     src/ui/ui_editor.cpp
     src/ui/ui_timeline.cpp

@@ -67,6 +67,9 @@ char*                g_videos_file_path;
 std::thread*         g_clip_load_thread       = nullptr;
 e_clip_parse_state   g_clip_load_thread_state = e_clip_parse_state_idle;
 
+static ivec2         g_old_mpv_size;
+static ivec2         g_old_window_size;
+
 //#define TEST_VIDEO L"H:\\videos\\av1_testing\\Replay 2024-07-21 23-10-44.mkv"
 //#define TEST_VIDEO L"D:\\projects\\replay_maker_v4\\out\\test.mp4"
 
@@ -127,504 +130,8 @@ bool mouse_hovering_area( ImVec2 min_size, ImVec2 max_size )
 }
 
 
-// --------------------------------------------------------------------------------------------------
-
-
-void draw_playback_controls( int size[ 2 ], bool draw_volume )
-{
-	// is there a video playing?
-	
-	// HACK
-	// if ( mpv_get_current_video() && g_video_media_info.track_count == 0 )
-	// {
-	// 	printf( "NO MEDIA INFO!\n" );
-	// 	get_media_info();
-	// }
-
-	ImGuiStyle& style        = ImGui::GetStyle();
-	ImVec2      region_avail = ImGui::GetContentRegionAvail();
-
-	// time-pos
-	double time_pos = 0;
-	double duration = 0;
-	p_mpv_get_property( get_mpv(), "time-pos", MPV_FORMAT_DOUBLE, &time_pos );
-	p_mpv_get_property( get_mpv(), "duration", MPV_FORMAT_DOUBLE, &duration );
-
-	// volume
-
-	s32 paused = 0;
-	p_mpv_get_property( get_mpv(), "pause", MPV_FORMAT_FLAG, &paused );
-
-	// seek bar
-
-	// https://stackoverflow.com/questions/3673226/how-to-print-time-in-format-2009-08-10-181754-811
-
-	char str_time_pos[ TIME_BUFFER ]{ 0 };
-	char str_duration[ TIME_BUFFER ]{ 0 };
-
-	util_format_time( str_time_pos, time_pos );
-	util_format_time( str_duration, duration );
-
-	// draw audio track name
-	// audio track test
-	//char* audio_track       = 0;
-	char*        audio_track     = 0;
-	// mpv_error audio_ret         = (mpv_error)p_mpv_get_property( g_mpv, "audio", MPV_FORMAT_NONE, &audio_track );
-	mpv_error    audio_ret            = (mpv_error)p_mpv_get_property( get_mpv(), "audio", MPV_FORMAT_STRING, &audio_track );
-	// mpv_error audio_ret         = (mpv_error)p_mpv_get_property( g_mpv, "track-list/audio/id", MPV_FORMAT_STRING, &audio_track );
-
-	char         track_name_buf[ 32 ] = { 0 };
-	// snprintf( track_name_buf, 32, "track-list/%s/title", audio_track );
-
-	char*        audio_track_name     = 0;
-	audio_ret                         = (mpv_error)p_mpv_get_property( get_mpv(), "current-tracks/audio/title", MPV_FORMAT_STRING, &audio_track_name );
-
-	//ImGui::PushStyleVarX( ImGuiStyleVar_ItemSpacing, 0.f );
-
-	ImGui::Text( "%s / %s", str_time_pos, str_duration );
-
-	ImGui::SameLine();
-	ImGui::SeparatorEx( ImGuiSeparatorFlags_Vertical );
-	ImGui::SameLine();
-
-	ImGui::TextUnformatted( mpv_get_current_video() ? mpv_get_current_video() : "No Video Loaded" );
-
-	ImGui::SameLine();
-	ImGui::SeparatorEx( ImGuiSeparatorFlags_Vertical );
-	ImGui::SameLine();
-
-	ImGui::Text( "Audio: %s", audio_track_name ? audio_track_name : "" );
-
-	const bool show_timeline = get_mpv_index() != EXTRA_VID_ID;
-
-	//ImGui::Separator();
-
-	//ImGui::PopStyleVar();
-	{
-		ImVec2 button_size = region_avail;
-		button_size.y      = ImGui::GetTextLineHeight();
-		button_size.x *= 0.5;
-		// button_size.x -= style.ItemSpacing.x;
-
-		extern u32 clip_data::current_output_index;
-		extern u32 clip_data::current_group_source;
-		extern u32 clip_data::current_group;
-
-		if ( ImGui::BeginTabBar( "##video_preview_tabs" ) )
-		{
-			if ( show_timeline )
-				ImGui::PushStyleColor( ImGuiCol_Tab, style.Colors[ ImGuiCol_TabSelected ] );
-
-			ImGui::SetNextItemWidth( button_size.x );
-
-			ImVec2 cursor_pos = ImGui::GetCursorPos();
-
-			if ( ImGui::TabItemButton( "##timeline_view" ) )
-			{
-				set_mpv_index( 0 );
-				replay_editor_set_group( clip_data::current_output_index, clip_data::current_group, clip_data::current_group_source );
-			}
-
-			if ( show_timeline )
-				ImGui::PopStyleColor();
-			else
-				ImGui::PushStyleColor( ImGuiCol_Tab, style.Colors[ ImGuiCol_TabSelected ] );
-
-			ImGui::SameLine();
-			ImGui::SetCursorPosX( cursor_pos.x );
-			ImGui::TextAligned( 0.5, button_size.x, "Timelime View" );
-			ImGui::SameLine();
-
-			//ImGui::SameLine();
-			//ImGui::Spacing();
-			//ImGui::SameLine();
-
-			ImGui::BeginDisabled( !g_mpv_extra_vid_on );
-
-			char loose_vid_name[ 300 ]{};
-
-			mpv_data_t* mpv_extra = get_mpv_data( EXTRA_VID_ID );
-
-			if ( mpv_extra && mpv_extra->current_video )
-			{
-				snprintf( loose_vid_name, 300, "Clip Preview - %s", mpv_extra->current_video );
-			}
-			else
-			{
-				snprintf( loose_vid_name, 300, "Clip Preview" );
-			}
-
-			ImGui::SetNextItemWidth( button_size.x );
-
-			//cursor_pos = ImGui::GetCursorPos();
-
-			// if ( ImGui::Selectable( loose_vid_name, g_show_loose_video, 0, button_size ) )
-			if ( ImGui::TabItemButton( "##clip_preview" ) )
-			{
-				set_mpv_index( EXTRA_VID_ID );
-			}
-
-			//cursor_pos = ImGui::GetCursorPos();
-
- 			if ( !show_timeline )
-				ImGui::PopStyleColor();
-
-			ImGui::SameLine();
-			ImGui::SetCursorPosX( cursor_pos.x + button_size.x );
-			ImGui::TextAligned( 0.5, button_size.x, loose_vid_name );
-
-			ImGui::EndDisabled();
-		}
-
-		ImGui::EndTabBar();
-
-		// ImGui::Separator();
-	}
-
-	// can offset the seek bar to the right depending on the current playback time
-	// ImGui::SameLine();
-
-	// what if we had a custom seek bar that was snapshots of the video, kind of like the vscode text preview on the scrollbar
-	// or have a thumbnail of the frame as a popup when you hover over the seek bar
-
-	if ( show_timeline )
-	{
-		ImGui::Separator();
-		timeline_draw();
-	}
-	else
-	{
-		if ( ImGui::BeginChild( "clip_creation", {}, ImGuiChildFlags_Borders | ImGuiChildFlags_AutoResizeY ) )
-		{
-			mpv_data_t* mpv = get_mpv_data( EXTRA_VID_ID );
-			ImGui::BeginDisabled( !mpv->current_video );
-
-			draw_replay_edit_creation_info();
-
-			ImGui::PushItemWidth( -1 );
-
-			// Basic video timeline
-			float time_pos_f = (float)time_pos;
-			if ( ImGui::SliderFloat( "##seek", &time_pos_f, 0.f, (float)duration ) )
-			{
-				// convert float to string in c
-				char time_pos_str[ 16 ];
-				gcvt( time_pos_f, 4, time_pos_str );
-
-				const char* cmd[]   = { "seek", time_pos_str, "absolute", NULL };
-				int         cmd_ret = p_mpv_command_async( get_mpv(), 0, cmd );
-				printf( "seek - %d\n", cmd_ret );
-			}
-
-			ImGui::PopItemWidth();
-			ImGui::EndDisabled();
-		}
-
-		ImGui::EndChild();
-	}
-
-	ImVec2 region_avail2 = ImGui::GetContentRegionAvail();
-
-	if ( region_avail2.y > ImGui::GetFrameHeightWithSpacing() )
-	{
-		ImGui::SetCursorPosY( size[ 1 ] - ImGui::GetFrameHeightWithSpacing() );
-	}
-
-	const ImVec2 label_size    = ImGui::CalcTextSize( "Pause", NULL, true );
-	ImVec2       play_btn_size = ImGui::CalcItemSize( { 0, 0 }, label_size.x + style.FramePadding.x * 2.0f, label_size.y + style.FramePadding.y * 2.0f );
-
-	if ( paused )
-	{
-		if ( ImGui::Button( "Play", play_btn_size ) )
-		{
-			if ( duration - 0.15 < time_pos )
-			{
-				// try to seek to next vid
-				if ( show_timeline )
-					timeline_advance();
-			}
-
-			const char* cmd[]   = { "set", "pause", "no", NULL };
-			int         cmd_ret = p_mpv_command_async( get_mpv(), 0, cmd );
-			printf( "play- %d\n", cmd_ret );
-		}
-	}
-	else
-	{
-		if ( ImGui::Button( "Pause", play_btn_size ) )
-		{
-			const char* cmd[]   = { "set", "pause", "yes", NULL };
-			int         cmd_ret = p_mpv_command_async( get_mpv(), 0, cmd );
-			printf( "pause- %d\n", cmd_ret );
-		}
-	}
-
-	ImGui::SameLine();
-	ImGui::Spacing();
-
-	ImGui::SameLine();
-	if ( ImGui::Button( "<|" ) )
-	{
-		const char* cmd[]   = { "seek", "0", "absolute", NULL };
-		int         cmd_ret = p_mpv_command_async( get_mpv(), 0, cmd );
-	}
-
-	ImGui::SameLine();
-	if ( ImGui::Button( "|>" ) )
-	{
-		char duration_str[ 16 ];
-		gcvt( duration, 4, duration_str );
-
-		// const char* cmd[]   = { "seek", duration_str, "absolute", NULL };
-		const char* cmd[]   = { "seek", "100", "absolute-percent+exact", NULL };
-		int         cmd_ret = p_mpv_command_async( get_mpv(), 0, cmd );
-	}
-
-	ImGui::SameLine();
-	ImGui::Spacing();
-
-	ImGui::SameLine();
-	if ( ImGui::Button( "<" ) )
-	{
-		const char* cmd[]   = { "frame-back-step", NULL };
-		int         cmd_ret = p_mpv_command_async( get_mpv(), 0, cmd );
-	}
-
-	ImGui::SameLine();
-	if ( ImGui::Button( ">" ) )
-	{
-		const char* cmd[]   = { "frame-step", NULL };
-		int         cmd_ret = p_mpv_command_async( get_mpv(), 0, cmd );
-	}
-
-	// TODO: add speed controls here
-
-	if ( !draw_volume )
-		return;
-
-	ImGui::SameLine();
-	ImGui::Spacing();
-	ImGui::SameLine();
-
-	// audio track selection
-	char        audio_btn[ 16 ] = { 0 };
-
-	mpv_data_t* mpv             = get_mpv_data();
-
-	if ( audio_track && mpv )
-	{
-
-		/*if ( strcmp( audio_track, "auto" ) == 0 )
-		{
-			snprintf( audio_btn, 16, "Audio: auto/%lld", g_video_media_info.track_count_audio );
-		}
-		else*/ if ( strcmp( audio_track, "no" ) == 0 )
-		{
-			snprintf( audio_btn, 16, "Audio: -/%lld", mpv->track_count_audio );
-		}
-		else
-		{
-			snprintf( audio_btn, 16, "Audio: %s/%lld", audio_track, mpv->track_count_audio );
-		}
-	}
-	else
-	{
-		snprintf( audio_btn, 16, "Audio: none" );
-	}
-
-	char   temp_test[ 16 ] = { 0 };
-	if ( mpv )
-		snprintf( temp_test, 16, "Audio: auto/%lld", mpv->track_count_audio );
-	else
-		snprintf( temp_test, 16, "Audio: none" );
-	
-	ImVec2 audio_btn_text = ImGui::CalcTextSize( temp_test );
-
-	audio_btn_text.x += style.FramePadding.x * 2;
-	audio_btn_text.y += style.FramePadding.y * 2;
-
-	if ( ImGui::Button( audio_btn, audio_btn_text ) )
-	{
-		const char* cmd[]   = { "cycle", "audio", NULL };
-		int         cmd_ret = p_mpv_command_async( get_mpv(), 0, cmd );
-		printf( "cycle audio ret - %d\n", cmd_ret );
-	}
-
-	ImGui::SameLine();
-
-	// try to get the audio track (might be odd with muscle memory)
-
-	if ( ImGui::Button( "Open Folder" ) )
-	{
-		sys_browse_to_file( mpv_get_current_video() );
-	}
-
-	ImGui::SameLine();
-
-	if ( ImGui::Button( "Toggle Sidebar" ) )
-	{
-		enable_sidebar( !app::sidebar );
-	}
-
-	ImGui::SameLine();
-
-	ImGui::BeginDisabled( true );
-
-	if ( ImGui::Button( "Take Screenshot" ) )
-	{
-	}
-
-	ImGui::EndDisabled();
-
-	if ( draw_volume )
-	{
-		double volume = 0;
-		p_mpv_get_property( get_mpv(), "volume", MPV_FORMAT_DOUBLE, &volume );
-
-		ImGui::SameLine();
-		ImGui::SetNextItemWidth( 130.f );
-
-		float volume_f = volume;
-		if ( ImGui::SliderFloat( "Volume", &volume_f, 0.f, 130.f ) )
-		{
-			// convert float to string in c
-			char volume_str[ 16 ];
-			gcvt( volume_f, 4, volume_str );
-
-			const char* cmd[]   = { "set", "volume", volume_str, NULL };
-			int         cmd_ret = p_mpv_command_async( get_mpv(), 0, cmd );
-		}
-	}
-}
-
-
-#if 0
-
-#define MPV_CMD( ... )                                              \
-{                                                               \
-const char* cmd[]   = { __VA_ARGS__, NULL };                \
-int         cmd_ret = p_mpv_command_async( g_mpv, 0, cmd ); \
-if ( cmd_ret != 0 ) \
-printf( "MPV CMD Error: %d", cmd_ret ); \
-}
-
-
-constexpr const char* MONITOR_ZOOM_HACK     = "1.1";
-constexpr const char* NEW_MONITOR_ZOOM_HACK = "1.0";
-
-
-void handle_keybinds()
-{
-	// make sure imgui isn't focused in any text box first
-	if ( ImGui::GetIO().WantTextInput )
-		return;
-
-	if ( ImGui::IsKeyPressed( ImGuiKey_Tab, false ) )
-	{
-		enable_sidebar( !app::sidebar );
-	}
-	else if ( ImGui::IsKeyPressed( ImGuiKey_F, false ) )
-	{
-		sys_mpv_full_window_toggle();
-	}
-	else if ( ImGui::IsKeyDown( ImGuiKey_LeftCtrl ) && ImGui::IsKeyPressed( ImGuiKey_S, false ) )
-	{
-		save_videos();
-	}
-
-	// ================================================================
-	// MPV Keybinds
-
-	// Pause
-	else if ( ImGui::IsKeyPressed( ImGuiKey_Space, false ) )
-	{
-		mpv_cmd_toggle_playback();
-	}
-	else if ( ImGui::IsKeyPressed( ImGuiKey_LeftArrow, true ) )
-	{
-		mpv_cmd_seek_offset( -5.0 );
-	}
-	else if ( ImGui::IsKeyPressed( ImGuiKey_RightArrow, true ) )
-	{
-		mpv_cmd_seek_offset( 5.0 );
-	}
-
-	// Video Cropping/Panning Adjustments
-	
-	// Reset All
-	else if ( ImGui::IsKeyPressed( ImGuiKey_Keypad0, false ) )
-	{
-		MPV_CMD( "set", "video-zoom", "0" );
-		MPV_CMD( "set", "video-pan-x", "0" );
-		MPV_CMD( "set", "video-pan-y", "0" );
-		MPV_CMD( "set", "vf", "crop" );
-	}
-	else if ( ImGui::IsKeyPressed( ImGuiKey_Keypad8, false ) )
-	{
-		// MPV_CMD( "set", "video-zoom", MONITOR_ZOOM_HACK );
-		// MPV_CMD( "set", "video-pan-x", "0.25" );
-		MPV_CMD( "set", "vf", "crop=1920:1080:0:360" );
-	}
-	else if ( ImGui::IsKeyPressed( ImGuiKey_Keypad9, false ) )
-	{
-		// MPV_CMD( "set", "video-zoom", "1.0" );
-		// MPV_CMD( "set", "video-pan-x", "-0.25" );
-		MPV_CMD( "set", "vf", "crop=2560:1440:1920:0" );
-	}
-	else if ( ImGui::IsKeyPressed( ImGuiKey_Keypad2, false ) )
-	{
-		MPV_CMD( "set", "vf", "crop=1920:1080:0:0" );
-	}
-	else if ( ImGui::IsKeyPressed( ImGuiKey_Keypad3, false ) )
-	{
-		//MPV_CMD( "set", "video-zoom", MONITOR_ZOOM_HACK );
-		//MPV_CMD( "set", "video-pan-x", "-0.25" );
-		MPV_CMD( "set", "vf", "crop=1920:1080:1920:0" );
-	}
-}
-
-#endif
-
-
-void draw_imgui_window( int window_size[ 2 ] )
-{
-	//ImGui::ShowDemoWindow();
-	//return;
-
-	if ( g_encode_running )
-	{
-		encode_draw();
-	}
-	else
-	{
-		// draw sidebar
-		if ( app::sidebar )
-		{
-			draw_replay_editor_window( window_size );
-		}
-
-		// draw playback controls
-		{
-			int element_size[ 2 ] = { 0, 0 };
-			element_size[ 0 ]     = app::mpv_size[ 0 ] + 1;
-			element_size[ 1 ]     = window_size[ 1 ] - app::mpv_size[ 1 ];
-
-			ImGui::SetNextWindowSize( { (float)element_size[ 0 ], (float)element_size[ 1 ] } );
-			ImGui::SetNextWindowPos( { float( window_size[ 0 ] - app::mpv_size[ 0 ] ), (float)app::mpv_size[ 1 ] } );
-
-			if ( !ImGui::Begin( "##Playback Controls", 0, ImGuiWindowFlags_NoNav | ImGuiWindowFlags_NoDecoration ) )
-			// if ( !ImGui::Begin( "##Playback Controls", 0, ImGuiWindowFlags_NoNav | ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoCollapse ) )
-			{
-				ImGui::End();
-				return;
-			}
-
-			draw_playback_controls( element_size, true );
-
-			ImGui::End();
-		}
-	}
-}
+// ===============================================================================================
+// Video List, Settings, Recently Opened
 
 
 void save_settings()
@@ -777,9 +284,9 @@ void update_recently_opened( const char* clips_file )
 
 
 // ===============================================================================================
+// Background Clip Data Parsing
 
 
-// background clip data parsing
 void clip_thread_worker( char* path )
 {
 	clip_parse_videos( path );
@@ -833,194 +340,7 @@ bool clip_thread_idle()
 
 
 // ===============================================================================================
-
-
-static ivec2 g_old_mpv_size;
-static ivec2 g_old_window_size;
-
-
-void         render_imgui();
-
-
-void         style_imgui()
-{
-	ImGuiStyle& style        = ImGui::GetStyle();
-
-	// style.FramePadding.x     = 4;
-	// style.FramePadding.y     = 4;
-
-	style.WindowPadding.x    = 6;
-	style.WindowPadding.y    = 6;
-	style.ItemSpacing.x      = 6;
-	style.ItemSpacing.y      = 6;
-	style.ItemInnerSpacing.x = 6;
-	style.ItemInnerSpacing.y = 6;
-
-	style.ChildRounding      = 3;
-	style.FrameRounding      = 3;
-	style.GrabRounding       = 3;
-	style.PopupRounding      = 3;
-	style.ScrollbarRounding  = 3;
-}
-
-
-void move_divider( u32 index )
-{
-	// check if we released the key, we could release it outside the window mid drag, as it lags behind
-	if ( !ImGui::IsMouseDown( ImGuiMouseButton_Left ) )
-	{
-		g_grabbed_divider_idx = -1;
-		return;
-	}
-
-	g_grabbed_divider_idx = index;
-
-	int width, height;
-	SDL_GetWindowSize( app::window, &width, &height );
-
-	if ( index == 0 )
-	{
-		// vertical divider
-		//cursor_main.y -= g_grab_cursor_offset[ 1 ];
-		app::mpv_size[ 1 ] = CLAMP( app::mouse_pos[ 1 ], 0, height );
-		ImGui::SetMouseCursor( ImGuiMouseCursor_ResizeNS );
-	}
-	else if ( index == 1 )
-	{
-		// horizontal divider
-		//cursor_main.x -= g_grab_cursor_offset[ 0 ];
-		app::mpv_size[ 0 ] = width - CLAMP( app::mouse_pos[ 0 ], 0, width );
-		ImGui::SetMouseCursor( ImGuiMouseCursor_ResizeEW );
-	}
-
-	// update mpv window size
-	mpv_window_resize();
-
-//	window_render_all();
-}
-
-
-void update_dividers()
-{
-	//if ( !g_mouse_in_window )
-	//	return;
-
-	// calc divider rectangle
-	int width, height;
-	SDL_GetWindowSize( app::window, &width, &height );
-
-	// rectangle 0 - playback controls divider
-	ImVec2   div_0_min{ float(width - app::mpv_size[ 0 ]), (float)app::mpv_size[ 1 ] - DIVIDER_SIZE };
-	ImVec2   div_0_max{ float(width), (float)app::mpv_size[ 1 ] + DIVIDER_SIZE };
-
-	// rectangle 1 - replay info
-	ImVec2   div_1_min{ (float)( width - app::mpv_size[ 0 ] ) - DIVIDER_SIZE, 0.f };
-	ImVec2   div_1_max{ (float)( width - app::mpv_size[ 0 ] ) + DIVIDER_SIZE, (float)height };
-
-	ImGuiIO& io                       = ImGui::GetIO();
-
-	g_hovered_divider                 = false;
-	static bool last_frame_left_click = false;
-	// bool        left_click            = ImGui::IsMouseClicked( ImGuiMouseButton_Left, false ) || ImGui::IsMouseDown( ImGuiMouseButton_Left );
-	bool        left_click            = ImGui::IsKeyPressed( ImGuiKey_MouseLeft, false );
-
-	// Already moving a divider, continue updating
-	if ( g_grabbed_divider_idx != -1 )
-	{
-		g_hovered_divider = true;
-		move_divider( g_grabbed_divider_idx );
-		last_frame_left_click = left_click;
-		return;
-	}
-
-	bool        hover_divider_0       = mouse_in_rect( div_0_min, div_0_max );
-	bool        hover_divider_1       = mouse_in_rect( div_1_min, div_1_max );
-	bool        popup_hovered         = false;
-
-	// check any popups first
-	if ( hover_divider_0 || hover_divider_1 )
-	{
-		if ( ImGui::IsPopupOpen( "", ImGuiPopupFlags_AnyPopupId | ImGuiPopupFlags_AnyPopupLevel ) )
-		{
-			bool          hovered_popup = false;
-			ImGuiContext* context       = ImGui::GetCurrentContext();
-
-			if ( context )
-			{
-				// Check popups to see if mouse is hovering over any of them
-				for ( int i = 0; i < context->OpenPopupStack.Size; i++ )
-				{
-					ImGuiPopupData& data   = context->OpenPopupStack[ i ];
-					ImGuiWindow*    window = data.Window;
-
-					if ( mouse_in_rect( window->Pos, { window->Pos.x + window->Size.x, window->Pos.y + window->Size.y } ) )
-					{
-						last_frame_left_click = left_click;
-						return;
-					}
-				}
-			}
-		}
-	}
-
-	// NOTE: not perfect, windows keeps setting the cursor back to default even though im not using a cursor in a window class, hmm
-	if ( g_grabbed_divider_idx == 0 || hover_divider_0 )
-	{
-		g_hovered_divider = true;
-
-		//io.ConfigFlags |= ImGuiConfigFlags_NoMouseCursorChange | ImGuiConfigFlags_NoMouse;
-		ImGui::SetMouseCursor( ImGuiMouseCursor_ResizeNS );
-
-		if ( !last_frame_left_click && left_click )
-			move_divider( 0 );
-	}
-	else if ( app::sidebar && ( g_grabbed_divider_idx == 1 || hover_divider_1 ) )
-	{
-		g_hovered_divider = true;
-
-		//io.ConfigFlags |= ImGuiConfigFlags_NoMouseCursorChange | ImGuiConfigFlags_NoMouse;
-		ImGui::SetMouseCursor( ImGuiMouseCursor_ResizeEW );
-		//SetCursor( g_cursor_resize_h );
-
-		if ( !last_frame_left_click && left_click )
-			move_divider( 1 );
-	}
-	else if ( io.ConfigFlags & ( ImGuiConfigFlags_NoMouseCursorChange | ImGuiConfigFlags_NoMouse ) )
-	{
-		//io.ConfigFlags &= ~( ImGuiConfigFlags_NoMouseCursorChange | ImGuiConfigFlags_NoMouse );
-		ImGui::SetMouseCursor( ImGuiMouseCursor_Arrow );
-		//SetCursor( g_cursor_default );
-		g_grabbed_divider_idx = -1;
-	}
-
-	last_frame_left_click = left_click;
-}
-
-
-void window_render_all()
-{
-	app::in_draw = true;
-
-	if ( !app::fullscreen )
-	{
-		if ( !g_encode_running )
-		{
-			update_dividers();
-		}
-
-		render_imgui();
-	}
-	else
-	{
-		ImGui_ImplSDL3_NewFrame();
-		ImGui::NewFrame();
-		ImGui::EndFrame();
-
-		mpv_draw_frame();
-	}
-
-	app::in_draw = false;
-}
+// UI Sizing
 
 
 void sys_mpv_full_window_enter()
@@ -1119,37 +439,25 @@ void enable_sidebar( bool enabled )
 }
 
 
-void render_imgui()
+void style_imgui()
 {
-	int width, height;
-	SDL_GetWindowSize( app::window, &width, &height );
+	ImGuiStyle& style        = ImGui::GetStyle();
 
-	int    window_size[ 2 ] = { width, height };
+	// style.FramePadding.x     = 4;
+	// style.FramePadding.y     = 4;
 
-	ImVec4 clear_color      = ImVec4( 0.1f, 0.1f, 0.1f, 1.00f );
+	style.WindowPadding.x    = 6;
+	style.WindowPadding.y    = 6;
+	style.ItemSpacing.x      = 6;
+	style.ItemSpacing.y      = 6;
+	style.ItemInnerSpacing.x = 6;
+	style.ItemInnerSpacing.y = 6;
 
-	ImGui_ImplOpenGL3_NewFrame();
-	ImGui_ImplSDL3_NewFrame();
-	ImGui::NewFrame();
-
-	draw_imgui_window( window_size );
-
-	// Rendering
-	ImGui::Render();
-
-	glViewport( 0, 0, width, height );
-	glClearColor( clear_color.x, clear_color.y, clear_color.z, clear_color.w );
-	glClear( GL_COLOR_BUFFER_BIT );
-
-	if ( !g_encode_running )
-	{
-		mpv_draw_frame();
-	}
-
-	ImGui_ImplOpenGL3_RenderDrawData( ImGui::GetDrawData() );
-
-	// Present
-	SDL_GL_SwapWindow( app::window );
+	style.ChildRounding      = 3;
+	style.FrameRounding      = 3;
+	style.GrabRounding       = 3;
+	style.PopupRounding      = 3;
+	style.ScrollbarRounding  = 3;
 }
 
 
@@ -1159,7 +467,7 @@ void update_dpi( float dpi_override )
 
 	if ( dpi_override == 0.f )
 	{
-		scale = SDL_GetWindowDisplayScale( app::window );
+		scale = std::max( 0.25f, SDL_GetWindowDisplayScale( app::window ) );
 	}
 	else
 	{
@@ -1173,6 +481,9 @@ void update_dpi( float dpi_override )
 	ImGui::GetStyle().ScaleAllSizes( scale );
 	ImGui::GetStyle().FontScaleDpi = scale;
 }
+
+
+// ===============================================================================================
 
 
 bool sdl_window_resize_watcher( void* userdata, SDL_Event* event )
