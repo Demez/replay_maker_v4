@@ -45,7 +45,7 @@ struct ChVector
 		{
 			void* newData = realloc( apData, sSize * sizeof( T ) );
 			if ( newData == nullptr )
-				printf( "Failed to Resize ChVector< %s >: %zd bytes\n", typeid( T ).name(), sSize );
+				printf( "Failed to Resize ChVector< %s >: %u bytes\n", typeid( T ).name(), sSize );
 
 			apData = static_cast< T* >( newData );
 
@@ -164,7 +164,7 @@ struct ChVector
 	void remove( uint32_t sIndex )
 	{
 		if ( sIndex > aSize )
-			printf( "Attempted to remove an index out of bounds in buffer: %zd > %zd\n", sIndex, aSize );
+			printf( "Attempted to remove an index out of bounds in buffer: %u > %u\n", sIndex, aSize );
 
 		// shift all memory back one index
 		if ( aSize )
@@ -222,7 +222,7 @@ struct ChVector
 	T& operator[]( uint32_t sIndex ) const
 	{
 		if ( sIndex > aSize )
-			printf( "Attempted to index out of bounds in buffer: %zd > %zd\n", sIndex, aSize );
+			printf( "Attempted to index out of bounds in buffer: %u > %u\n", sIndex, aSize );
 
 		return apData[ sIndex ];
 	}
