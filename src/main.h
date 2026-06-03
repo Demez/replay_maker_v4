@@ -249,7 +249,6 @@ namespace app
 	extern bool        running;
 	extern bool        fullscreen;
 	extern bool        in_window_drag;
-	extern bool        in_drag_drop;
 	extern bool        in_draw;
 	extern bool        pause_window_events;
 	extern bool        sidebar;

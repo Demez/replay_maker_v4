@@ -51,7 +51,6 @@ namespace app
 	bool        running             = true;
 	bool        fullscreen          = false;
 	bool        in_window_drag      = false;
-	bool        in_drag_drop        = false;
 	bool        in_draw             = false;
 	bool        pause_window_events = false;
 	bool        sidebar             = true;
@@ -488,7 +487,7 @@ void update_dpi( float dpi_override )
 
 bool sdl_window_resize_watcher( void* userdata, SDL_Event* event )
 {
-	if ( app::in_draw || app::in_drag_drop || app::pause_window_events )
+	if ( app::in_draw || app::pause_window_events )
 		return true;
 
 	if ( SDL_GetWindowFlags( app::window ) & SDL_WINDOW_MINIMIZED )
@@ -569,9 +568,6 @@ void main_loop()
 				// Current set of drops is now complete (NULL filename)
 				case SDL_EVENT_DROP_COMPLETE:
 				{
-					if ( app::in_drag_drop )
-						break;
-
 					replay_editor_load_loose_video( drop_file.c_str() );
 					SDL_RaiseWindow( app::window );
 					drop_file.clear();

@@ -20,8 +20,6 @@ static clip_time_range_t*      g_edit_time_range        = nullptr;
 // constexpr ImVec4               g_selected_btn_color( 1.f, 1.f, 1.f, 1.f );
 // constexpr ImVec4               g_selected_btn_color( 0.21f, 0.45f, 0.73f, 1.f );
 constexpr ImVec4               g_selected_btn_color( 0.31f, 0.55f, 0.86f, 1.f );
-static u32                     g_default_prefix        = 0;
-static u32                     g_default_encode_preset = 0;
 
 char*                          g_video_input_dir;
 
@@ -92,11 +90,6 @@ void draw_replay_info_menu_bar()
 
 			printf( "Open\n" );
 		}
-
-		// if ( ImGui::MenuItem( "Open Directory" ) )
-		// {
-		// 	printf( "Open Dir\n" );
-		// }
 
 		if ( ImGui::BeginMenu( "Open Recent" ) )
 		{
@@ -311,8 +304,9 @@ void replay_editor_close_loose_video()
 	if ( g_mpv_extra_vid_on )
 	{
 		mpv_cmd_close_video( EXTRA_VID_ID );
-		//remove_mpv_extra_video();
-		set_mpv_index( get_mpv_count() - 1 );
+
+		if ( get_mpv_index() == EXTRA_VID_ID )
+			set_mpv_index( 0 );
 	}
 }
 
@@ -320,7 +314,6 @@ void replay_editor_close_loose_video()
 void replay_editor_load_loose_video( const char* path )
 {
 	replay_editor_close_loose_video();
-	// set_mpv_extra_video();
 
 	mpv_cmd_loadfile( path, EXTRA_VID_ID );
 	set_mpv_index( EXTRA_VID_ID );
@@ -439,14 +432,15 @@ void replay_editor_load( clip_output_video_t* output )
 
 void draw_replay_edit_creation_info()
 {
-	// select default prefix
-	if ( g_default_prefix >= clip_data::prefix_count )
-		g_default_prefix = 0;
+	static u32 default_prefix        = 0;
+	static u32 default_encode_preset = 0;
 
-	if ( g_default_encode_preset >= clip_data::preset_count )
-		g_default_encode_preset = 0;
+	// select default prefix and encode preset
+	if ( default_prefix >= clip_data::prefix_count )
+		default_prefix = 0;
 
-	// ImGui::TextUnformatted( "TODO: Default Encode Presets Here" );
+	if ( default_encode_preset >= clip_data::preset_count )
+		default_encode_preset = 0;
 
 	if ( ImGui::Button( "New Video" ) )
 	{
@@ -465,7 +459,7 @@ void draw_replay_edit_creation_info()
 				u32                  new_group = clip_data::current_output->groups.size();
 				clip_output_group_t& group     = clip_data::current_output->groups.emplace_back();
 
-				group.presets.push_back( g_default_encode_preset );
+				group.presets.push_back( default_encode_preset );
 
 				// Copy seek time and pause
 				double time_pos = 0;
@@ -475,7 +469,7 @@ void draw_replay_edit_creation_info()
 
 				clip_group_add_source( output, new_group, mpv->current_video );
 				replay_editor_set_group( clip_data::output_count - 1, new_group, 0 );
-				output->prefix = g_default_prefix;
+				output->prefix = default_prefix;
 
 				p_mpv_set_property( get_mpv(), "time-pos", MPV_FORMAT_DOUBLE, &time_pos );
 				// p_mpv_set_property( get_mpv(), "pause", MPV_FORMAT_FLAG, &paused );
@@ -497,13 +491,13 @@ void draw_replay_edit_creation_info()
 
 	if ( clip_data::prefix_count )
 	{
-		if ( ImGui::BeginCombo( "Default Prefix", clip_data::prefix[ g_default_prefix ].name, ImGuiComboFlags_WidthFitPreview ) )
+		if ( ImGui::BeginCombo( "Default Prefix", clip_data::prefix[ default_prefix ].name, ImGuiComboFlags_WidthFitPreview ) )
 		{
 			for ( u32 i = 0; i < clip_data::prefix_count; i++ )
 			{
-				if ( ImGui::Selectable( clip_data::prefix[ i ].name, i == g_default_prefix ) )
+				if ( ImGui::Selectable( clip_data::prefix[ i ].name, i == default_prefix ) )
 				{
-					g_default_prefix = i;
+					default_prefix = i;
 				}
 			}
 
@@ -515,13 +509,13 @@ void draw_replay_edit_creation_info()
 
 	if ( clip_data::preset_count )
 	{
-		if ( ImGui::BeginCombo( "Default Encode Preset", clip_data::preset[ g_default_encode_preset ].name, ImGuiComboFlags_WidthFitPreview ) )
+		if ( ImGui::BeginCombo( "Default Encode Preset", clip_data::preset[ default_encode_preset ].name, ImGuiComboFlags_WidthFitPreview ) )
 		{
 			for ( u32 i = 0; i < clip_data::preset_count; i++ )
 			{
-				if ( ImGui::Selectable( clip_data::preset[ i ].name, i == g_default_encode_preset ) )
+				if ( ImGui::Selectable( clip_data::preset[ i ].name, i == default_encode_preset ) )
 				{
-					g_default_encode_preset = i;
+					default_encode_preset = i;
 				}
 			}
 
@@ -529,7 +523,6 @@ void draw_replay_edit_creation_info()
 		}
 	}
 
-#if 1
 	ImGui::Separator();
 
 	if ( clip_data::current_output )
@@ -548,7 +541,6 @@ void draw_replay_edit_creation_info()
 
 		ImGui::Separator();
 	}
-#endif
 }
 
 
