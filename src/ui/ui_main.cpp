@@ -150,7 +150,121 @@ void update_dividers()
 // Base UI
 
 
-void draw_playback_controls( int size[ 2 ], bool draw_volume )
+void draw_replay_edit_creation_info()
+{
+	static u32 default_prefix        = 0;
+	static u32 default_encode_preset = 0;
+
+	// select default prefix and encode preset
+	if ( default_prefix >= clip_data::prefix_count )
+		default_prefix = 0;
+
+	if ( default_encode_preset >= clip_data::preset_count )
+		default_encode_preset = 0;
+
+	if ( ImGui::Button( "New Video" ) )
+	{
+		// create a new output video based on the filename of the playing video
+		mpv_data_t* mpv = get_mpv_data();
+
+		if ( mpv && mpv->current_video )
+		{
+			replay_editor_reset();
+
+			clip_output_video_t* output = clip_add_output( mpv->current_video );
+			clip_data::current_output   = output;
+
+			if ( output )
+			{
+				u32                  new_group = clip_data::current_output->groups.size();
+				clip_output_group_t& group     = clip_data::current_output->groups.emplace_back();
+
+				group.presets.push_back( default_encode_preset );
+
+				// Copy seek time and pause
+				double time_pos = 0;
+				s32    paused   = 0;
+				p_mpv_get_property( mpv->mpv, "time-pos", MPV_FORMAT_DOUBLE, &time_pos );
+				p_mpv_get_property( mpv->mpv, "pause", MPV_FORMAT_FLAG, &paused );
+
+				clip_group_add_source( output, new_group, mpv->current_video );
+				replay_editor_set_group( clip_data::output_count - 1, new_group, 0 );
+				output->prefix = default_prefix;
+
+				p_mpv_set_property( get_mpv(), "time-pos", MPV_FORMAT_DOUBLE, &time_pos );
+				// p_mpv_set_property( get_mpv(), "pause", MPV_FORMAT_FLAG, &paused );
+
+				const char* cmd[]   = { "set", "pause", paused ? "yes" : "no", NULL };
+				int         cmd_ret = p_mpv_command_async( get_mpv(), 0, cmd );
+
+				// close loose video
+				mpv_cmd_close_video( EXTRA_VID_ID );
+			}
+		}
+	}
+
+	ImGui::SameLine();
+
+	// ImGui::TextUnformatted( "Default Prefix" );
+	// ImGui::SameLine();
+	// ImGui::SetNextItemWidth( -FLT_MIN );
+
+	if ( clip_data::prefix_count )
+	{
+		if ( ImGui::BeginCombo( "Default Prefix", clip_data::prefix[ default_prefix ].name, ImGuiComboFlags_WidthFitPreview ) )
+		{
+			for ( u32 i = 0; i < clip_data::prefix_count; i++ )
+			{
+				if ( ImGui::Selectable( clip_data::prefix[ i ].name, i == default_prefix ) )
+				{
+					default_prefix = i;
+				}
+			}
+
+			ImGui::EndCombo();
+		}
+	}
+
+	ImGui::SameLine();
+
+	if ( clip_data::preset_count )
+	{
+		if ( ImGui::BeginCombo( "Default Encode Preset", clip_data::preset[ default_encode_preset ].name, ImGuiComboFlags_WidthFitPreview ) )
+		{
+			for ( u32 i = 0; i < clip_data::preset_count; i++ )
+			{
+				if ( ImGui::Selectable( clip_data::preset[ i ].name, i == default_encode_preset ) )
+				{
+					default_encode_preset = i;
+				}
+			}
+
+			ImGui::EndCombo();
+		}
+	}
+
+	ImGui::Separator();
+
+	if ( clip_data::current_output )
+	{
+		ImGui::TextUnformatted( "Add Video to Group" );
+
+		for ( clip_output_group_t& group : clip_data::current_output->groups )
+		{
+			std::string group_name = clip_group_get_name( group );
+
+			ImGui::SameLine();
+			if ( ImGui::Button( group_name.c_str() ) )
+			{
+			}
+		}
+
+		ImGui::Separator();
+	}
+}
+
+
+void draw_playback_controls( int size[ 2 ] )
 {
 	// is there a video playing?
 
@@ -224,7 +338,6 @@ void draw_playback_controls( int size[ 2 ], bool draw_volume )
 		ImVec2 button_size = region_avail;
 		button_size.y      = ImGui::GetTextLineHeight();
 		button_size.x *= 0.5;
-		// button_size.x -= style.ItemSpacing.x;
 
 		extern u32 clip_data::current_output_index;
 		extern u32 clip_data::current_group_source;
@@ -250,6 +363,7 @@ void draw_playback_controls( int size[ 2 ], bool draw_volume )
 			else
 				ImGui::PushStyleColor( ImGuiCol_Tab, style.Colors[ ImGuiCol_TabSelected ] );
 
+			// Hack to center text on the tab
 			ImGui::SameLine();
 			ImGui::SetCursorPosX( cursor_pos.x );
 			ImGui::TextAligned( 0.5, button_size.x, "Timelime View" );
@@ -350,6 +464,9 @@ void draw_playback_controls( int size[ 2 ], bool draw_volume )
 		ImGui::SetCursorPosY( size[ 1 ] - ImGui::GetFrameHeightWithSpacing() );
 	}
 
+	// ------------------------------------------------------------------------------
+	// Base Video Controls
+
 	const ImVec2 label_size    = ImGui::CalcTextSize( "Pause", NULL, true );
 	ImVec2       play_btn_size = ImGui::CalcItemSize( { 0, 0 }, label_size.x + style.FramePadding.x * 2.0f, label_size.y + style.FramePadding.y * 2.0f );
 
@@ -418,9 +535,6 @@ void draw_playback_controls( int size[ 2 ], bool draw_volume )
 	}
 
 	// TODO: add speed controls here
-
-	if ( !draw_volume )
-		return;
 
 	ImGui::SameLine();
 	ImGui::Spacing();
@@ -496,24 +610,21 @@ void draw_playback_controls( int size[ 2 ], bool draw_volume )
 
 	ImGui::EndDisabled();
 
-	if ( draw_volume )
+	double volume = 0;
+	p_mpv_get_property( get_mpv(), "volume", MPV_FORMAT_DOUBLE, &volume );
+
+	ImGui::SameLine();
+	ImGui::SetNextItemWidth( 130.f );
+
+	float volume_f = volume;
+	if ( ImGui::SliderFloat( "Volume", &volume_f, 0.f, 130.f ) )
 	{
-		double volume = 0;
-		p_mpv_get_property( get_mpv(), "volume", MPV_FORMAT_DOUBLE, &volume );
+		// convert float to string in c
+		char volume_str[ 16 ];
+		gcvt( volume_f, 4, volume_str );
 
-		ImGui::SameLine();
-		ImGui::SetNextItemWidth( 130.f );
-
-		float volume_f = volume;
-		if ( ImGui::SliderFloat( "Volume", &volume_f, 0.f, 130.f ) )
-		{
-			// convert float to string in c
-			char volume_str[ 16 ];
-			gcvt( volume_f, 4, volume_str );
-
-			const char* cmd[]   = { "set", "volume", volume_str, NULL };
-			int         cmd_ret = p_mpv_command_async( get_mpv(), 0, cmd );
-		}
+		const char* cmd[]   = { "set", "volume", volume_str, NULL };
+		int         cmd_ret = p_mpv_command_async( get_mpv(), 0, cmd );
 	}
 }
 
@@ -551,7 +662,7 @@ void draw_imgui_window( int window_size[ 2 ] )
 				return;
 			}
 
-			draw_playback_controls( element_size, true );
+			draw_playback_controls( element_size );
 
 			ImGui::End();
 		}

@@ -197,7 +197,7 @@ bool                               valid_time_range( clip_time_range_t& range, v
 // imgui drawing
 void                               draw_imgui_window( int window_size[ 2 ] );
 void                               draw_replay_editor_window( int window_size[ 2 ] );
-void                               draw_playback_controls( int window_size[ 2 ], bool draw_volume );
+void                               draw_playback_controls( int window_size[ 2 ] );
 
 // void                               replay_editor_load_input( u32 output_i, u32 input_i );
 void                               replay_editor_load_loose_video( const char* path );
