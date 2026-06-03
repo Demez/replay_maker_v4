@@ -849,7 +849,7 @@ auto main( int argc, char* argv[] ) -> int
 		memcpy( recent_path, exe_dir, exe_dir_len * sizeof( char ) );
 		strcat( recent_path, SEP_S RECENTLY_OPENED_FILE );
 
-		g_recently_opened_path = strdup( recent_path );
+		g_recently_opened_path = util_strdup( recent_path );
 	}
 
 //	{
@@ -876,7 +876,7 @@ auto main( int argc, char* argv[] ) -> int
 
 			{
 				update_recently_opened( argv[ 1 ] );
-				g_videos_file_path = strdup( argv[ 1 ] );
+				g_videos_file_path = util_strdup( argv[ 1 ] );
 			}
 		}
 	}
