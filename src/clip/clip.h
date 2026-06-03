@@ -155,50 +155,53 @@ struct clip_prefix_t
 };
 
 
-// TODO: probably get rid of this, we never have multple of these stored in memory
-// make it a namespace instead
-struct clip_data_t
+namespace clip_data
 {
-	u32                   version = 0;
+	extern u32                   version;
 
-	clip_output_video_t*  output;
-	u32                   output_count;
+	extern clip_output_video_t*  output;
+	extern u32                   output_count;
 
-	clip_encode_preset_t* preset;
-	u32                   preset_count;
+	extern clip_encode_preset_t* preset;
+	extern u32                   preset_count;
 
-	clip_prefix_t*        prefix;
-	u32                   prefix_count;
-};
+	extern clip_prefix_t*        prefix;
+	extern u32                   prefix_count;
+
+	extern clip_output_video_t*  current_output;
+	extern u32                   current_output_index;
+	extern u32                   current_input;
+	extern u32                   current_group_source;
+	extern u32                   current_group;
+}
 
 
 // ----------------------------------------------------------------------------
 
 
-clip_data_t*          clip_create();
-void                  clip_free( clip_data_t* data );
+void                  clip_data_reset();
 
-bool                  clip_parse_settings( clip_data_t* data, const char* path );
-bool                  clip_parse_videos( clip_data_t* data, const char* path );
+bool                  clip_parse_settings( const char* path );
+bool                  clip_parse_videos( const char* path );
 
 void                  clip_get_video_metadata( clip_source_t& source );
-void                  clip_check_video( clip_data_t* data, clip_output_video_t& output );
-void                  clip_check_videos( clip_data_t* data );
+void                  clip_check_video( clip_output_video_t& output );
+void                  clip_check_videos();
 
-void                  clip_save_settings( clip_data_t* data, const char* path );
-bool                  clip_save_videos( clip_data_t* data, const char* path );
+void                  clip_save_settings( const char* path );
+bool                  clip_save_videos( const char* path );
 
 // clip_data_t* clip_load_from_json5( const char* path );
 
-// void clip_save_to_json5( const char* path, clip_data_t* data );
+// void clip_save_to_json5( const char* path,);
 
-clip_prefix_t*        clip_create_prefix( clip_data_t* data );
-clip_encode_preset_t* clip_create_encode_preset( clip_data_t* data );
+clip_prefix_t*        clip_create_prefix();
+clip_encode_preset_t* clip_create_encode_preset();
 
-u32                   clip_add_prefix( clip_data_t* data, const char* name, const char* prefix );
-clip_encode_preset_t* clip_add_encode_preset( clip_data_t* data, const char* name, const char* ext );
+u32                   clip_add_prefix( const char* name, const char* prefix );
+clip_encode_preset_t* clip_add_encode_preset( const char* name, const char* ext );
 
-clip_output_video_t*  clip_add_output( clip_data_t* data, const char* name );
+clip_output_video_t*  clip_add_output( const char* name );
 u32                   clip_add_input( clip_output_video_t* output, const char* path );
 
 // u32                   clip_add_source_to_preset( clip_output_video_t* output, u32 preset_index, const char* path );
@@ -217,21 +220,21 @@ void                  clip_group_remove_preset( clip_output_video_t& output, u32
 
 u32                   clip_duplicate_input( clip_output_video_t* output, u32 input_i );
 
-void                  clip_remove_output( clip_data_t* data, clip_output_video_t* output );
-void                  clip_remove_output( clip_data_t* data, u32 output_i );
+void                  clip_remove_output( clip_output_video_t* output );
+void                  clip_remove_output( u32 output_i );
 void                  clip_remove_input( clip_output_video_t* output, u32 input_i );
 
 void                  clip_add_time_range( clip_output_video_t* output, u32 input_i, float start_time, float end_time );
 void                  clip_remove_time_range( clip_output_video_t* output, u32 input_i, u32 time_range );
 void                  clip_duplicate_time_range( clip_output_video_t* output, u32 input_i, u32 time_range );
 
-void                  clip_add_preset_to_encode_override( clip_data_t* data, clip_encode_settings_t& override, const char* preset_name );
-void                  clip_add_preset_to_encode_override( clip_data_t* data, clip_encode_settings_t& override, u32 preset_index );
+void                  clip_add_preset_to_encode_override( clip_encode_settings_t& override, const char* preset_name );
+void                  clip_add_preset_to_encode_override( clip_encode_settings_t& override, u32 preset_index );
 
-void                  clip_add_preset( clip_data_t* data, clip_output_video_t& output, u32 preset_index );
-void                  clip_remove_preset( clip_data_t* data, clip_output_video_t& output, u32 preset_index );
+void                  clip_add_preset( clip_output_video_t& output, u32 preset_index );
+void                  clip_remove_preset( clip_output_video_t& output, u32 preset_index );
 
 clip_output_group_t*  clip_get_group( clip_output_video_t* output, u32 group_index );
 
-void                  clip_move_output( clip_data_t* data, u32 output_id, u32 insert_position );
+void                  clip_move_output( u32 output_id, u32 insert_position );
 

@@ -194,10 +194,7 @@ float                              get_video_bitrate( const char* path );
 
 bool                               valid_time_range( clip_time_range_t& range, video_metadata_t& metadata );
 
-void                               calc_imgui_window_size( int index, ivec2& size );
-void                               calc_playback_window_size( ivec2& size );
-void                               calc_replay_window_size( ivec2& size );
-
+// imgui drawing
 void                               draw_imgui_window( int window_size[ 2 ] );
 void                               draw_replay_editor_window( int window_size[ 2 ] );
 void                               draw_playback_controls( int window_size[ 2 ], bool draw_volume );
@@ -217,7 +214,7 @@ void                               window_render_all();
 void                               update_dpi( float dpi_override = 0.f );
 
 // background clip data parsing
-void                               clip_thread_open_file( clip_data_t* data, const char* path );
+void                               clip_thread_open_file( const char* path );
 e_clip_parse_state                 clip_thread_state();
 bool                               clip_thread_loading();
 bool                               clip_thread_idle();
@@ -233,55 +230,39 @@ void                               write_recently_opened();
 void                               load_recently_opened();
 void                               update_recently_opened( const char* clips_file );
 
-// namespace state
-// {
-// 	extern bool  running;
-// 	extern bool  fullscreen;
-// 	extern bool  in_window_drag;
-// 	extern bool  in_drag_drop;
-// 	extern bool  in_draw;
-// 	extern bool  pause_window_events;
-// 	extern float dpi;
-// }
-// 
-// namespace app
-// {
-// 	extern SDL_Window* window;
-// 
-// 	extern ivec2       mouse_pos;
-// 	extern ivec2       mouse_delta;
-// 
-// 	extern float       frame_time;
-// 	extern float       save_timer;
-// }
 
-extern bool                        g_running;
-extern bool                        g_fullscreen;
-extern bool                        g_in_window_drag;
-extern bool                        g_in_drag_drop;
-extern bool                        g_in_draw;
-extern bool                        g_pause_window_events;
-extern float                       g_dpi;
+namespace app
+{
+	// Window
+	extern SDL_Window* window;
+	extern ivec2       mpv_size;
+	extern ivec2       window_size;
 
-extern SDL_Window*                 g_main_window;
+	// Mouse
+	extern ivec2       mouse_pos;
+	extern ivec2       mouse_delta;
 
-extern ivec2                       g_mouse_pos;
-extern ivec2                       g_mouse_delta;
+	extern float       frame_time;
+	extern float       save_timer;
 
-extern ivec2                       g_mpv_size;
-extern ivec2                       g_window_size;
-extern bool                        g_show_sidebar;
+	// States
+	extern bool        running;
+	extern bool        fullscreen;
+	extern bool        in_window_drag;
+	extern bool        in_drag_drop;
+	extern bool        in_draw;
+	extern bool        pause_window_events;
+	extern bool        sidebar;
+}
 
+
+// Video List File
 extern char*                       g_videos_file_path;
 
+// Recently Opened
 extern char*                       g_recently_opened_path;
 extern char**                      g_recently_opened;
 extern u8                          g_recently_opened_count;
-
-extern float                       g_frame_time;
-
-extern float                       g_save_timer;
-
 constexpr u8                       MAX_RECENT_OPEN = 8;
 
 constexpr int                      DIVIDER_SIZE = 5;  // multiplied by 2

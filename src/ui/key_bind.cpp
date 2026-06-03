@@ -124,7 +124,7 @@ void handle_keybinds()
 
 	if ( ImGui::IsKeyPressed( ImGuiKey_Tab, false ) )
 	{
-		enable_sidebar( !g_show_sidebar );
+		enable_sidebar( !app::sidebar );
 	}
 	else if ( ImGui::IsKeyPressed( ImGuiKey_F, false ) )
 	{
@@ -157,9 +157,9 @@ void handle_keybinds()
 	else if ( ImGui::IsKeyPressed( ImGuiKey_MouseLeft, false ) )
 	{
 		int width = 0;
-		SDL_GetWindowSize( g_main_window, &width, nullptr );
+		SDL_GetWindowSize( app::window, &width, nullptr );
 
-		bool video_area_hovered = mouse_hovering_area( { float( width - g_mpv_size[ 0 ]), 0.f }, { (float)width, (float)g_mpv_size[ 1 ] } );
+		bool video_area_hovered = mouse_hovering_area( { float( width - app::mpv_size[ 0 ]), 0.f }, { (float)width, (float)app::mpv_size[ 1 ] } );
 
 		if ( !g_hovered_divider && video_area_hovered )
 			mpv_cmd_toggle_playback();

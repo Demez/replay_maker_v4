@@ -72,7 +72,6 @@ struct encoder_t
 extern char                g_output_dir[ 512 ];
 extern char                g_temp_video_dir[ 512 ];
 
-extern clip_data_t*        g_clip_data;
 extern enc_output_video_t* g_output_videos;
 
 extern encoder_t           g_encoder_data;

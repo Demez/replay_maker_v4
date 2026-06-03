@@ -38,7 +38,7 @@ void encode_thread_start()
 
 	g_encoder_data.scan_index = 0;
 	g_encode_started          = false;
-	g_fullscreen              = false;
+	app::fullscreen              = false;
 
 	const char* cmd[]         = { "set", "pause", "yes", NULL };
 	int         cmd_ret       = p_mpv_command_async( get_mpv(), 0, cmd );
@@ -64,7 +64,7 @@ void encode_thread_stop()
 
 bool encode_check_state()
 {
-	if ( !g_encode_running || !g_running )
+	if ( !g_encode_running || !app::running )
 		return false;
 	
 	while ( g_encode_pause )
@@ -96,7 +96,7 @@ bool collect_video_info()
 	return false;
 
 #if 0
-	g_output_videos = ch_calloc< enc_output_video_t >( g_clip_data->output_count );
+	g_output_videos = ch_calloc< enc_output_video_t >( clip_data::output_count );
 
 	if ( !g_output_videos )
 	{
@@ -117,17 +117,17 @@ bool collect_video_info()
 	  "%d Output Videos\n"
 	  "====================================================================\n",
 	  g_output_dir,
-	  g_clip_data->preset_count, g_clip_data->prefix_count, g_clip_data->output_count );
+	  clip_data::preset_count, clip_data::prefix_count, clip_data::output_count );
 
 	// check this for each encode preset
-	for ( u32 out_i = 0; out_i < g_clip_data->output_count; out_i++ )
+	for ( u32 out_i = 0; out_i < clip_data::output_count; out_i++ )
 	{
-		clip_output_video_t& output     = g_clip_data->output[ out_i ];
+		clip_output_video_t& output     = clip_data::output[ out_i ];
 		enc_output_video_t&  enc_output = g_output_videos[ out_i ];
 		enc_output.output               = &output;
 		g_encoder_data.scan_index       = out_i;
 
-		log_printf( "%s%s\n", g_clip_data->prefix[ output.prefix ].prefix, output.name );
+		log_printf( "%s%s\n", clip_data::prefix[ output.prefix ].prefix, output.name );
 
 		// ----------------------------------------------------------------------------------------
 		// determine encode presets for this output video
@@ -170,7 +170,7 @@ bool collect_video_info()
 
 		for ( u32 preset_i = 0; preset_i < enc_output.presets_count; preset_i++ )
 		{
-			log_printf( "\"%s\" ", g_clip_data->preset[ enc_output.presets[ preset_i ] ].name );
+			log_printf( "\"%s\" ", clip_data::preset[ enc_output.presets[ preset_i ] ].name );
 		}
 
 		log_printf( "\n" );
@@ -200,14 +200,14 @@ bool collect_video_info()
 
 		for ( u32 preset_i = 0; preset_i < enc_output.presets_count; preset_i++ )
 		{
-			clip_encode_preset_t& preset = g_clip_data->preset[ enc_output.presets[ preset_i ] ];
+			clip_encode_preset_t& preset = clip_data::preset[ enc_output.presets[ preset_i ] ];
 			log_printf( "\nEncode Preset: %s\n", preset.name );
 
 			log_printf(
 			  "    Output:   %s/%s%s%s.%s\n",
 			  preset.out_folder_append ? preset.out_folder_append : "",
 			  preset.out_prefix ? preset.out_prefix : "",
-			  g_clip_data->prefix[ output.prefix ].prefix,
+			  clip_data::prefix[ output.prefix ].prefix,
 			  output.name,
 			  preset.ext );
 
@@ -276,7 +276,7 @@ void encode_videos()
 		return;
 	}
 
-	if ( g_clip_data->output_count == 0 )
+	if ( clip_data::output_count == 0 )
 	{
 		log_printf( log_error, "no output videos found!\n" );
 		return;

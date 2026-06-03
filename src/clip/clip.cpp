@@ -6,120 +6,89 @@
 std::unordered_map< std::string, video_metadata_t > g_video_metadata_map;
 
 
+namespace clip_data
+{
+	u32                   version              = CLIP_VIDEO_FORMAT_VER;
+
+	clip_output_video_t*  output               = nullptr;
+	u32                   output_count         = 0;
+
+	clip_encode_preset_t* preset               = nullptr;
+	u32                   preset_count         = 0;
+
+	clip_prefix_t*        prefix               = nullptr;
+	u32                   prefix_count         = 0;
+
+	clip_output_video_t*  current_output       = nullptr;
+	u32                   current_output_index = UINT32_MAX;
+	u32                   current_input        = 0;
+	u32                   current_group_source = 0;
+	u32                   current_group        = 0;
+};
+
 // --------------------------------------------------------------------------------------------------------
 
 
-clip_data_t* clip_create()
+void clip_data_reset()
 {
-	clip_data_t* data = ch_calloc< clip_data_t >( 1 );
-	data->version     = CLIP_VIDEO_FORMAT_VER;
-
-#if 0
-	// for now, create a default encode preset and a default prefix preset
-	clip_encode_preset_t* encode = clip_add_encode_preset( data, "test", "mkv" );
-
-	encode->ffmpeg_cmd           = strdup( "-map 0 -c:a libopus -b:a 160k -c:v libx264 -crf 24 -preset veryfast -pix_fmt yuv444p -colorspace bt709 -color_primaries bt709 -color_trc bt709 -threads 16" );
-	encode->out_folder_append    = strdup( "test" );
-	encode->out_prefix           = strdup( "test_" );
-
-	// for now, create a default encode preset and a default prefix preset
-	clip_encode_preset_t* encode2 = clip_add_encode_preset( data, "test_webm", "webm" );
-
-	encode2->ffmpeg_cmd           = strdup( "-map 0 -c:a libopus -b:a 160k -c:v libx264 -crf 24 -preset veryfast -pix_fmt yuv444p -colorspace bt709 -color_primaries bt709 -color_trc bt709 -threads 16" );
-	encode2->out_folder_append    = strdup( "test2" );
-	encode2->out_prefix           = strdup( "test2_" );
-
-	// for now, create a default encode preset and a default prefix preset
-	clip_encode_preset_t* encode3 = clip_add_encode_preset( data, "test3_webm", "webm" );
-
-	encode3->ffmpeg_cmd           = strdup( "-map 0 -c:a libopus -b:a 160k -c:v libx264 -crf 24 -preset veryfast -pix_fmt yuv444p -colorspace bt709 -color_primaries bt709 -color_trc bt709 -threads 16" );
-	encode3->out_folder_append    = strdup( "test2" );
-	encode3->out_prefix           = strdup( "test2_" );
-
-	clip_add_prefix( data, "General", "general_d_" );
-	clip_add_prefix( data, "VRChat", "vrc_d_" );
-	clip_add_prefix( data, "Left 4 Dead 2", "l4d2_d_" );
-	clip_add_prefix( data, "Deep Rock Galactic", "drg_d_" );
-#endif
-
-	return data;
-}
-
-
-void clip_free( clip_data_t* data )
-{
-	if ( data == nullptr )
-		return;
 }
 
 
 // ============================================================================================================================
 
 
-u32 clip_add_prefix( clip_data_t* data, const char* name, const char* prefix )
+u32 clip_add_prefix( const char* name, const char* prefix )
 {
-	if ( !data )
-		return UINT32_MAX;
-
-	clip_prefix_t* new_data = ch_realloc< clip_prefix_t >( data->prefix, data->prefix_count + 1 );
+	clip_prefix_t* new_data = ch_realloc< clip_prefix_t >( clip_data::prefix, clip_data::prefix_count + 1 );
 
 	if ( !new_data )
 		return UINT32_MAX;
 
-	data->prefix = new_data;
-	memset( &data->prefix[ data->prefix_count ], 0, sizeof( clip_prefix_t ) );
+	clip_data::prefix = new_data;
+	memset( &clip_data::prefix[ clip_data::prefix_count ], 0, sizeof( clip_prefix_t ) );
 
 	size_t name_len = strlen( name );
-	memcpy( data->prefix[ data->prefix_count ].name, name, std::min( name_len, MAX_LEN_PRESET_NAME ) );
+	memcpy( clip_data::prefix[ clip_data::prefix_count ].name, name, std::min( name_len, MAX_LEN_PRESET_NAME ) );
 
-	data->prefix[ data->prefix_count ].prefix = strdup( prefix );
+	clip_data::prefix[ clip_data::prefix_count ].prefix = strdup( prefix );
 
-	return data->prefix_count++;
+	return clip_data::prefix_count++;
 }
 
 
-clip_encode_preset_t* clip_add_encode_preset( clip_data_t* data, const char* name, const char* ext )
+clip_encode_preset_t* clip_add_encode_preset( const char* name, const char* ext )
 {
-	if ( !data )
-		return nullptr;
-
-	if ( array_append( data->preset, data->preset_count ) )
+	if ( array_append( clip_data::preset, clip_data::preset_count ) )
 		return nullptr;
 
 	size_t name_len = strlen( name );
-	memcpy( data->preset[ data->preset_count ].name, name, std::min( name_len, MAX_LEN_PRESET_NAME ) );
+	memcpy( clip_data::preset[ clip_data::preset_count ].name, name, std::min( name_len, MAX_LEN_PRESET_NAME ) );
 
 	size_t ext_len = strlen( name );
-	memcpy( data->preset[ data->preset_count ].ext, ext, std::min( ext_len, MAX_LEN_EXT ) );
+	memcpy( clip_data::preset[ clip_data::preset_count ].ext, ext, std::min( ext_len, MAX_LEN_EXT ) );
 
-	return &data->preset[ data->preset_count++ ];
+	return &clip_data::preset[ clip_data::preset_count++ ];
 }
 
 
 // ========================================================================================================
 
 
-clip_prefix_t* clip_create_prefix( clip_data_t* data )
+clip_prefix_t* clip_create_prefix()
 {
-	if ( !data )
+	if ( array_append( clip_data::prefix, clip_data::prefix_count ) )
 		return nullptr;
 
-	if ( array_append( data->prefix, data->prefix_count ) )
-		return nullptr;
-
-	return &data->prefix[ data->prefix_count++ ];
+	return &clip_data::prefix[ clip_data::prefix_count++ ];
 }
 
 
-clip_encode_preset_t* clip_create_encode_preset( clip_data_t* data )
+clip_encode_preset_t* clip_create_encode_preset()
 {
-	if ( !data )
+	if ( array_append( clip_data::preset, clip_data::preset_count ) )
 		return nullptr;
 
-	if ( array_append( data->preset, data->preset_count ) )
-		return nullptr;
-
-	return &data->preset[ data->preset_count++ ];
+	return &clip_data::preset[ clip_data::preset_count++ ];
 }
 
 
@@ -153,20 +122,17 @@ char* clip_replay_name_trim( const char* name, u32 prefix_len )
 }
 
 
-clip_output_video_t* clip_add_output( clip_data_t* data, const char* name )
+clip_output_video_t* clip_add_output( const char* name )
 {
-	if ( !data )
-		return nullptr;
-
-	clip_output_video_t* new_data = ch_realloc< clip_output_video_t >( data->output, data->output_count + 1 );
+	clip_output_video_t* new_data = ch_realloc< clip_output_video_t >( clip_data::output, clip_data::output_count + 1 );
 
 	if ( !new_data )
 		return nullptr;
 
-	data->output = new_data;
-	memset( &data->output[ data->output_count ], 0, sizeof( clip_output_video_t ) );
+	clip_data::output = new_data;
+	memset( &clip_data::output[ clip_data::output_count ], 0, sizeof( clip_output_video_t ) );
 
-	clip_output_video_t* output = &data->output[ data->output_count ];
+	clip_output_video_t* output = &clip_data::output[ clip_data::output_count ];
 	output->name                = fs_get_filename_no_ext( name );
 	output->enabled             = true;
 
@@ -194,7 +160,7 @@ clip_output_video_t* clip_add_output( clip_data_t* data, const char* name )
 		}
 	}
 
-	data->output_count++;
+	clip_data::output_count++;
 
 	// add a group to it
 
@@ -310,7 +276,7 @@ std::string clip_group_get_name( clip_output_group_t& group )
 	{
 		for ( u32 preset_i = 0; preset_i < group.presets.size(); preset_i++ )
 		{
-			clip_encode_preset_t& preset = g_clip_data->preset[ group.presets[ preset_i ] ];
+			clip_encode_preset_t& preset = clip_data::preset[ group.presets[ preset_i ] ];
 			strcat( title, preset.name );
 
 			if ( preset_i + 1 < group.presets.size() )
@@ -348,7 +314,7 @@ u32  clip_group_add_source( clip_output_video_t* output, u32 group_index, const 
 	clip_source_usage_t& source = group.sources.emplace_back();
 	source.source_index         = source_i;
 
-	clip_check_video( g_clip_data, *output );
+	clip_check_video( *output );
 
 	return group.sources.size() - 1;
 }
@@ -369,7 +335,7 @@ void clip_group_remove_source( clip_output_video_t* output, u32 group_index, u32
 
 	group.sources.remove( group_src_i );
 
-	clip_check_video( g_clip_data, *output );
+	clip_check_video( *output );
 }
 
 
@@ -394,7 +360,7 @@ void clip_group_add_preset( clip_output_video_t& output, clip_output_group_t& gr
 		return;
 
 	group.presets.push_back( preset_i );
-	clip_check_video( g_clip_data, output );
+	clip_check_video( output );
 }
 
 
@@ -405,7 +371,7 @@ void clip_group_remove_preset( clip_output_video_t& output, clip_output_group_t&
 		if ( group.presets[ i ] == preset_i )
 		{
 			group.presets.remove( i );
-			clip_check_video( g_clip_data, output );
+			clip_check_video( output );
 			break;
 		}
 	}
@@ -476,41 +442,35 @@ u32 clip_duplicate_input( clip_output_video_t* output, u32 input_i )
 }
 
 
-void clip_remove_output( clip_data_t* data, clip_output_video_t* output )
+void clip_remove_output( clip_output_video_t* output )
 {
-	if ( !data )
-		return;
-
 	// look for the pointer
 	u32 output_i = 0;
-	for ( ; output_i < data->output_count; output_i++ )
+	for ( ; output_i < clip_data::output_count; output_i++ )
 	{
-		if ( &data->output[ output_i ] == output )
+		if ( &clip_data::output[ output_i ] == output )
 			break;
 	}
 
-	if ( output_i == data->output_count )
+	if ( output_i == clip_data::output_count )
 	{
 		log_printf( "invalid output\n" );
 		return;
 	}
 
-	clip_remove_output( data, output_i );
+	clip_remove_output( output_i );
 }
 
 
-void clip_remove_output( clip_data_t* data, u32 output_i )
+void clip_remove_output( u32 output_i )
 {
-	if ( !data )
-		return;
-
-	if ( output_i > data->output_count )
+	if ( output_i > clip_data::output_count )
 	{
 		log_printf( "invalid output index\n" );
 		return;
 	}
 
-	clip_output_video_t& output = data->output[ output_i ];
+	clip_output_video_t& output = clip_data::output[ output_i ];
 
 	// remove source videos
 	for ( u32 i = 0; i < output.source_count; i++ )
@@ -520,7 +480,7 @@ void clip_remove_output( clip_data_t* data, u32 output_i )
 
 	free( output.source );
 
-	util_array_remove_element( data->output, data->output_count, output_i );
+	util_array_remove_element( clip_data::output, clip_data::output_count, output_i );
 }
 
 
@@ -625,11 +585,8 @@ void clip_duplicate_time_range( clip_output_video_t* output, u32 input_i, u32 sr
 }
 
 
-void clip_add_preset_to_encode_override( clip_data_t* data, clip_encode_settings_t& override, u32 preset_index )
+void clip_add_preset_to_encode_override( clip_encode_settings_t& override, u32 preset_index )
 {
-	if ( !data )
-		return;
-
 	if ( array_append( override.presets, override.presets_count ) )
 		return;
 
@@ -637,17 +594,14 @@ void clip_add_preset_to_encode_override( clip_data_t* data, clip_encode_settings
 }
 
 
-void clip_add_preset_to_encode_override( clip_data_t* data, clip_encode_settings_t& override, const char* preset_name )
+void clip_add_preset_to_encode_override( clip_encode_settings_t& override, const char* preset_name )
 {
-	if ( !data )
-		return;
-
 	// look for a preset with this name
-	for ( u32 i = 0; i < data->preset_count; i++ )
+	for ( u32 i = 0; i < clip_data::preset_count; i++ )
 	{
-		if ( strcmp( data->preset[ i ].name, preset_name ) == 0 )
+		if ( strcmp( clip_data::preset[ i ].name, preset_name ) == 0 )
 		{
-			clip_add_preset_to_encode_override( data, override, i );
+			clip_add_preset_to_encode_override( override, i );
 			return;
 		}
 	}
@@ -656,7 +610,7 @@ void clip_add_preset_to_encode_override( clip_data_t* data, clip_encode_settings
 }
 
 
-void clip_add_preset( clip_data_t* data, clip_output_video_t& output, u32 preset_index )
+void clip_add_preset( clip_output_video_t& output, u32 preset_index )
 {
 	// for ( clip_output_group_t& preset_out : output.groups )
 	// {
@@ -669,7 +623,7 @@ void clip_add_preset( clip_data_t* data, clip_output_video_t& output, u32 preset
 }
 
 
-void clip_remove_preset( clip_data_t* data, clip_output_video_t& output, u32 preset_index )
+void clip_remove_preset( clip_output_video_t& output, u32 preset_index )
 {
 	// for ( size_t i = 0; i < output.groups.size(); i++ )
 	// {
@@ -694,18 +648,15 @@ clip_output_group_t* clip_get_group( clip_output_video_t* output, u32 group_inde
 }
 
 
-void clip_move_output( clip_data_t* data, u32 output_id, u32 insert_position )
+void clip_move_output( u32 output_id, u32 insert_position )
 {
-	if ( !data )
-		return;
-
 	if ( output_id == insert_position )
 		return;
 
-	if ( output_id >= data->output_count )
+	if ( output_id >= clip_data::output_count )
 		return;
 
-	if ( insert_position >= data->output_count )
+	if ( insert_position >= clip_data::output_count )
 		return;
 
 	clip_output_video_t* temp_data = ch_calloc< clip_output_video_t >( 1 );
@@ -717,17 +668,17 @@ void clip_move_output( clip_data_t* data, u32 output_id, u32 insert_position )
 	}
 
 	// back up this data
-	memcpy( temp_data, &data->output[ output_id ], sizeof( clip_output_video_t ) );
+	memcpy( temp_data, &clip_data::output[ output_id ], sizeof( clip_output_video_t ) );
 
 	if ( output_id > insert_position )
 	{
 		// we want to move this output to an earlier spot in memor
 		// shift everything between the insert position and original output position forward by 1
 		u32 move_count = output_id - insert_position;
-		memmove( data->output + insert_position + 1, data->output + insert_position, sizeof( clip_output_video_t ) * move_count );
+		memmove( clip_data::output + insert_position + 1, clip_data::output + insert_position, sizeof( clip_output_video_t ) * move_count );
 
 		// now copy back the data
-		memcpy( &data->output[ insert_position ], temp_data, sizeof( clip_output_video_t ) );
+		memcpy( &clip_data::output[ insert_position ], temp_data, sizeof( clip_output_video_t ) );
 	}
 	else
 	{
@@ -735,14 +686,14 @@ void clip_move_output( clip_data_t* data, u32 output_id, u32 insert_position )
 
 		// shift everything between the insert position and original output position back by 1
 		u32 move_count = insert_position - output_id;
-		memmove( data->output + output_id, data->output + output_id + 1, sizeof( clip_output_video_t ) * move_count );
+		memmove( clip_data::output + output_id, clip_data::output + output_id + 1, sizeof( clip_output_video_t ) * move_count );
 
 		// now copy back the data
-		memcpy( &data->output[ insert_position ], temp_data, sizeof( clip_output_video_t ) );
+		memcpy( &clip_data::output[ insert_position ], temp_data, sizeof( clip_output_video_t ) );
 	}
 
-	//u32 move_count = data->output_count - insert_position;
-	//memmove( data->output, data->output + insert_position, sizeof( clip_output_video_t ) * move_count );
+	//u32 move_count = clip_data::output_count - insert_position;
+	//memmove( clip_data::output, clip_data::output + insert_position, sizeof( clip_output_video_t ) * move_count );
 
 	free( temp_data );
 }

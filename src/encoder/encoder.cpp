@@ -415,7 +415,7 @@ void add_metadata_cmd( clip_output_video_t& output, char* ffmpeg_cmd, bool add_m
 			float  end_time    = ( time_range.end - time_offset ) * 1000;
 
 			char*  path_unix   = fs_replace_path_seps_unix( source.path );
-			char*  preset_name = g_clip_data->preset[ preset_i ].name;
+			char*  preset_name = clip_data::preset[ preset_i ].name;
 
 			// TODO: this probably breaks on videos with more than one source
 			// i think we need to offset the start/end times with the raw source video start time? idfk
@@ -891,7 +891,7 @@ enc_video_data_t get_video_segments( enc_output_video_t& enc_output, clip_output
 	video_data.output            = &output;
 
 #if CLIP_TEMP
-	clip_encode_preset_t& preset = g_clip_data->preset[ preset_i ];
+	clip_encode_preset_t& preset = clip_data::preset[ preset_i ];
 
 	bool                  failed = false;
 
@@ -941,10 +941,10 @@ enc_video_data_t get_video_segments( enc_output_video_t& enc_output, clip_output
 
 std::string get_video_output_name( clip_output_video_t& output, clip_encode_preset_t& preset )
 {
-	if ( output.prefix >= g_clip_data->prefix_count )
+	if ( output.prefix >= clip_data::prefix_count )
 		return {};
 
-	clip_prefix_t& prefix = g_clip_data->prefix[ output.prefix ];
+	clip_prefix_t& prefix = clip_data::prefix[ output.prefix ];
 
 	std::string filename;
 
@@ -969,10 +969,10 @@ void run_encode_preset( clip_encode_preset_t& preset, u32 preset_i )
 
 	g_encoder_data.encode_preset = preset_i;
 
-	for ( u32 out_i = 0; out_i < g_clip_data->output_count; out_i++ )
+	for ( u32 out_i = 0; out_i < clip_data::output_count; out_i++ )
 	{
-		clip_output_video_t& output     = g_clip_data->output[ out_i ];
-		clip_prefix_t&       prefix     = g_clip_data->prefix[ output.prefix ];
+		clip_output_video_t& output     = clip_data::output[ out_i ];
+		clip_prefix_t&       prefix     = clip_data::prefix[ output.prefix ];
 		enc_output_video_t&  enc_output = g_output_videos[ out_i ];
 
 		g_encoder_data.output_index     = out_i;
@@ -1079,12 +1079,12 @@ void run_encoding()
 
 	g_encoder_data.output_dir.clear();
 
-	for ( u32 preset_i = 0; preset_i < g_clip_data->preset_count; preset_i++ )
+	for ( u32 preset_i = 0; preset_i < clip_data::preset_count; preset_i++ )
 	{
 		if ( !encode_check_state() )
 			break;
 
-		clip_encode_preset_t& preset = g_clip_data->preset[ preset_i ];
+		clip_encode_preset_t& preset = clip_data::preset[ preset_i ];
 		g_encoder_data.output_dir.append( g_output_dir );
 
 		if ( preset.out_folder_append )

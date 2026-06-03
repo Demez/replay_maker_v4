@@ -26,9 +26,9 @@ void encode_draw_sidebar()
 
 		if ( ImGui::BeginChild( "##preset_list", {}, ImGuiChildFlags_Borders | ImGuiChildFlags_AutoResizeY, ImGuiWindowFlags_None ) )
 		{
-			for ( size_t preset_i = 0; preset_i < g_clip_data->preset_count; preset_i++ )
+			for ( size_t preset_i = 0; preset_i < clip_data::preset_count; preset_i++ )
 			{
-				clip_encode_preset_t& preset = g_clip_data->preset[ preset_i ];
+				clip_encode_preset_t& preset = clip_data::preset[ preset_i ];
 
 				if ( g_encoder_data.encode_preset == preset_i )
 				{
@@ -70,9 +70,9 @@ void encode_draw_sidebar()
 
 		if ( ImGui::BeginChild( "##video_list", {}, ImGuiChildFlags_Borders /*| ImGuiChildFlags_ResizeY*/ ) )
 		{
-			for ( size_t vid_i = 0; vid_i < g_clip_data->output_count; vid_i++ )
+			for ( size_t vid_i = 0; vid_i < clip_data::output_count; vid_i++ )
 			{
-				clip_output_video_t& output     = g_clip_data->output[ vid_i ];
+				clip_output_video_t& output     = clip_data::output[ vid_i ];
 				enc_output_video_t&  enc_output = g_output_videos[ vid_i ];
 
 				u32 preset_idx = g_encoder_data.encode_preset;
@@ -80,7 +80,7 @@ void encode_draw_sidebar()
 				if ( preset_select > -1 )
 					preset_idx = preset_select;
 
-				clip_encode_preset_t& preset            = g_clip_data->preset[ preset_idx ];
+				clip_encode_preset_t& preset            = clip_data::preset[ preset_idx ];
 
 				bool                  is_used_in_preset = false;
 				float                 duration          = 0.f;
@@ -223,7 +223,7 @@ void encode_draw_ffmpeg()
 	if ( output_select > -1 )
 		output_idx = output_select;
 
-	clip_output_video_t& output     = g_clip_data->output[ output_idx ];
+	clip_output_video_t& output     = clip_data::output[ output_idx ];
 	enc_output_video_t&  enc_output = g_output_videos[ output_idx ];
 
 	enc_output.ffmpeg_output_lock.lock();
@@ -260,9 +260,9 @@ void encode_draw_output_info()
 	if ( preset_select > -1 )
 		preset_idx = preset_select;
 
-	clip_output_video_t&  output     = g_clip_data->output[ output_idx ];
+	clip_output_video_t&  output     = clip_data::output[ output_idx ];
 	enc_output_video_t&   enc_output = g_output_videos[ output_idx ];
-	clip_encode_preset_t& preset     = g_clip_data->preset[ preset_idx ];
+	clip_encode_preset_t& preset     = clip_data::preset[ preset_idx ];
 
 	std::string           filename   = get_video_output_name( output, preset );
 
@@ -356,13 +356,10 @@ void encode_draw_output_info()
 
 void encode_draw()
 {
-	if ( !g_clip_data )
-		return;
-
 	ImGuiStyle& style = ImGui::GetStyle();
 
 	int window_width, window_height;
-	SDL_GetWindowSizeInPixels( g_main_window, &window_width, &window_height );
+	SDL_GetWindowSizeInPixels( app::window, &window_width, &window_height );
 
 	// ==========================================================================================================
 	// wait for it to finish lol
@@ -386,7 +383,7 @@ void encode_draw()
 
 			ImGui::Separator();
 
-			ImGui::Text( "%d / %d Videos Scanned", g_encoder_data.scan_index, g_clip_data->output_count );
+			ImGui::Text( "%d / %d Videos Scanned", g_encoder_data.scan_index, clip_data::output_count );
 		}
 
 		ImGui::PopStyleVar();

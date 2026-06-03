@@ -9,7 +9,7 @@ extern std::unordered_map< std::string, video_metadata_t > g_video_metadata_map;
 // ============================================================================================================================
 
 
-static void clip_parse_encode_presets( clip_data_t* data, json_object_t& json )
+static void clip_parse_encode_presets( json_object_t& json )
 {
 	if ( json.aType != e_json_type_array )
 	{
@@ -27,7 +27,7 @@ static void clip_parse_encode_presets( clip_data_t* data, json_object_t& json )
 			continue;
 		}
 
-		clip_encode_preset_t* encode = clip_create_encode_preset( data );
+		clip_encode_preset_t* encode = clip_create_encode_preset();
 
 		if ( !encode )
 		{
@@ -98,7 +98,7 @@ static void clip_parse_encode_presets( clip_data_t* data, json_object_t& json )
 }
 
 
-static void clip_parse_prefixes( clip_data_t* data, json_object_t& json )
+static void clip_parse_prefixes( json_object_t& json )
 {
 	if ( json.aType != e_json_type_array )
 	{
@@ -130,7 +130,7 @@ static void clip_parse_prefixes( clip_data_t* data, json_object_t& json )
 			continue;
 		}
 
-		clip_prefix_t* prefix = clip_create_prefix( data );
+		clip_prefix_t* prefix = clip_create_prefix();
 
 		if ( !prefix )
 		{
@@ -144,11 +144,8 @@ static void clip_parse_prefixes( clip_data_t* data, json_object_t& json )
 }
 
 
-bool clip_parse_settings( clip_data_t* data, const char* path )
+bool clip_parse_settings( const char* path )
 {
-	if ( !data )
-		return false;
-
 	char* file = fs_read_file( path );
 
 	if ( !file )
@@ -178,11 +175,11 @@ bool clip_parse_settings( clip_data_t* data, const char* path )
 
 		if ( util_strncmp( "encode_presets", 14, object.aName.data, object.aName.size ) )
 		{
-			clip_parse_encode_presets( data, object );
+			clip_parse_encode_presets( object );
 		}
 		else if ( util_strncmp( "prefixes", 8, object.aName.data, object.aName.size ) )
 		{
-			clip_parse_prefixes( data, object );
+			clip_parse_prefixes( object );
 		}
 	}
 
@@ -196,7 +193,7 @@ bool clip_parse_settings( clip_data_t* data, const char* path )
 // ============================================================================================================================
 
 
-void clip_parse_encode_override( clip_data_t* data, clip_output_video_t& output, json_object_t& root, u32 source_i )
+void clip_parse_encode_override( clip_output_video_t& output, json_object_t& root, u32 source_i )
 {
 #if 0
 	if ( root.aType != e_json_type_object )
@@ -222,9 +219,9 @@ void clip_parse_encode_override( clip_data_t* data, clip_output_video_t& output,
 				json_object_t& json_preset = object.aObjects.data[ preset_name_i ];
 
 				// look for the preset
-				for ( u32 preset_i = 0; preset_i < data->preset_count; preset_i++ )
+				for ( u32 preset_i = 0; preset_i < clip_data::preset_count; preset_i++ )
 				{
-					if ( !util_strncmp( json_preset.aString.data, json_preset.aString.size, data->preset[ preset_i ].name, strlen( data->preset[ preset_i ].name ) ) )
+					if ( !util_strncmp( json_preset.aString.data, json_preset.aString.size, clip_data::preset[ preset_i ].name, strlen( clip_data::preset[ preset_i ].name ) ) )
 						continue;
 
 					// check if we have a preset with this already
@@ -281,7 +278,7 @@ void clip_parse_encode_override( clip_data_t* data, clip_output_video_t& output,
 
 
 // version 3 parsing
-bool clip_parse_input_v3( clip_data_t* data, clip_output_video_t& output, json_object_t& root, u32 input_i )
+bool clip_parse_input_v3( clip_output_video_t& output, json_object_t& root, u32 input_i )
 {
 	if ( root.aType != e_json_type_object )
 	{
@@ -302,7 +299,7 @@ bool clip_parse_input_v3( clip_data_t* data, clip_output_video_t& output, json_o
 		}
 		else if ( util_strncmp( "encode_overrides", 16, object.aName.data, object.aName.size ) )
 		{
-			clip_parse_encode_override( data, output, object, input_i );
+			clip_parse_encode_override( output, object, input_i );
 		}
 		else if ( util_strncmp( "time_ranges", 11, object.aName.data, object.aName.size ) )
 		{
@@ -374,7 +371,7 @@ bool clip_parse_input_v3( clip_data_t* data, clip_output_video_t& output, json_o
 }
 
 
-bool clip_parse_output_group( clip_data_t* data, clip_output_video_t& output, json_object_t& root, clip_output_group_t& group )
+bool clip_parse_output_group( clip_output_video_t& output, json_object_t& root, clip_output_group_t& group )
 {
 	if ( root.aType != e_json_type_object )
 	{
@@ -399,9 +396,9 @@ bool clip_parse_output_group( clip_data_t* data, clip_output_video_t& output, js
 				json_object_t& obj_json = object.aObjects.data[ source_use_i ];
 
 				// look for the preset
-				for ( u32 preset_i = 0; preset_i < data->preset_count; preset_i++ )
+				for ( u32 preset_i = 0; preset_i < clip_data::preset_count; preset_i++ )
 				{
-					if ( !util_strncmp( obj_json.aString.data, obj_json.aString.size, data->preset[ preset_i ].name, strlen( data->preset[ preset_i ].name ) ) )
+					if ( !util_strncmp( obj_json.aString.data, obj_json.aString.size, clip_data::preset[ preset_i ].name, strlen( clip_data::preset[ preset_i ].name ) ) )
 						continue;
 
 					group.presets.push_back( preset_i );
@@ -496,9 +493,9 @@ bool clip_parse_output_group( clip_data_t* data, clip_output_video_t& output, js
 }
 
 
-void clip_parse_video( clip_data_t* data, json_object_t& root, u32 output_i )
+void clip_parse_video( json_object_t& root, u32 output_i )
 {
-	clip_output_video_t& output = data->output[ output_i ];
+	clip_output_video_t& output = clip_data::output[ output_i ];
 
 	for ( size_t root_i = 0; root_i < root.aObjects.count; root_i++ )
 	{
@@ -511,9 +508,9 @@ void clip_parse_video( clip_data_t* data, json_object_t& root, u32 output_i )
 		else if ( util_strncmp( "prefix", 6, object.aName.data, object.aName.size ) )
 		{
 			// look for the prefix
-			for ( u32 prefix_i = 0; prefix_i < data->prefix_count; prefix_i++ )
+			for ( u32 prefix_i = 0; prefix_i < clip_data::prefix_count; prefix_i++ )
 			{
-				if ( !util_strncmp( object.aString.data, object.aString.size, data->prefix[ prefix_i ].name, strlen( data->prefix[ prefix_i ].name ) ) )
+				if ( !util_strncmp( object.aString.data, object.aString.size, clip_data::prefix[ prefix_i ].name, strlen( clip_data::prefix[ prefix_i ].name ) ) )
 					continue;
 
 				output.prefix = prefix_i;
@@ -539,7 +536,7 @@ void clip_parse_video( clip_data_t* data, json_object_t& root, u32 output_i )
 			for ( size_t video_i = 0; video_i < object.aObjects.count; video_i++ )
 			{
 				json_object_t& json_video = object.aObjects.data[ video_i ];
-				if ( clip_parse_input_v3( data, output, json_video, video_i ) )
+				if ( clip_parse_input_v3( output, json_video, video_i ) )
 					output.source_count++;
 			}
 		}
@@ -596,7 +593,7 @@ void clip_parse_video( clip_data_t* data, json_object_t& root, u32 output_i )
 					continue;
 				}
 
-				clip_parse_output_group( data, output, json_preset_use, output.groups[ preset_use_i ] );
+				clip_parse_output_group( output, json_preset_use, output.groups[ preset_use_i ] );
 			}
 		}
 		else
@@ -605,16 +602,13 @@ void clip_parse_video( clip_data_t* data, json_object_t& root, u32 output_i )
 		}
 	}
 
-	clip_check_video( data, output );
+	clip_check_video( output );
 }
 
 
-bool clip_parse_videos( clip_data_t* data, const char* path )
+bool clip_parse_videos( const char* path )
 {
-	if ( !data )
-		return false;
-
-	if ( data->output_count )
+	if ( clip_data::output_count )
 	{
 		log_printf( "TODO: CLEAR OLD OUTPUT VIDEOS\n" );
 	}
@@ -676,7 +670,7 @@ bool clip_parse_videos( clip_data_t* data, const char* path )
 			goto fail;
 		}
 
-		data->version = version.aInt;
+		clip_data::version = version.aInt;
 	}
 	else
 	{
@@ -693,27 +687,27 @@ bool clip_parse_videos( clip_data_t* data, const char* path )
 	videos_root = &root.aObjects.data[ 1 ];
 
 	// allocate all the output videos now
-	new_data    = ch_realloc< clip_output_video_t >( data->output, videos_root->aObjects.count );
+	new_data    = ch_realloc< clip_output_video_t >( clip_data::output, videos_root->aObjects.count );
 
 	if ( !new_data )
 		return false;
 
 	memset( new_data, 0, sizeof( clip_output_video_t ) * videos_root->aObjects.count );
 
-	data->output       = new_data;
-	data->output_count = videos_root->aObjects.count;
+	clip_data::output       = new_data;
+	clip_data::output_count = videos_root->aObjects.count;
 
 	for ( size_t root_i = 0; root_i < videos_root->aObjects.count; root_i++ )
 	{
 		json_object_t& object = videos_root->aObjects.data[ root_i ];
-		clip_parse_video( data, object, root_i );
+		clip_parse_video( object, root_i );
 	}
 
 	json_free( root );
 	free( file );
 
 	// scan videos
-	clip_check_videos( data );
+	clip_check_videos();
 
 	return true;
 
@@ -739,7 +733,7 @@ void clip_get_video_metadata( clip_source_t& source )
 }
 
 
-void clip_check_video( clip_data_t* data, clip_output_video_t& output )
+void clip_check_video( clip_output_video_t& output )
 {
 	if ( output.name == nullptr )
 	{
@@ -825,7 +819,7 @@ void clip_check_video( clip_data_t* data, clip_output_video_t& output )
 
 	for ( u32 preset_i = 0; preset_i < output.presets_count; preset_i++ )
 	{
-		clip_encode_preset_t& preset = g_clip_data->preset[ output.presets[ preset_i ] ];
+		clip_encode_preset_t& preset = g_clip_clip_data::preset[ output.presets[ preset_i ] ];
 
 		float duration         = 0.f;
 		bool  duration_invalid = false;
@@ -879,7 +873,7 @@ void clip_check_video( clip_data_t* data, clip_output_video_t& output )
 }
 
 
-void clip_check_videos( clip_data_t* data )
+void clip_check_videos()
 {
 }
 
@@ -887,7 +881,7 @@ void clip_check_videos( clip_data_t* data )
 // ============================================================================================================================
 
 
-void clip_save_settings( clip_data_t* data, const char* path )
+void clip_save_settings( const char* path )
 {
 	// build json5
 
@@ -899,7 +893,7 @@ void clip_save_settings( clip_data_t* data, const char* path )
 
 
 #if 0
-static bool clip_save_encode_override( clip_data_t* data, clip_encode_override_t& encode_override, json_object_t& root )
+static bool clip_save_encode_override( clip_encode_override_t& encode_override, json_object_t& root )
 {
 	root.aName          = json_strn( "encode_overrides", 16 );
 	root.aType          = e_json_type_array;
@@ -913,13 +907,13 @@ static bool clip_save_encode_override( clip_data_t* data, clip_encode_override_t
 	{
 		json_object_t& entry = root.aObjects.data[ i ];
 		entry.aType          = e_json_type_string;
-		entry.aString        = json_str( data->preset[ encode_override.presets[ i ] ].name );
+		entry.aString        = json_str( clip_data::preset[ encode_override.presets[ i ] ].name );
 	}
 
 	return true;
 }
 #else
-static bool clip_save_encode_override( clip_data_t* data, clip_encode_settings_t& encode_override, json_object_t& root )
+static bool clip_save_encode_override( clip_encode_settings_t& encode_override, json_object_t& root )
 {
 	root.aName          = json_strn( "encode_overrides", 16 );
 	root.aType          = e_json_type_object;
@@ -941,7 +935,7 @@ static bool clip_save_encode_override( clip_data_t* data, clip_encode_settings_t
 	{
 		json_object_t& entry = root.aObjects.data[ 0 ].aObjects.data[ i ];
 		entry.aType          = e_json_type_string;
-		entry.aString        = json_str( data->preset[ encode_override.presets[ i ] ].name );
+		entry.aString        = json_str( clip_data::preset[ encode_override.presets[ i ] ].name );
 	}
 
 	root.aObjects.data[ 1 ].aName   = json_strn( "ffmpeg_cmd", 10 );
@@ -956,7 +950,7 @@ static bool clip_save_encode_override( clip_data_t* data, clip_encode_settings_t
 // ============================================================================================================================
 
 
-bool clip_save_videos( clip_data_t* data, const char* path )
+bool clip_save_videos( const char* path )
 {
 	return false;
 
@@ -964,7 +958,7 @@ bool clip_save_videos( clip_data_t* data, const char* path )
 	if ( !data )
 		return false;
 
-	if ( !data->output_count )
+	if ( !clip_data::output_count )
 		return false;
 
 	if ( !path )
@@ -984,7 +978,7 @@ bool clip_save_videos( clip_data_t* data, const char* path )
 	root.aObjects.data[ 0 ].aType = e_json_type_int;
 	root.aObjects.data[ 0 ].aInt  = CLIP_VIDEO_FORMAT_VER;
 
-	if ( !json_add_array( root.aObjects.data[ 1 ], data->output_count ) )
+	if ( !json_add_array( root.aObjects.data[ 1 ], clip_data::output_count ) )
 	{
 		json_free( root );
 		return false;
@@ -996,7 +990,7 @@ bool clip_save_videos( clip_data_t* data, const char* path )
 	for ( size_t root_i = 0; root_i < video_root.aObjects.count; root_i++ )
 	{
 		json_object_t&       output_json = video_root.aObjects.data[ root_i ];
-		clip_output_video_t& output      = data->output[ root_i ];
+		clip_output_video_t& output      = clip_data::output[ root_i ];
 		output_json.aType                = e_json_type_object;
 
 		// output video has 4 objects
@@ -1017,7 +1011,7 @@ bool clip_save_videos( clip_data_t* data, const char* path )
 		// prefix
 		output_json.aObjects.data[ 1 ].aName   = json_strn( "prefix", 6 );
 		output_json.aObjects.data[ 1 ].aType   = e_json_type_string;
-		output_json.aObjects.data[ 1 ].aString = json_str( data->prefix[ output.prefix ].name );
+		output_json.aObjects.data[ 1 ].aString = json_str( clip_data::prefix[ output.prefix ].name );
 
 		// encode_overrides
 	//	if ( !clip_save_encode_override( data, output.encode_overrides, output_json.aObjects.data[ 2 ] ) )

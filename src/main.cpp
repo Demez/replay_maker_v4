@@ -33,38 +33,39 @@ namespace font
 }
 
 
-SDL_Window*         g_main_window         = nullptr;
-SDL_GLContext       g_gl_context          = nullptr;
+namespace app
+{
+	// Window
+	SDL_Window* window              = nullptr;
+	ivec2       mpv_size            = { 0, 0 };
+	ivec2       window_size         = { 0, 0 };
 
-bool                g_running             = true;
-bool                g_fullscreen          = false;
-bool                g_in_window_drag      = false;
-bool                g_in_drag_drop        = false;
-bool                g_in_draw             = false;
-bool                g_pause_window_events = false;
-float               g_dpi                 = 1.f;
+	// Mouse
+	ivec2       mouse_pos           = { 0, 0 };
+	ivec2       mouse_delta         = { 0, 0 };
 
-ivec2               g_mouse_pos           = { 0, 0 };
-ivec2               g_mouse_delta         = { 0, 0 };
+	float       frame_time          = 0.f;
+	float       save_timer          = -1.f;
 
-ivec2               g_mpv_size            = { 0, 0 };
-ivec2               g_window_size         = { 0, 0 };
-bool                g_show_sidebar        = true;
+	// States
+	bool        running             = true;
+	bool        fullscreen          = false;
+	bool        in_window_drag      = false;
+	bool        in_drag_drop        = false;
+	bool        in_draw             = false;
+	bool        pause_window_events = false;
+	bool        sidebar             = true;
+}
 
-int                 g_grabbed_divider_idx = -1;
-bool                g_hovered_divider     = false;
+static SDL_GLContext g_gl_context          = nullptr;
 
-extern clip_data_t* g_clip_data;
+int                  g_grabbed_divider_idx = -1;
+bool                 g_hovered_divider     = false;
 
-char*               g_videos_file_path;
+char*                g_videos_file_path;
 
-float               g_save_timer             = -1.f;
-
-float               g_frame_time             = 0.f;
-
-
-std::thread*        g_clip_load_thread       = nullptr;
-e_clip_parse_state  g_clip_load_thread_state = e_clip_parse_state_idle;
+std::thread*         g_clip_load_thread       = nullptr;
+e_clip_parse_state   g_clip_load_thread_state = e_clip_parse_state_idle;
 
 //#define TEST_VIDEO L"H:\\videos\\av1_testing\\Replay 2024-07-21 23-10-44.mkv"
 //#define TEST_VIDEO L"D:\\projects\\replay_maker_v4\\out\\test.mp4"
@@ -92,7 +93,7 @@ bool point_in_rect( ImVec2 point, ImVec2 min_size, ImVec2 max_size )
 
 bool mouse_in_rect( ImVec2 min_size, ImVec2 max_size )
 {
-	return point_in_rect( ImVec2( g_mouse_pos[ 0 ], g_mouse_pos[ 1 ] ), min_size, max_size );
+	return point_in_rect( ImVec2( app::mouse_pos[ 0 ], app::mouse_pos[ 1 ] ), min_size, max_size );
 }
 
 
@@ -127,41 +128,6 @@ bool mouse_hovering_area( ImVec2 min_size, ImVec2 max_size )
 
 
 // --------------------------------------------------------------------------------------------------
-
-
-void calc_imgui_window_size( int index, ivec2& size )
-{
-	switch ( index )
-	{
-		case 0:
-		{
-			return calc_playback_window_size( size );
-		}
-		case 1:
-		{
-			return calc_replay_window_size( size );
-		}
-		default:
-		{
-			size[ 0 ] = 0;
-			size[ 1 ] = 0;
-		}
-	}
-}
-
-
-void calc_playback_window_size( ivec2& size )
-{
-	size[ 0 ] = MIN( 0, g_window_size[ 0 ] - ( g_mpv_size[ 0 ] + DIVIDER_SIZE ) );
-	size[ 1 ] = g_window_size[ 1 ];
-}
-
-
-void calc_replay_window_size( ivec2& size )
-{
-	size[ 0 ] = MIN( 0, g_window_size[ 0 ] - DIVIDER_SIZE );
-	size[ 1 ] = MIN( 0, g_window_size[ 1 ] - ( g_mpv_size[ 1 ] + DIVIDER_SIZE ) );
-}
 
 
 void draw_playback_controls( int size[ 2 ], bool draw_volume )
@@ -240,9 +206,9 @@ void draw_playback_controls( int size[ 2 ], bool draw_volume )
 		button_size.x *= 0.5;
 		// button_size.x -= style.ItemSpacing.x;
 
-		extern u32 g_clip_current_output_index;
-		extern u32 g_clip_current_group_source;
-		extern u32 g_clip_current_group;
+		extern u32 clip_data::current_output_index;
+		extern u32 clip_data::current_group_source;
+		extern u32 clip_data::current_group;
 
 		if ( ImGui::BeginTabBar( "##video_preview_tabs" ) )
 		{
@@ -256,7 +222,7 @@ void draw_playback_controls( int size[ 2 ], bool draw_volume )
 			if ( ImGui::TabItemButton( "##timeline_view" ) )
 			{
 				set_mpv_index( 0 );
-				replay_editor_set_group( g_clip_current_output_index, g_clip_current_group, g_clip_current_group_source );
+				replay_editor_set_group( clip_data::current_output_index, clip_data::current_group, clip_data::current_group_source );
 			}
 
 			if ( show_timeline )
@@ -497,7 +463,7 @@ void draw_playback_controls( int size[ 2 ], bool draw_volume )
 
 	if ( ImGui::Button( "Toggle Sidebar" ) )
 	{
-		enable_sidebar( !g_show_sidebar );
+		enable_sidebar( !app::sidebar );
 	}
 
 	ImGui::SameLine();
@@ -555,7 +521,7 @@ void handle_keybinds()
 
 	if ( ImGui::IsKeyPressed( ImGuiKey_Tab, false ) )
 	{
-		enable_sidebar( !g_show_sidebar );
+		enable_sidebar( !app::sidebar );
 	}
 	else if ( ImGui::IsKeyPressed( ImGuiKey_F, false ) )
 	{
@@ -632,7 +598,7 @@ void draw_imgui_window( int window_size[ 2 ] )
 	else
 	{
 		// draw sidebar
-		if ( g_show_sidebar )
+		if ( app::sidebar )
 		{
 			draw_replay_editor_window( window_size );
 		}
@@ -640,11 +606,11 @@ void draw_imgui_window( int window_size[ 2 ] )
 		// draw playback controls
 		{
 			int element_size[ 2 ] = { 0, 0 };
-			element_size[ 0 ]     = g_mpv_size[ 0 ] + 1;
-			element_size[ 1 ]     = window_size[ 1 ] - g_mpv_size[ 1 ];
+			element_size[ 0 ]     = app::mpv_size[ 0 ] + 1;
+			element_size[ 1 ]     = window_size[ 1 ] - app::mpv_size[ 1 ];
 
 			ImGui::SetNextWindowSize( { (float)element_size[ 0 ], (float)element_size[ 1 ] } );
-			ImGui::SetNextWindowPos( { float( window_size[ 0 ] - g_mpv_size[ 0 ] ), (float)g_mpv_size[ 1 ] } );
+			ImGui::SetNextWindowPos( { float( window_size[ 0 ] - app::mpv_size[ 0 ] ), (float)app::mpv_size[ 1 ] } );
 
 			if ( !ImGui::Begin( "##Playback Controls", 0, ImGuiWindowFlags_NoNav | ImGuiWindowFlags_NoDecoration ) )
 			// if ( !ImGui::Begin( "##Playback Controls", 0, ImGuiWindowFlags_NoNav | ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoCollapse ) )
@@ -670,7 +636,7 @@ void save_settings()
 	memcpy( settings_path, exe_dir, exe_dir_len * sizeof( char ) );
 	strcat( settings_path, SEP_S "replay_maker_config.json5" );
 
-	clip_save_settings( g_clip_data, settings_path );
+	clip_save_settings( settings_path );
 }
 
 
@@ -682,9 +648,9 @@ void save_videos()
 	if ( g_clip_load_thread_state != e_clip_parse_state_idle )
 		return;
 
-	//if ( clip_save_videos( g_clip_data, g_videos_file_path ) )
+	//if ( clip_save_videos( g_videos_file_path ) )
 	//{
-	//	g_save_timer = 5000.f;
+	//	app::save_timer = 5000.f;
 	//}
 }
 
@@ -814,15 +780,15 @@ void update_recently_opened( const char* clips_file )
 
 
 // background clip data parsing
-void clip_thread_worker( clip_data_t* data, char* path )
+void clip_thread_worker( char* path )
 {
-	clip_parse_videos( data, path );
+	clip_parse_videos( path );
 	g_clip_load_thread_state = e_clip_parse_state_finished;
 	free( path );
 }
 
 
-void clip_thread_open_file( clip_data_t* data, const char* path )
+void clip_thread_open_file( const char* path )
 {
 	if ( g_clip_load_thread_state != e_clip_parse_state_idle )
 	{
@@ -831,7 +797,7 @@ void clip_thread_open_file( clip_data_t* data, const char* path )
 
 	replay_editor_reset();
 
-	g_clip_load_thread       = new std::thread( clip_thread_worker, data, strdup( path ) );
+	g_clip_load_thread       = new std::thread( clip_thread_worker, strdup( path ) );
 	g_clip_load_thread_state = e_clip_parse_state_running;
 }
 
@@ -910,20 +876,20 @@ void move_divider( u32 index )
 	g_grabbed_divider_idx = index;
 
 	int width, height;
-	SDL_GetWindowSize( g_main_window, &width, &height );
+	SDL_GetWindowSize( app::window, &width, &height );
 
 	if ( index == 0 )
 	{
 		// vertical divider
 		//cursor_main.y -= g_grab_cursor_offset[ 1 ];
-		g_mpv_size[ 1 ] = CLAMP( g_mouse_pos[ 1 ], 0, height );
+		app::mpv_size[ 1 ] = CLAMP( app::mouse_pos[ 1 ], 0, height );
 		ImGui::SetMouseCursor( ImGuiMouseCursor_ResizeNS );
 	}
 	else if ( index == 1 )
 	{
 		// horizontal divider
 		//cursor_main.x -= g_grab_cursor_offset[ 0 ];
-		g_mpv_size[ 0 ] = width - CLAMP( g_mouse_pos[ 0 ], 0, width );
+		app::mpv_size[ 0 ] = width - CLAMP( app::mouse_pos[ 0 ], 0, width );
 		ImGui::SetMouseCursor( ImGuiMouseCursor_ResizeEW );
 	}
 
@@ -941,15 +907,15 @@ void update_dividers()
 
 	// calc divider rectangle
 	int width, height;
-	SDL_GetWindowSize( g_main_window, &width, &height );
+	SDL_GetWindowSize( app::window, &width, &height );
 
 	// rectangle 0 - playback controls divider
-	ImVec2   div_0_min{ float(width - g_mpv_size[ 0 ]), (float)g_mpv_size[ 1 ] - DIVIDER_SIZE };
-	ImVec2   div_0_max{ float(width), (float)g_mpv_size[ 1 ] + DIVIDER_SIZE };
+	ImVec2   div_0_min{ float(width - app::mpv_size[ 0 ]), (float)app::mpv_size[ 1 ] - DIVIDER_SIZE };
+	ImVec2   div_0_max{ float(width), (float)app::mpv_size[ 1 ] + DIVIDER_SIZE };
 
 	// rectangle 1 - replay info
-	ImVec2   div_1_min{ (float)( width - g_mpv_size[ 0 ] ) - DIVIDER_SIZE, 0.f };
-	ImVec2   div_1_max{ (float)( width - g_mpv_size[ 0 ] ) + DIVIDER_SIZE, (float)height };
+	ImVec2   div_1_min{ (float)( width - app::mpv_size[ 0 ] ) - DIVIDER_SIZE, 0.f };
+	ImVec2   div_1_max{ (float)( width - app::mpv_size[ 0 ] ) + DIVIDER_SIZE, (float)height };
 
 	ImGuiIO& io                       = ImGui::GetIO();
 
@@ -1008,7 +974,7 @@ void update_dividers()
 		if ( !last_frame_left_click && left_click )
 			move_divider( 0 );
 	}
-	else if ( g_show_sidebar && ( g_grabbed_divider_idx == 1 || hover_divider_1 ) )
+	else if ( app::sidebar && ( g_grabbed_divider_idx == 1 || hover_divider_1 ) )
 	{
 		g_hovered_divider = true;
 
@@ -1033,9 +999,9 @@ void update_dividers()
 
 void window_render_all()
 {
-	g_in_draw = true;
+	app::in_draw = true;
 
-	if ( !g_fullscreen )
+	if ( !app::fullscreen )
 	{
 		if ( !g_encode_running )
 		{
@@ -1053,45 +1019,45 @@ void window_render_all()
 		mpv_draw_frame();
 	}
 
-	g_in_draw = false;
+	app::in_draw = false;
 }
 
 
 void sys_mpv_full_window_enter()
 {
-	g_fullscreen           = true;
+	app::fullscreen        = true;
 
 	// save old mpv window size
-	g_old_mpv_size[ 0 ]    = g_mpv_size[ 0 ];
-	g_old_mpv_size[ 1 ]    = g_mpv_size[ 1 ];
+	g_old_mpv_size[ 0 ]    = app::mpv_size[ 0 ];
+	g_old_mpv_size[ 1 ]    = app::mpv_size[ 1 ];
 
-	g_old_window_size[ 0 ] = g_window_size[ 0 ];
-	g_old_window_size[ 1 ] = g_window_size[ 1 ];
+	g_old_window_size[ 0 ] = app::window_size[ 0 ];
+	g_old_window_size[ 1 ] = app::window_size[ 1 ];
 
 	// set mpv window size
-	g_mpv_size[ 0 ]        = g_window_size[ 0 ];
-	g_mpv_size[ 1 ]        = g_window_size[ 1 ];
+	app::mpv_size[ 0 ]     = app::window_size[ 0 ];
+	app::mpv_size[ 1 ]     = app::window_size[ 1 ];
 }
 
 
 void window_on_resize()
 {
 	// calc new window size
-	ivec2 old_window_size = { g_window_size[ 0 ], g_window_size[ 1 ] };
+	ivec2 old_window_size = { app::window_size[ 0 ], app::window_size[ 1 ] };
 	ivec2 new_window_size = { 0, 0 };
 
-	SDL_GetWindowSize( g_main_window, &new_window_size[ 0 ], &new_window_size[ 1 ] );
+	SDL_GetWindowSize( app::window, &new_window_size[ 0 ], &new_window_size[ 1 ] );
 
 	ivec2 size_diff{};
 	size_diff[ 0 ] = new_window_size[ 0 ] - old_window_size[ 0 ];
 	size_diff[ 1 ] = new_window_size[ 1 ] - old_window_size[ 1 ];
 
 	// calc new mpv window size
-	g_mpv_size[ 0 ] += size_diff[ 0 ];
-	g_mpv_size[ 1 ] += size_diff[ 1 ];
+	app::mpv_size[ 0 ] += size_diff[ 0 ];
+	app::mpv_size[ 1 ] += size_diff[ 1 ];
 
-	g_window_size[ 0 ] = new_window_size[ 0 ];
-	g_window_size[ 1 ] = new_window_size[ 1 ];
+	app::window_size[ 0 ] = new_window_size[ 0 ];
+	app::window_size[ 1 ] = new_window_size[ 1 ];
 
 	mpv_window_resize();
 }
@@ -1099,18 +1065,18 @@ void window_on_resize()
 
 void sys_mpv_full_window_exit()
 {
-	g_fullscreen = false;
+	app::fullscreen = false;
 
 	int width, height;
-	SDL_GetWindowSize( g_main_window, &width, &height );
+	SDL_GetWindowSize( app::window, &width, &height );
 
 	// scale the mpv window size based on
 	int diff_x      = width - g_old_window_size[ 0 ];
 	int diff_y      = height - g_old_window_size[ 1 ];
 
 	// restore mpv window size
-	g_mpv_size[ 0 ] = g_old_mpv_size[ 0 ] + diff_x;
-	g_mpv_size[ 1 ] = g_old_mpv_size[ 1 ] + diff_y;
+	app::mpv_size[ 0 ] = g_old_mpv_size[ 0 ] + diff_x;
+	app::mpv_size[ 1 ] = g_old_mpv_size[ 1 ] + diff_y;
 
 	window_on_resize();
 	window_render_all();
@@ -1119,7 +1085,7 @@ void sys_mpv_full_window_exit()
 
 void sys_mpv_full_window_toggle()
 {
-	if ( !g_fullscreen )
+	if ( !app::fullscreen )
 	{
 		sys_mpv_full_window_enter();
 	}
@@ -1132,21 +1098,21 @@ void sys_mpv_full_window_toggle()
 
 void enable_sidebar( bool enabled )
 {
-	g_show_sidebar           = enabled;
+	app::sidebar           = enabled;
 
-	static int old_mpv_width = g_mpv_size[ 0 ];
+	static int old_mpv_width = app::mpv_size[ 0 ];
 
 	int        width, height;
-	SDL_GetWindowSize( g_main_window, &width, &height );
+	SDL_GetWindowSize( app::window, &width, &height );
 
 	if ( !enabled )
 	{
-		old_mpv_width   = g_mpv_size[ 0 ];
-		g_mpv_size[ 0 ] = width;
+		old_mpv_width   = app::mpv_size[ 0 ];
+		app::mpv_size[ 0 ] = width;
 	}
 	else
 	{
-		g_mpv_size[ 0 ] = old_mpv_width;
+		app::mpv_size[ 0 ] = old_mpv_width;
 	}
 
 	mpv_window_resize();
@@ -1156,7 +1122,7 @@ void enable_sidebar( bool enabled )
 void render_imgui()
 {
 	int width, height;
-	SDL_GetWindowSize( g_main_window, &width, &height );
+	SDL_GetWindowSize( app::window, &width, &height );
 
 	int    window_size[ 2 ] = { width, height };
 
@@ -1183,7 +1149,7 @@ void render_imgui()
 	ImGui_ImplOpenGL3_RenderDrawData( ImGui::GetDrawData() );
 
 	// Present
-	SDL_GL_SwapWindow( g_main_window );
+	SDL_GL_SwapWindow( app::window );
 }
 
 
@@ -1193,14 +1159,13 @@ void update_dpi( float dpi_override )
 
 	if ( dpi_override == 0.f )
 	{
-		scale = SDL_GetWindowDisplayScale( g_main_window );
+		scale = SDL_GetWindowDisplayScale( app::window );
 	}
 	else
 	{
 		scale = CLAMP( dpi_override, 0.25f, 5.f );
 	}
 
-	g_dpi          = scale;
 	ImGui::GetStyle() = ImGuiStyle();
 
 	style_imgui();
@@ -1212,10 +1177,10 @@ void update_dpi( float dpi_override )
 
 bool sdl_window_resize_watcher( void* userdata, SDL_Event* event )
 {
-	if ( g_in_draw || g_in_drag_drop || g_pause_window_events )
+	if ( app::in_draw || app::in_drag_drop || app::pause_window_events )
 		return true;
 
-	if ( SDL_GetWindowFlags( g_main_window ) & SDL_WINDOW_MINIMIZED )
+	if ( SDL_GetWindowFlags( app::window ) & SDL_WINDOW_MINIMIZED )
 		return true;
 
 	switch ( event->type )
@@ -1236,9 +1201,9 @@ bool sdl_window_resize_watcher( void* userdata, SDL_Event* event )
 			ImGui::SetNextFrameWantCaptureKeyboard( false );
 			ImGui::SetWindowFocus( nullptr );
 
-			g_in_window_drag = true;
+			app::in_window_drag = true;
 			window_render_all();
-			g_in_window_drag = false;
+			app::in_window_drag = false;
 			break;
 		}
 #endif
@@ -1270,10 +1235,10 @@ void main_loop()
 
 	static std::string drop_file;
 
-	while ( g_running )
+	while ( app::running )
 	{
-		g_mouse_delta[ 0 ] = 0;
-		g_mouse_delta[ 1 ] = 0;
+		app::mouse_delta[ 0 ] = 0;
+		app::mouse_delta[ 1 ] = 0;
 
 		// Handle Events
 		SDL_Event event;
@@ -1293,11 +1258,11 @@ void main_loop()
 				// Current set of drops is now complete (NULL filename)
 				case SDL_EVENT_DROP_COMPLETE:
 				{
-					if ( g_in_drag_drop )
+					if ( app::in_drag_drop )
 						break;
 
 					replay_editor_load_loose_video( drop_file.c_str() );
-					SDL_RaiseWindow( g_main_window );
+					SDL_RaiseWindow( app::window );
 					drop_file.clear();
 					break;
 				}
@@ -1307,16 +1272,16 @@ void main_loop()
 					break;
 
 				case SDL_EVENT_MOUSE_MOTION:
-					g_mouse_pos[ 0 ] = event.motion.x;
-					g_mouse_pos[ 1 ] = event.motion.y;
-					g_mouse_delta[ 0 ] += event.motion.xrel;
-					g_mouse_delta[ 1 ] += event.motion.yrel;
+					app::mouse_pos[ 0 ] = event.motion.x;
+					app::mouse_pos[ 1 ] = event.motion.y;
+					app::mouse_delta[ 0 ] += event.motion.xrel;
+					app::mouse_delta[ 1 ] += event.motion.yrel;
 					break;
 
 #if !_WIN32
 				case SDL_EVENT_WINDOW_RESIZED:
 					int width, height;
-					SDL_GetWindowSize( g_main_window_sdl, &width, &height );
+					SDL_GetWindowSize( app::window_sdl, &width, &height );
 					io.DisplaySize.x = width;
 					io.DisplaySize.y = height;
 
@@ -1326,7 +1291,7 @@ void main_loop()
 
 				case SDL_EVENT_QUIT:
 				case SDL_EVENT_WINDOW_CLOSE_REQUESTED:
-					g_running = false;
+					app::running = false;
 					break;
 			}
 		}
@@ -1334,20 +1299,20 @@ void main_loop()
 		// -----------------------------------------------------------------------------------
 		// Update Frame Time
 
-		current_time = sys_get_time_ms();
-		g_frame_time = ( current_time / 1000.f ) - ( start_time / 1000.f );
+		current_time    = sys_get_time_ms();
+		app::frame_time = ( current_time / 1000.f ) - ( start_time / 1000.f );
 
-		start_time   = current_time;
+		start_time      = current_time;
 
 		// don't let the time go too crazy, usually happens when in a breakpoint
 		// time                 = std::min( real_time, 0.1f );
 
 		// g_total_time += ( time * 1000.f );
 
-		if ( g_save_timer > 0.f )
-			g_save_timer -= g_frame_time;
+		if ( app::save_timer > 0.f )
+			app::save_timer -= app::frame_time;
 
-		if ( !g_running )
+		if ( !app::running )
 			break;
 
 		// called so mpv doesn't get flooded with too many events, and becomes unresponsive
@@ -1359,7 +1324,7 @@ void main_loop()
 		}
 
 		// is the window minimized
-		if ( SDL_GetWindowFlags( g_main_window ) & SDL_WINDOW_MINIMIZED )
+		if ( SDL_GetWindowFlags( app::window ) & SDL_WINDOW_MINIMIZED )
 		{
 			SDL_Delay( 10 );
 			continue;
@@ -1455,25 +1420,25 @@ auto main( int argc, char* argv[] ) -> int
 
 	// ------------------------------------------
 
-	SET_INT2( g_window_size, 1600, 900 );
+	SET_INT2( app::window_size, 1600, 900 );
 
 	// calculate the size of the mpv window (what about DPI Scale here later?)
-	g_mpv_size[ 0 ] = g_window_size[ 0 ] - 600;  // replay editor/sidebar
-	g_mpv_size[ 1 ] = g_window_size[ 1 ] - 240;  // playback controls
+	app::mpv_size[ 0 ] = app::window_size[ 0 ] - 600;  // replay editor/sidebar
+	app::mpv_size[ 1 ] = app::window_size[ 1 ] - 240;  // playback controls
 
-	g_main_window   = SDL_CreateWindow( "Replay Maker", g_window_size[ 0 ], g_window_size[ 1 ], SDL_WINDOW_RESIZABLE | SDL_WINDOW_OPENGL | SDL_WINDOW_HIGH_PIXEL_DENSITY | SDL_WINDOW_HIDDEN );
+	app::window   = SDL_CreateWindow( "Replay Maker", app::window_size[ 0 ], app::window_size[ 1 ], SDL_WINDOW_RESIZABLE | SDL_WINDOW_OPENGL | SDL_WINDOW_HIGH_PIXEL_DENSITY | SDL_WINDOW_HIDDEN );
 
-	if ( !g_main_window )
+	if ( !app::window )
 	{
 		printf( "Failed to Create Main Window!\n" );
 		return 1;
 	}
 
-	SDL_SetWindowMinimumSize( g_main_window, 640, 480 );
+	SDL_SetWindowMinimumSize( app::window, 800, 600 );
 
-	sys_set_window( g_main_window );
+	sys_set_window( app::window );
 
-	g_gl_context = SDL_GL_CreateContext( g_main_window );
+	g_gl_context = SDL_GL_CreateContext( app::window );
 
 	if ( !g_gl_context )
 	{
@@ -1481,7 +1446,7 @@ auto main( int argc, char* argv[] ) -> int
 		return 1;
 	}
 
-	SDL_GL_MakeCurrent( g_main_window, g_gl_context );
+	SDL_GL_MakeCurrent( app::window, g_gl_context );
 
 	if ( !gladLoadGL() )
 	{
@@ -1500,7 +1465,7 @@ auto main( int argc, char* argv[] ) -> int
 		return 1;
 	}
 
-	if ( !ImGui_ImplSDL3_InitForOpenGL( g_main_window, g_gl_context ) )
+	if ( !ImGui_ImplSDL3_InitForOpenGL( app::window, g_gl_context ) )
 	{
 		printf( "Failed to init ImGui\n" );
 		return 1;
@@ -1562,21 +1527,13 @@ auto main( int argc, char* argv[] ) -> int
 
 	// ------------------------------------------
 
-	g_clip_data = clip_create();
-
-	if ( !g_clip_data )
-	{
-		printf( "failed to create clip data\n" );
-		return 1;
-	}
-
 	{
 		char settings_path[ 4096 ] = { 0 };
 
 		memcpy( settings_path, exe_dir, exe_dir_len * sizeof( char ) );
 		strcat( settings_path, SEP_S "replay_maker_config.json5" );
 
-		clip_parse_settings( g_clip_data, settings_path );
+		clip_parse_settings( settings_path );
 	}
 
 	{
@@ -1608,8 +1565,7 @@ auto main( int argc, char* argv[] ) -> int
 		if ( fs_is_file( argv[ 1 ] ) )
 		{
 			// assume these are clips
-			// if ( clip_parse_videos( g_clip_data, argv[ 1 ] ) )
-			clip_thread_open_file( g_clip_data, argv[ 1 ] );
+			clip_thread_open_file( argv[ 1 ] );
 
 			{
 				update_recently_opened( argv[ 1 ] );
@@ -1634,7 +1590,7 @@ auto main( int argc, char* argv[] ) -> int
 	// do one render to get everything set up
 	window_render_all();
 
-	SDL_ShowWindow( g_main_window );
+	SDL_ShowWindow( app::window );
 
 	main_loop();
 

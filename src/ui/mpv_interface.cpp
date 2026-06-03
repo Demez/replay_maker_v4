@@ -194,29 +194,29 @@ void mpv_draw_frame()
 	// Fit image in window size
 	float factor[ 2 ] = { 1.f, 1.f };
 
-	factor[ 0 ]       = (float)g_mpv_size[ 0 ] / (float)video_width;
-	factor[ 1 ]       = (float)g_mpv_size[ 1 ] / (float)video_height;
+	factor[ 0 ]       = (float)app::mpv_size[ 0 ] / (float)video_width;
+	factor[ 1 ]       = (float)app::mpv_size[ 1 ] / (float)video_height;
 
 	float zoom_level = std::min( factor[ 0 ], factor[ 1 ] );
 
 	int   new_width  = video_width * zoom_level;
 	int   new_height = video_height * zoom_level;
 
-	int   pos_x       = g_mpv_size[ 0 ] / 2 - ( new_width / 2 );
-	int   pos_y       = g_mpv_size[ 1 ] / 2 - ( new_height / 2 );
+	int   pos_x       = app::mpv_size[ 0 ] / 2 - ( new_width / 2 );
+	int   pos_y       = app::mpv_size[ 1 ] / 2 - ( new_height / 2 );
 
-	int   offset_x    = g_mpv_size[ 0 ] - new_width;
-	int   offset_y    = g_mpv_size[ 1 ] - new_height;
+	int   offset_x    = app::mpv_size[ 0 ] - new_width;
+	int   offset_y    = app::mpv_size[ 1 ] - new_height;
 
 	glBindFramebuffer( GL_FRAMEBUFFER, g_fbo );
 	////glBindRenderbuffer( GL_RENDERBUFFER, g_mpv_rbo );
 	//
-	glViewport( 0, 0, g_mpv_size[ 0 ], g_mpv_size[ 1 ] );
+	glViewport( 0, 0, app::mpv_size[ 0 ], app::mpv_size[ 1 ] );
 	// glClearColor( 0.15, 0.15, 0.15, 1.0 );
 	// glClear( GL_COLOR_BUFFER_BIT );
 
-	mpv_opengl_fbo   fbo{ g_fbo, g_mpv_size[ 0 ], g_mpv_size[ 1 ], GL_RGB };
-	// mpv_opengl_fbo   fbo{ g_mpv_fbo, g_window_size[ 0 ], g_window_size[ 1 ], GL_RGB };
+	mpv_opengl_fbo   fbo{ g_fbo, app::mpv_size[ 0 ], app::mpv_size[ 1 ], GL_RGB };
+	// mpv_opengl_fbo   fbo{ g_mpv_fbo, app::window_size[ 0 ], app::window_size[ 1 ], GL_RGB };
 	int              yes  = 1;
 
 	mpv_render_param rp[] = {
@@ -237,9 +237,9 @@ void mpv_draw_frame()
 	glBindFramebuffer( GL_FRAMEBUFFER, 0 );
 	//glBindRenderbuffer( GL_RENDERBUFFER, 0 );
 
-	// glViewport( 0, g_window_size[ 1 ] - g_mpv_size[ 1 ], g_mpv_size[ 0 ], g_mpv_size[ 1 ] );
-	glViewport( g_window_size[ 0 ] - g_mpv_size[ 0 ], g_window_size[ 1 ] - g_mpv_size[ 1 ], g_mpv_size[ 0 ], g_mpv_size[ 1 ] );
-	// glViewport( 0, 0, g_window_size[ 0 ], g_window_size[ 1 ] );
+	// glViewport( 0, app::window_size[ 1 ] - app::mpv_size[ 1 ], app::mpv_size[ 0 ], app::mpv_size[ 1 ] );
+	glViewport( app::window_size[ 0 ] - app::mpv_size[ 0 ], app::window_size[ 1 ] - app::mpv_size[ 1 ], app::mpv_size[ 0 ], app::mpv_size[ 1 ] );
+	// glViewport( 0, 0, app::window_size[ 0 ], app::window_size[ 1 ] );
 
 	//glEnable( GL_SCISSOR_TEST );
 	//glScissor( pos_x, pos_y, new_width, new_height );
@@ -283,8 +283,8 @@ void mpv_update_texture()
 		return;
 
 	glBindTexture( GL_TEXTURE_2D, g_fbo_tex );
-	glTexImage2D( GL_TEXTURE_2D, 0, GL_RGB, g_mpv_size[ 0 ], g_mpv_size[ 1 ], 0, GL_RGB, GL_UNSIGNED_BYTE, nullptr );
-	// glTexImage2D( GL_TEXTURE_2D, 0, GL_RGB, g_window_size[ 0 ], g_window_size[ 1 ], 0, GL_RGB, GL_UNSIGNED_BYTE, nullptr );
+	glTexImage2D( GL_TEXTURE_2D, 0, GL_RGB, app::mpv_size[ 0 ], app::mpv_size[ 1 ], 0, GL_RGB, GL_UNSIGNED_BYTE, nullptr );
+	// glTexImage2D( GL_TEXTURE_2D, 0, GL_RGB, app::window_size[ 0 ], app::window_size[ 1 ], 0, GL_RGB, GL_UNSIGNED_BYTE, nullptr );
 
 	glTexParameteri( GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR );
 	glTexParameteri( GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR );
