@@ -162,11 +162,24 @@ void draw_replay_edit_creation_info()
 	if ( default_encode_preset >= clip_data::preset_count )
 		default_encode_preset = 0;
 
+	mpv_data_t* mpv = get_mpv_data();
+
+	ImGui::PushStyleColor( ImGuiCol_ButtonActive, COLOR_BTN_RED_ACTIVE );
+	ImGui::PushStyleColor( ImGuiCol_ButtonHovered, COLOR_BTN_RED_HOVER );
+	ImGui::PushStyleColor( ImGuiCol_Button, COLOR_BTN_RED );
+
+	if ( ImGui::Button( "Close Video" ) )
+	{
+		mpv_cmd_close_video( EXTRA_VID_ID );
+	}
+
+	ImGui::SameLine();
+
+	ImGui::PopStyleColor( 3 );
+
 	if ( ImGui::Button( "New Video" ) )
 	{
 		// create a new output video based on the filename of the playing video
-		mpv_data_t* mpv = get_mpv_data();
-
 		if ( mpv && mpv->current_video )
 		{
 			replay_editor_reset();
@@ -245,17 +258,20 @@ void draw_replay_edit_creation_info()
 
 	ImGui::Separator();
 
-	if ( clip_data::current_output )
+	if ( clip_data::current_output && mpv && mpv->current_video )
 	{
 		ImGui::TextUnformatted( "Add Video to Group" );
 
-		for ( clip_output_group_t& group : clip_data::current_output->groups )
+		for ( u32 group_i = 0; group_i < clip_data::current_output->groups.size(); group_i++ )
 		{
+			clip_output_group_t& group = clip_data::current_output->groups[ group_i ];
 			std::string group_name = clip_group_get_name( group );
 
 			ImGui::SameLine();
 			if ( ImGui::Button( group_name.c_str() ) )
 			{
+				u32 source_i = clip_group_add_source( clip_data::current_output, group_i, mpv->current_video );
+				replay_editor_set_group( clip_data::current_output_index, group_i, source_i );
 			}
 		}
 

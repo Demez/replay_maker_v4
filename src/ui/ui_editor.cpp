@@ -500,9 +500,7 @@ void draw_preset_dropdown( clip_output_video_t& output, clip_output_group_t& gro
 			preset_remove = i;
 		}
 
-		ImGui::PopStyleColor();
-		ImGui::PopStyleColor();
-		ImGui::PopStyleColor();
+		ImGui::PopStyleColor( 3 );
 	}
 
 	if ( preset_remove != UINT32_MAX )
