@@ -233,6 +233,28 @@ void                               write_recently_opened();
 void                               load_recently_opened();
 void                               update_recently_opened( const char* clips_file );
 
+// namespace state
+// {
+// 	extern bool  running;
+// 	extern bool  fullscreen;
+// 	extern bool  in_window_drag;
+// 	extern bool  in_drag_drop;
+// 	extern bool  in_draw;
+// 	extern bool  pause_window_events;
+// 	extern float dpi;
+// }
+// 
+// namespace app
+// {
+// 	extern SDL_Window* window;
+// 
+// 	extern ivec2       mouse_pos;
+// 	extern ivec2       mouse_delta;
+// 
+// 	extern float       frame_time;
+// 	extern float       save_timer;
+// }
+
 extern bool                        g_running;
 extern bool                        g_fullscreen;
 extern bool                        g_in_window_drag;

@@ -237,7 +237,8 @@ void mpv_draw_frame()
 	glBindFramebuffer( GL_FRAMEBUFFER, 0 );
 	//glBindRenderbuffer( GL_RENDERBUFFER, 0 );
 
-	glViewport( 0, g_window_size[ 1 ] - g_mpv_size[ 1 ], g_mpv_size[ 0 ], g_mpv_size[ 1 ] );
+	// glViewport( 0, g_window_size[ 1 ] - g_mpv_size[ 1 ], g_mpv_size[ 0 ], g_mpv_size[ 1 ] );
+	glViewport( g_window_size[ 0 ] - g_mpv_size[ 0 ], g_window_size[ 1 ] - g_mpv_size[ 1 ], g_mpv_size[ 0 ], g_mpv_size[ 1 ] );
 	// glViewport( 0, 0, g_window_size[ 0 ], g_window_size[ 1 ] );
 
 	//glEnable( GL_SCISSOR_TEST );

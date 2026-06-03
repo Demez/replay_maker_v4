@@ -156,7 +156,10 @@ void handle_keybinds()
 	}
 	else if ( ImGui::IsKeyPressed( ImGuiKey_MouseLeft, false ) )
 	{
-		bool video_area_hovered = mouse_hovering_area( { 0.f, 0.f }, { (float)g_mpv_size[ 0 ], (float)g_mpv_size[ 1 ] } );
+		int width = 0;
+		SDL_GetWindowSize( g_main_window, &width, nullptr );
+
+		bool video_area_hovered = mouse_hovering_area( { float( width - g_mpv_size[ 0 ]), 0.f }, { (float)width, (float)g_mpv_size[ 1 ] } );
 
 		if ( !g_hovered_divider && video_area_hovered )
 			mpv_cmd_toggle_playback();

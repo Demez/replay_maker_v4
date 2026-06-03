@@ -353,6 +353,7 @@ void timeline_draw()
 	}
 
 	// ------------------------------------------------------------------------------------------
+	if ( 1 )
 	{
 		// ImGui::BeginDisabled( !draw_tabs_and_sections );
 		// ImGui::SameLine();
@@ -379,12 +380,11 @@ void timeline_draw()
 			clip_remove_output( g_clip_data, g_clip_current_output_index );
 			timeline_reset();
 			replay_editor_reset();
+			mpv_cmd_close_video();
 
 			ImGui::EndDisabled();
 
-			ImGui::PopStyleColor();
-			ImGui::PopStyleColor();
-			ImGui::PopStyleColor();
+			ImGui::PopStyleColor( 3 );
 
 			return;
 		}
@@ -413,10 +413,7 @@ void timeline_draw()
 			}
 
 			ImGui::EndDisabled();
-
-			ImGui::PopStyleColor();
-			ImGui::PopStyleColor();
-			ImGui::PopStyleColor();
+			ImGui::PopStyleColor( 3 );
 
 			return;
 		}
@@ -436,20 +433,16 @@ void timeline_draw()
 
 			timeline_reset();
 
-			ImGui::PopStyleColor();
-			ImGui::PopStyleColor();
-			ImGui::PopStyleColor();
-
 			ImGui::EndDisabled();
+
+			ImGui::PopStyleColor( 3 );
 
 			return;
 		}
 
 		ImGui::EndDisabled();
 
-		ImGui::PopStyleColor();
-		ImGui::PopStyleColor();
-		ImGui::PopStyleColor();
+		ImGui::PopStyleColor( 3 );
 
 		if ( group )
 		{

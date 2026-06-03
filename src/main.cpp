@@ -50,7 +50,6 @@ ivec2               g_mouse_delta         = { 0, 0 };
 ivec2               g_mpv_size            = { 0, 0 };
 ivec2               g_window_size         = { 0, 0 };
 bool                g_show_sidebar        = true;
-bool                g_show_loose_video    = false;
 
 int                 g_grabbed_divider_idx = -1;
 bool                g_hovered_divider     = false;
@@ -230,6 +229,8 @@ void draw_playback_controls( int size[ 2 ], bool draw_volume )
 
 	ImGui::Text( "Audio: %s", audio_track_name ? audio_track_name : "" );
 
+	const bool show_timeline = get_mpv_index() != EXTRA_VID_ID;
+
 	//ImGui::Separator();
 
 	//ImGui::PopStyleVar();
@@ -237,9 +238,7 @@ void draw_playback_controls( int size[ 2 ], bool draw_volume )
 		ImVec2 button_size = region_avail;
 		button_size.y      = ImGui::GetTextLineHeight();
 		button_size.x *= 0.5;
-		button_size.x -= style.ItemSpacing.x;
-
-		g_show_loose_video = get_mpv_index() == EXTRA_VID_ID;
+		// button_size.x -= style.ItemSpacing.x;
 
 		extern u32 g_clip_current_output_index;
 		extern u32 g_clip_current_group_source;
@@ -247,21 +246,28 @@ void draw_playback_controls( int size[ 2 ], bool draw_volume )
 
 		if ( ImGui::BeginTabBar( "##video_preview_tabs" ) )
 		{
-			if ( !g_show_loose_video )
+			if ( show_timeline )
 				ImGui::PushStyleColor( ImGuiCol_Tab, style.Colors[ ImGuiCol_TabSelected ] );
 
 			ImGui::SetNextItemWidth( button_size.x );
 
-			if ( ImGui::TabItemButton( "Output Video" ) )
+			ImVec2 cursor_pos = ImGui::GetCursorPos();
+
+			if ( ImGui::TabItemButton( "##timeline_view" ) )
 			{
 				set_mpv_index( 0 );
 				replay_editor_set_group( g_clip_current_output_index, g_clip_current_group, g_clip_current_group_source );
 			}
 
-			if ( !g_show_loose_video )
+			if ( show_timeline )
 				ImGui::PopStyleColor();
 			else
 				ImGui::PushStyleColor( ImGuiCol_Tab, style.Colors[ ImGuiCol_TabSelected ] );
+
+			ImGui::SameLine();
+			ImGui::SetCursorPosX( cursor_pos.x );
+			ImGui::TextAligned( 0.5, button_size.x, "Timelime View" );
+			ImGui::SameLine();
 
 			//ImGui::SameLine();
 			//ImGui::Spacing();
@@ -284,14 +290,22 @@ void draw_playback_controls( int size[ 2 ], bool draw_volume )
 
 			ImGui::SetNextItemWidth( button_size.x );
 
+			//cursor_pos = ImGui::GetCursorPos();
+
 			// if ( ImGui::Selectable( loose_vid_name, g_show_loose_video, 0, button_size ) )
-			if ( ImGui::TabItemButton( loose_vid_name ) )
+			if ( ImGui::TabItemButton( "##clip_preview" ) )
 			{
 				set_mpv_index( EXTRA_VID_ID );
 			}
 
-			if ( g_show_loose_video )
+			//cursor_pos = ImGui::GetCursorPos();
+
+ 			if ( !show_timeline )
 				ImGui::PopStyleColor();
+
+			ImGui::SameLine();
+			ImGui::SetCursorPosX( cursor_pos.x + button_size.x );
+			ImGui::TextAligned( 0.5, button_size.x, loose_vid_name );
 
 			ImGui::EndDisabled();
 		}
@@ -307,7 +321,7 @@ void draw_playback_controls( int size[ 2 ], bool draw_volume )
 	// what if we had a custom seek bar that was snapshots of the video, kind of like the vscode text preview on the scrollbar
 	// or have a thumbnail of the frame as a popup when you hover over the seek bar
 
-	if ( !g_show_loose_video )
+	if ( show_timeline )
 	{
 		ImGui::Separator();
 		timeline_draw();
@@ -360,7 +374,8 @@ void draw_playback_controls( int size[ 2 ], bool draw_volume )
 			if ( duration - 0.15 < time_pos )
 			{
 				// try to seek to next vid
-				timeline_advance();
+				if ( show_timeline )
+					timeline_advance();
 			}
 
 			const char* cmd[]   = { "set", "pause", "no", NULL };
@@ -629,7 +644,7 @@ void draw_imgui_window( int window_size[ 2 ] )
 			element_size[ 1 ]     = window_size[ 1 ] - g_mpv_size[ 1 ];
 
 			ImGui::SetNextWindowSize( { (float)element_size[ 0 ], (float)element_size[ 1 ] } );
-			ImGui::SetNextWindowPos( { 0.f, (float)g_mpv_size[ 1 ] } );
+			ImGui::SetNextWindowPos( { float( window_size[ 0 ] - g_mpv_size[ 0 ] ), (float)g_mpv_size[ 1 ] } );
 
 			if ( !ImGui::Begin( "##Playback Controls", 0, ImGuiWindowFlags_NoNav | ImGuiWindowFlags_NoDecoration ) )
 			// if ( !ImGui::Begin( "##Playback Controls", 0, ImGuiWindowFlags_NoNav | ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoCollapse ) )
@@ -908,7 +923,7 @@ void move_divider( u32 index )
 	{
 		// horizontal divider
 		//cursor_main.x -= g_grab_cursor_offset[ 0 ];
-		g_mpv_size[ 0 ] = CLAMP( g_mouse_pos[ 0 ], 0, width );
+		g_mpv_size[ 0 ] = width - CLAMP( g_mouse_pos[ 0 ], 0, width );
 		ImGui::SetMouseCursor( ImGuiMouseCursor_ResizeEW );
 	}
 
@@ -929,12 +944,12 @@ void update_dividers()
 	SDL_GetWindowSize( g_main_window, &width, &height );
 
 	// rectangle 0 - playback controls divider
-	ImVec2   div_0_min{ 0.f, (float)g_mpv_size[ 1 ] - DIVIDER_SIZE };
-	ImVec2   div_0_max{ (float)g_mpv_size[ 0 ], (float)g_mpv_size[ 1 ] + DIVIDER_SIZE };
+	ImVec2   div_0_min{ float(width - g_mpv_size[ 0 ]), (float)g_mpv_size[ 1 ] - DIVIDER_SIZE };
+	ImVec2   div_0_max{ float(width), (float)g_mpv_size[ 1 ] + DIVIDER_SIZE };
 
 	// rectangle 1 - replay info
-	ImVec2   div_1_min{ (float)g_mpv_size[ 0 ] - DIVIDER_SIZE, 0.f };
-	ImVec2   div_1_max{ (float)g_mpv_size[ 0 ] + DIVIDER_SIZE, (float)height };
+	ImVec2   div_1_min{ (float)( width - g_mpv_size[ 0 ] ) - DIVIDER_SIZE, 0.f };
+	ImVec2   div_1_max{ (float)( width - g_mpv_size[ 0 ] ) + DIVIDER_SIZE, (float)height };
 
 	ImGuiIO& io                       = ImGui::GetIO();
 
