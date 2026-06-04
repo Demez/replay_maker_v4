@@ -563,52 +563,47 @@ u32 clip_duplicate_input( clip_output_video_t* output, u32 input_i )
 }
 
 
-void clip_add_time_range( clip_output_video_t* output, u32 input_i, float start_time, float end_time )
+void clip_group_add_time_range( clip_output_video_t* output, clip_output_group_t& group, u32 source_i, float start_time, float end_time )
 {
-#if 0
 	if ( !output )
 		return;
 
-	if ( input_i > output->source_count )
+	if ( source_i > group.sources.size() )
 	{
 		log_printf( "invalid source index\n" );
 		return;
 	}
 
-	clip_source_t& source = output->source[ input_i ];
+	clip_source_usage_t& source   = group.sources[ source_i ];
 
 	// What if you made time ranges linked lists? maybe the same with source videos? would allow for easy re-ordering
-	clip_time_range_t* new_data = ch_realloc< clip_time_range_t >( source.time_range, source.time_range_count + 1 );
+	clip_time_range_t&   new_data = source.time_range.emplace_back();
 
-	if ( !new_data )
-		return;
-
-	source.time_range = new_data;
-	memset( &source.time_range[ source.time_range_count ], 0, sizeof( clip_time_range_t ) );
-
-	source.time_range[ source.time_range_count ].start = start_time;
-	source.time_range[ source.time_range_count ].end   = end_time;
-
-	source.time_range_count++;
-#endif
+	new_data.start                = start_time;
+	new_data.end                  = end_time;
 }
 
 
-void clip_remove_time_range( clip_output_video_t* output, u32 input_i, u32 time_range )
+void clip_group_remove_time_range( clip_output_video_t* output, clip_output_group_t& group, u32 source_i, u32 time_range )
 {
-#if 0
 	if ( !output )
 		return;
 
-	if ( input_i > output->source_count )
+	if ( source_i > output->source_count )
 	{
 		log_printf( "invalid source index\n" );
 		return;
 	}
 
-	clip_source_t& source = output->source[ input_i ];
-	util_array_remove_element( source.time_range, source.time_range_count, time_range );
-#endif
+	clip_source_usage_t& source = group.sources[ source_i ];
+
+	if ( time_range > source.time_range.size() )
+	{
+		log_printf( "invalid time range index\n" );
+		return;
+	}
+
+	source.time_range.remove( time_range );
 }
 
 

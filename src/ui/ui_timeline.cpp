@@ -176,6 +176,23 @@ void timeline_marker_control( ImGuiIO& io, ImGuiKey key, int marker )
 		else
 		{
 			// set marker
+			if ( clip_data::current_group_source != g_timeline_marker_source )
+			{
+				// remove the other marker since it was
+				if ( marker == 1 )
+				{
+					g_timeline_marker_active[ 0 ] = false;
+					g_timeline_marker_times[ 0 ]  = 0.f;
+				}
+				else
+				{
+					g_timeline_marker_active[ 1 ] = false;
+					g_timeline_marker_times[ 1 ]  = 0.f;
+				}
+
+				g_timeline_marker_source = clip_data::current_group_source;
+			}
+
 			double time_pos = 0;
 			p_mpv_get_property( get_mpv(), "time-pos", MPV_FORMAT_DOUBLE, &time_pos );
 
@@ -508,6 +525,7 @@ void timeline_draw()
 		}
 	}
 
+	// Marker Controls
 	if ( durations.size() && capture_inputs )
 	{
 		timeline_marker_control( io, ImGuiKey_Q, 0 );
@@ -527,7 +545,7 @@ void timeline_draw()
 				start_time = temp;
 			}
 
-			clip_add_time_range( clip_data::current_output, clip_data::current_source, start_time, end_time );
+			clip_group_add_time_range( clip_data::current_output, *group, clip_data::current_group_source, start_time, end_time );
 
 			// reset markers
 			g_timeline_marker_active[ 0 ] = false;
@@ -863,13 +881,15 @@ void timeline_draw()
 			area_percents.push_back( last_percent );
 			last_percent += percent_of_area;
 
-			bool                 mouse_hovered_area = mouse_in_rect( vid_area_min, vid_area_max );
+			bool mouse_hovered_area = mouse_in_rect( vid_area_min, vid_area_max );
 
 			if ( video_i < group->sources.size() )
 			{
 				clip_source_usage_t& source_use         = group->sources[ video_i ];
 				clip_source_t&       source             = clip_data::current_output->source[ source_use.source_index ];
 
+				// ----------------------------------------------------------------------------------------------------------
+				// Draw Each Time Range in Video Source
 				for ( size_t time_i = 0; time_i < source_use.time_range.size(); time_i++ )
 				{
 					clip_time_range_t& time_range        = source_use.time_range[ time_i ];
@@ -977,6 +997,50 @@ void timeline_draw()
 					}
 	#endif
 				}
+
+				// ------------------------------------------------------------------------------------------
+				// Draw 2 Marker positions
+
+				if ( g_timeline_marker_source == video_i )
+				{
+					for ( int marker_i = 0; marker_i < 2; marker_i++ )
+					{
+						if ( !g_timeline_marker_active[ marker_i ] )
+							continue;
+
+						double  time_pos_seconds = duration.duration ? duration.duration / g_timeline_marker_times[ marker_i ] : 0.0;
+						int     marker_pos_final = duration.duration ? ( seek_area / time_pos_seconds ) + seek_pos_start : seek_pos_start;
+
+						ImColor marker_color     = marker_i == 0 ? TIMELINE_MARKER_COLOR_A : TIMELINE_MARKER_COLOR_B;
+
+						draw_list->AddLine(
+						  ImVec2( marker_pos_final, window_cursor_pos.y + ImGui::GetFrameHeight() + 1 ),
+						  ImVec2( marker_pos_final, window_area_max.y - 1 ),
+						  marker_color,
+						  1.f );
+
+						ImVec2 text_size     = ImGui::CalcTextSize( marker_i == 0 ? "A" : "B" );
+
+						float  box_padding_x = ( text_size.x + style.FramePadding.x + style.FramePadding.x ) / 2.f;
+						float  box_padding_y = ( text_size.y + style.FramePadding.y + style.FramePadding.y );
+
+						// ImVec2 title_size    = title_text_size;
+						// title_size.x += style.FramePadding.x * 2;
+						// title_size.y += style.FramePadding.y * 2;
+
+						// ImVec2 title_pos( section_pos_left + style.FramePadding.x, window_area_min.y + style.FramePadding.y );
+
+						// draw_list->AddRectFilled( ImVec2( section_pos_left, window_area_min.y ), ImVec2( section_pos_right, window_area_min.y + title_size.y ), border_color );
+
+						draw_list->AddRectFilled(
+						  ImVec2( marker_pos_final - ( box_padding_x - 1 ), window_cursor_pos.y + ImGui::GetFrameHeight() + 1 ),
+						  ImVec2( marker_pos_final + box_padding_x, window_cursor_pos.y + ImGui::GetFrameHeight() + 1 + box_padding_y ),
+						  marker_color, style.FrameRounding, ImDrawFlags_RoundCornersAll );
+
+						draw_list->AddText( ImVec2( marker_pos_final - ( style.FramePadding.x - 1 ), window_cursor_pos.y + ImGui::GetFrameHeight() + style.FramePadding.y ), ImColor( 0, 0, 0 ), marker_i == 0 ? "A" : "B" );
+					}
+				}
+
 	#if 01
 				// Process section resizing
 				if ( section_resize && section_resize_source == video_i )
@@ -1049,49 +1113,9 @@ void timeline_draw()
 				}
 	#endif
 
-				// ------------------------------------------------------------------------------------------
-				// Draw 2 Marker positions
-
-#if 0
-				for ( int marker_i = 0; marker_i < 2; marker_i++ )
-				{
-					if ( !g_timeline_marker_active[ marker_i ] )
-						continue;
-
-					double  time_pos_seconds = duration.duration ? duration.duration / g_timeline_marker_times[ marker_i ] : 0.0;
-					int     marker_pos_final = duration.duration ? ( seek_area / time_pos_seconds ) + seek_pos_start : seek_pos_start;
-
-					ImColor marker_color     = marker_i == 0 ? TIMELINE_MARKER_COLOR_A : TIMELINE_MARKER_COLOR_B;
-
-					draw_list->AddLine(
-					  ImVec2( marker_pos_final, window_cursor_pos.y + 1 ),
-					  ImVec2( marker_pos_final, window_area_max.y - 1 ),
-					  marker_color,
-					  1.f );
-
-					ImVec2 text_size     = ImGui::CalcTextSize( marker_i == 0 ? "A" : "B" );
-
-					float  box_padding_x = ( text_size.x + style.FramePadding.x + style.FramePadding.x ) / 2.f;
-					float  box_padding_y = ( text_size.y + style.FramePadding.y + style.FramePadding.y );
-
-					// ImVec2 title_size    = title_text_size;
-					// title_size.x += style.FramePadding.x * 2;
-					// title_size.y += style.FramePadding.y * 2;
-
-					// ImVec2 title_pos( section_pos_left + style.FramePadding.x, window_area_min.y + style.FramePadding.y );
-
-					// draw_list->AddRectFilled( ImVec2( section_pos_left, window_area_min.y ), ImVec2( section_pos_right, window_area_min.y + title_size.y ), border_color );
-
-
-					draw_list->AddRectFilled(
-					  ImVec2( marker_pos_final - ( box_padding_x - 1 ), window_cursor_pos.y + 1 ),
-					  ImVec2( marker_pos_final + box_padding_x, window_cursor_pos.y + 1 + box_padding_y ),
-					  marker_color, style.FrameRounding, ImDrawFlags_RoundCornersAll );
-
-					draw_list->AddText( ImVec2( marker_pos_final - ( style.FramePadding.x - 1 ), window_cursor_pos.y + style.FramePadding.y ), ImColor( 0, 0, 0 ), marker_i == 0 ? "A" : "B" );
-				}
-#endif
+				
 			}
+			
 
 			// ------------------------------------------------------------------------------------------
 			// Seek Bar Hit Detection
@@ -1182,9 +1206,9 @@ void timeline_draw()
 	// ------------------------------------------------------------------------------------------
 	// Key binding controls
 
-	if ( capture_inputs && g_selected_section != UINT32_MAX && ImGui::IsKeyPressed( ImGuiKey_Delete ) )
+	if ( group && capture_inputs && g_selected_section != UINT32_MAX && ImGui::IsKeyPressed( ImGuiKey_Delete ) )
 	{
-		clip_remove_time_range( clip_data::current_output, clip_data::current_source, g_selected_section );
+		clip_group_remove_time_range( clip_data::current_output, *group, clip_data::current_group_source, g_selected_section );
 		g_selected_section = UINT32_MAX;
 	}
 

@@ -54,7 +54,7 @@ bool replay_editor_set_video( u32 output_i, u32 input_i )
 		// return false;
 	}
 
-	replay_editor_reset();
+	// replay_editor_reset();
 
 	clip_data::current_output       = &output;
 	clip_data::current_output_index = output_i;
