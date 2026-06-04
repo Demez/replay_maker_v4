@@ -265,6 +265,49 @@ void draw_timeline_title_button()
 #endif
 
 
+#if 0
+void draw_time_range_move_button()
+{
+	// MOVE RIGHT (+1)
+	if ( mouse_in_rect( order_btn_min, order_btn_max ) )
+	{
+		ignore_seek_drag = true;
+
+		if ( source_use.time_range.size() > 1 )
+		{
+			if ( io.MouseDown[ 0 ] )
+			{
+				//btn_color.x *= 1.5;
+				//btn_color.y *= 1.5;
+				//btn_color.z *= 1.5;
+				btn_color = style.Colors[ ImGuiCol_ButtonActive ];
+			}
+			else if ( io.MouseReleased[ 0 ] )
+			{
+				// btn_color.x *= 1.5;
+				// btn_color.y *= 1.5;
+				// btn_color.z *= 1.5;
+				btn_color = style.Colors[ ImGuiCol_ButtonActive ];
+			}
+			else
+			{
+				//btn_color.x *= 1.25;
+				//btn_color.y *= 1.25;
+				//btn_color.z *= 1.25;
+				btn_color = style.Colors[ ImGuiCol_ButtonHovered ];
+			}
+		}
+	}
+
+	//btn_color.w = 1;
+
+	draw_list->AddRectFilled( order_btn_min, order_btn_max, ImColor( style.Colors[ ImGuiCol_WindowBg ] ), style.FrameRounding, ImDrawFlags_RoundCornersAll );
+	draw_list->AddRectFilled( order_btn_min, order_btn_max, ImColor( btn_color ), style.FrameRounding, ImDrawFlags_RoundCornersAll );
+	draw_list->AddText( { order_btn_min.x + text_diff, order_btn_min.y }, ImColor( ImVec4( 255, 255, 255, 255 ) ), ">" );
+}
+#endif
+
+
 void timeline_draw()
 {
 	p_mpv_set_option_string( get_mpv(), "start", "0%" );
@@ -684,17 +727,15 @@ void timeline_draw()
 	// ------------------------------------------------------------------------------------------
 	// Draw Background
 
+	// only draw if no group is selected
+	if ( !group || group->sources.empty() )
 	{
 		ImColor main_border_color = style.Colors[ ImGuiCol_Border ];
 		ImColor main_bg_color     = style.Colors[ ImGuiCol_WindowBg ];
 
-		// if ( !mouse_hovered )
-		{
-			main_bg_color.Value.x *= style.DisabledAlpha;
-			main_bg_color.Value.y *= style.DisabledAlpha;
-			main_bg_color.Value.z *= style.DisabledAlpha;
-		}
-		// main_bg_color.Value.w *= style.DisabledAlpha;
+		main_bg_color.Value.x *= style.DisabledAlpha;
+		main_bg_color.Value.y *= style.DisabledAlpha;
+		main_bg_color.Value.z *= style.DisabledAlpha;
 
 		// draw border and background on top
 		draw_list->AddRectFilled( window_area_min, window_area_max, main_bg_color, style.FrameRounding, ImDrawFlags_RoundCornersAll );
@@ -849,6 +890,14 @@ void timeline_draw()
 	static float      new_seek_percent         = 0.f;
 
 	bool              seek_time_override       = false;
+	bool              ignore_seek_drag         = false;
+
+	// shift time range params
+	static u32        shift_time_range_hovered_prev = UINT32_MAX;
+	u32               shift_time_range_hovered      = UINT32_MAX;
+	bool              shift_time_range              = false;
+	bool              shift_time_range_dir          = false;
+	u32               shift_time_range_vid          = 0;
 
 	ChVector< float > area_percents;
 
@@ -916,6 +965,100 @@ void timeline_draw()
 					draw_list->AddRectFilled( ImVec2( section_pos_left, height_min ), ImVec2( section_pos_right, height_min + title_size ), border_color, style.FrameRounding, ImDrawFlags_RoundCornersAll );
 					draw_list->AddText( title_pos, ImColor( 0, 0, 0 ), title );
 
+					// Draw order changing buttons on time range
+
+					const float ORDER_BTN_SIZE        = ImGui::GetTextLineHeight();
+					const float text_width            = ImGui::CalcTextSize( "<" ).x;
+					const float ORDER_BTN_WIDTH       = text_width + style.FramePadding.x;
+					const float order_btn_diff        = ( ImGui::GetFrameHeight() - ORDER_BTN_WIDTH ) * 0.5f;
+					const float order_btn_diff_height = ( ImGui::GetFrameHeight() - ORDER_BTN_SIZE ) * 0.5f;
+
+					ImVec2      order_btn_min         = { section_pos_right - ( order_btn_diff + text_width + 2 ), height_min + order_btn_diff_height };
+					ImVec2      order_btn_max         = { order_btn_min.x + ORDER_BTN_WIDTH, order_btn_min.y + ORDER_BTN_SIZE };
+
+					const float text_diff             = ( ORDER_BTN_WIDTH - text_width ) * 0.5f;
+
+					// offset it back more for left button start pos
+					order_btn_min.x -= ORDER_BTN_WIDTH + 2;
+					order_btn_max.x -= ORDER_BTN_WIDTH + 2;
+
+					// 0 == move left, 1 == move right
+					for ( u32 m = 0; m < 2; m++ )
+					{
+						ImVec4 btn_color = style.Colors[ ImGuiCol_Button ];
+						bool   disabled  = source_use.time_range.size() <= 1;
+
+						if ( !disabled )
+						{
+							if ( m == 0 && time_i == 0 )
+							{
+								disabled = true;
+							}
+							else if ( m == 1 && time_i + 1 == source_use.time_range.size() )
+							{
+								disabled = true;
+							}
+						}
+
+						// MOVE RIGHT (+1)
+						if ( mouse_in_rect( order_btn_min, order_btn_max ) )
+						{
+							shift_time_range_hovered = time_i;
+
+							ignore_seek_drag = true;
+
+							if ( !disabled )
+							{
+								if ( io.MouseDown[ 0 ] )
+								{
+									//btn_color.x *= 1.5;
+									//btn_color.y *= 1.5;
+									//btn_color.z *= 1.5;
+									btn_color = style.Colors[ ImGuiCol_ButtonActive ];
+								}
+								else if ( io.MouseReleased[ 0 ] )
+								{
+									// btn_color.x *= 1.5;
+									// btn_color.y *= 1.5;
+									// btn_color.z *= 1.5;
+									btn_color = style.Colors[ ImGuiCol_ButtonActive ];
+
+									shift_time_range     = true;
+									shift_time_range_vid = video_i;
+									shift_time_range_dir = m == 0 ? false : true; 
+
+								}
+								else
+								{
+									//btn_color.x *= 1.25;
+									//btn_color.y *= 1.25;
+									//btn_color.z *= 1.25;
+									btn_color = style.Colors[ ImGuiCol_ButtonHovered ];
+								}
+							}
+						}
+
+						if ( disabled )
+						{
+							btn_color.w *= style.DisabledAlpha;
+						}
+
+						//btn_color.w = 1;
+
+						// draw window bg to darken button first
+						// draw_list->AddRectFilled( order_btn_min, order_btn_max, ImColor( style.Colors[ ImGuiCol_WindowBg ] ), style.FrameRounding, ImDrawFlags_RoundCornersAll );
+						draw_list->AddRectFilled( order_btn_min, order_btn_max, ImColor( {64, 64, 64, 255} ), style.FrameRounding, ImDrawFlags_RoundCornersAll );
+						draw_list->AddRectFilled( order_btn_min, order_btn_max, ImColor( btn_color ), style.FrameRounding, ImDrawFlags_RoundCornersAll );
+
+						// TODO: USE AddTriangleFilled instead
+						// draw_list->AddText( { order_btn_min.x + text_diff, order_btn_min.y }, ImColor( disabled ? style.Colors[ ImGuiCol_TextDisabled ] : style.Colors[ ImGuiCol_Text ] ), m == 0 ? ">" : "<" );
+						draw_list->AddText( { order_btn_min.x + text_diff, order_btn_min.y }, ImColor( style.Colors[ ImGuiCol_Text ] ), m == 0 ? "<" : ">" );
+
+						// offset next button
+						order_btn_min.x += ORDER_BTN_WIDTH + 2;
+						order_btn_max.x += ORDER_BTN_WIDTH + 2;
+					}
+
 					// draw grab points
 					//draw_list->AddRectFilled( ImVec2( section_pos_left, window_area_min.y ), ImVec2( section_pos_left + 16, window_area_max.y ), SECTION_COLOR_BORDER );
 					//draw_list->AddRectFilled( ImVec2( section_pos_right - 16, window_area_min.y ), ImVec2( section_pos_right, window_area_max.y ), SECTION_COLOR_BORDER );
@@ -923,7 +1066,9 @@ void timeline_draw()
 					// if ( !capture_inputs )
 					// 	continue;
 
+					// ------------------------------------------------------------------------------------------
 					// check cursor snapping above time range start
+
 					int snap_to_time_range = 0;
 
 					if ( mouse_in_rect( ImVec2( section_pos_left - 3, window_area_min.y ), ImVec2( section_pos_left + 3, height_min ) ) )
@@ -950,7 +1095,6 @@ void timeline_draw()
 							change_to_source_i = video_i;
 						}
 					}
-	#if 1
 
 					// check if we want to select this one
 					if ( io.MouseClicked[ 0 ] && mouse_in_rect( ImVec2( section_pos_left, height_min ), ImVec2( section_pos_right, window_area_max.y ) ) )
@@ -958,6 +1102,9 @@ void timeline_draw()
 						g_selected_section    = time_i;
 						just_selected_section = true;
 					}
+
+					// ------------------------------------------------------------------------------------------
+					// Section Resize Start
 
 					if ( !section_resize )
 					{
@@ -971,7 +1118,7 @@ void timeline_draw()
 
 							if ( io.MouseClicked[ 0 ] )
 							{
-								seek_time_override       = true;
+								//seek_time_override       = true;
 								section_resize           = true;
 								section_resize_left      = true;
 								section_resize_index     = time_i;
@@ -985,9 +1132,9 @@ void timeline_draw()
 						{
 							ImGui::SetMouseCursor( ImGuiMouseCursor_ResizeEW );
 
-							if ( !io.MouseClicked[ 0 ] )
+							if ( io.MouseClicked[ 0 ] )
 							{
-								seek_time_override       = true;
+								//seek_time_override       = true;
 								section_resize           = true;
 								section_resize_source    = video_i;
 								section_resize_index     = time_i;
@@ -995,7 +1142,6 @@ void timeline_draw()
 							}
 						}
 					}
-	#endif
 				}
 
 				// ------------------------------------------------------------------------------------------
@@ -1041,8 +1187,9 @@ void timeline_draw()
 					}
 				}
 
-	#if 01
+				// ------------------------------------------------------------------------------------------
 				// Process section resizing
+
 				if ( section_resize && section_resize_source == video_i )
 				{
 					static float min_start_time = 0.f;
@@ -1111,18 +1258,14 @@ void timeline_draw()
 						}
 					}
 				}
-	#endif
-
-				
 			}
-			
 
 			// ------------------------------------------------------------------------------------------
 			// Seek Bar Hit Detection
 
 			// if ( clip_data::current_group_source == source_use_i )
 			{
-				if ( capture_inputs && !section_resize && !seek_time_override )
+				if ( capture_inputs && !section_resize && !seek_time_override && !ignore_seek_drag )
 				{
 					if ( mouse_hovered_area && io.MouseClicked[ 0 ] )
 					{
@@ -1132,7 +1275,7 @@ void timeline_draw()
 							g_selected_section = UINT32_MAX;
 					}
 
-					if ( io.MouseReleased[ 0 ] )
+					if ( !io.MouseDown[ 0 ] )
 					{
 						// timeline_set_seek_time( new_time_pos );
 						seek_drag        = false;
@@ -1201,7 +1344,8 @@ void timeline_draw()
 		}
 	}
 
-	just_selected_section = false;
+	shift_time_range_hovered_prev = shift_time_range_hovered;
+	just_selected_section         = false;
 
 	// ------------------------------------------------------------------------------------------
 	// Key binding controls
@@ -1211,7 +1355,6 @@ void timeline_draw()
 		clip_group_remove_time_range( clip_data::current_output, *group, clip_data::current_group_source, g_selected_section );
 		g_selected_section = UINT32_MAX;
 	}
-
 
 	// ------------------------------------------------------------------------------------------
 	// Set new cursor pos for normal imgui widget drawing
@@ -1231,10 +1374,6 @@ void timeline_draw()
 		}
 	}
 
-	if ( clip_data::current_output && change_to_source_i == clip_data::current_output->groups.size() )
-	{
-	}
-
 	if ( change_to_source_i != UINT32_MAX )
 	{
 		// char time_pos_str[ 16 ];
@@ -1242,8 +1381,6 @@ void timeline_draw()
 		// 
 		// int ret = p_mpv_set_option_string( get_mpv(), "start", time_pos_str );
 
-		// TODO: what if you had multiple mpv clients open, one for each source video....
-		// then you could hot swap to a different one quickly
 		replay_editor_set_group( clip_data::current_output_index, clip_data::current_group, change_to_source_i );
 		// timeline_set_seek_time( new_time_pos );
 
@@ -1271,18 +1408,24 @@ void timeline_draw()
 
 		if ( mouse_moving || io.MouseClicked[ 0 ] || seek_time_override )
 		{
-			if ( mouse_moving )
-				printf( "MOUSE MOVE\n" );
-
 			// ui actually feels worse with this lol
 			// timeline_set_seek_time_fast( new_time_pos );
 			timeline_set_seek_time( new_time_pos );
 		}
 	}
 
-	if ( group && delete_current_vid )
+	if ( group )
 	{
-		delete_current_video( group );
+		if ( shift_time_range )
+		{
+			clip_group_shift_time_range( clip_data::current_output, *group, shift_time_range_vid, shift_time_range_hovered, shift_time_range_dir );
+		}
+
+		if ( delete_current_vid )
+		{
+			delete_current_video( group );
+			group = nullptr;
+		}
 	}
 
 	was_playing = !paused;

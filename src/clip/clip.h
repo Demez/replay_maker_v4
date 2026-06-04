@@ -234,8 +234,11 @@ void                  clip_group_remove_preset( clip_output_video_t& output, u32
 
 //u32                   clip_duplicate_input( clip_output_video_t* output, u32 input_i );
 
-// TODO: REWORK THESE FOR GROUPS
 void                  clip_group_add_time_range( clip_output_video_t* output, clip_output_group_t& group, u32 source_i, float start_time, float end_time );
 void                  clip_group_remove_time_range( clip_output_video_t* output, clip_output_group_t& group, u32 source_i, u32 time_range );
+
+// direction = false for back, true for forward
+void                  clip_group_shift_time_range( clip_output_video_t* output, clip_output_group_t& group, u32 source_i, u32 time_range, bool direction );
+
 //void                  clip_duplicate_time_range( clip_output_video_t* output, u32 input_i, u32 time_range );
 

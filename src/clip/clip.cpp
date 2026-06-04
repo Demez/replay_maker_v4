@@ -607,6 +607,52 @@ void clip_group_remove_time_range( clip_output_video_t* output, clip_output_grou
 }
 
 
+// direction = false for back, true for forward
+void clip_group_shift_time_range( clip_output_video_t* output, clip_output_group_t& group, u32 source_i, u32 time_range_i, bool direction )
+{
+	if ( !output )
+		return;
+
+	if ( source_i > output->source_count )
+	{
+		log_printf( "invalid source index\n" );
+		return;
+	}
+
+	clip_source_usage_t& source = group.sources[ source_i ];
+
+	if ( time_range_i > source.time_range.size() )
+	{
+		log_printf( "invalid time range index\n" );
+		return;
+	}
+
+	if ( source.time_range.size() == 1 )
+		return;
+
+	clip_time_range_t time_range = source.time_range[ time_range_i ];
+
+	if ( direction )
+	{
+		// check if valid move
+		if ( time_range_i + 1 < source.time_range.size() )
+		{
+			source.time_range.insert( time_range, time_range_i + 2 );
+			source.time_range.remove( time_range_i );
+		}
+	}
+	else
+	{
+		// check if valid move
+		if ( time_range_i > 0 )
+		{
+			source.time_range.insert( time_range, time_range_i - 1 );
+			source.time_range.remove( time_range_i + 1 );
+		}
+	}
+}
+
+
 void clip_duplicate_time_range( clip_output_video_t* output, u32 input_i, u32 src_time_range_i )
 {
 #if 0
