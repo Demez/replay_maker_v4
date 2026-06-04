@@ -197,13 +197,13 @@ void delete_current_video( clip_output_group_t* group )
 
 	if ( group->sources.size() )
 	{
-		clip_data::current_input = group->sources[ clip_data::current_group_source ].source_index;
-		replay_editor_set_group( clip_data::current_output_index, clip_data::current_group, clip_data::current_input );
+		// clip_data::current_source = group->sources[ clip_data::current_group_source ].source_index;
+		replay_editor_set_group( clip_data::current_output_index, clip_data::current_group, clip_data::current_group_source );
 	}
 	else
 	{
 		replay_editor_set_group( clip_data::current_output_index, clip_data::current_group, 0 );
-		clip_data::current_input        = UINT32_MAX;
+		clip_data::current_source        = UINT32_MAX;
 		clip_data::current_group_source = UINT32_MAX;
 	}
 }
@@ -291,9 +291,9 @@ void timeline_draw()
 
 	bool                      video_path_matches     = false;
 
-	if ( clip_data::current_output && clip_data::current_output->source_count > 0 && clip_data::current_input != UINT32_MAX )
+	if ( clip_data::current_output && clip_data::current_output->source_count > 0 && clip_data::current_source != UINT32_MAX )
 	{
-		video_path_matches = ( mpv_get_current_video() ? strcmp( clip_data::current_output->source[ clip_data::current_input ].path, mpv_get_current_video() ) == 0 : false );
+		video_path_matches = ( mpv_get_current_video() ? strcmp( clip_data::current_output->source[ clip_data::current_source ].path, mpv_get_current_video() ) == 0 : false );
 	}
 
 	bool                      draw_tabs_and_sections = clip_data::current_output && clip_data::current_group_source != UINT32_MAX && video_path_matches;
@@ -527,7 +527,7 @@ void timeline_draw()
 				start_time = temp;
 			}
 
-			clip_add_time_range( clip_data::current_output, clip_data::current_input, start_time, end_time );
+			clip_add_time_range( clip_data::current_output, clip_data::current_source, start_time, end_time );
 
 			// reset markers
 			g_timeline_marker_active[ 0 ] = false;
@@ -748,6 +748,16 @@ void timeline_draw()
 			draw_list->AddRectFilled( vid_area_min, title_max, main_border_color, style.FrameRounding, ImDrawFlags_RoundCornersAll );
 			draw_list->AddText( title_pos, ImColor( 255, 255, 255 ), source.filename );
 
+			// DO NOT DO THIS !!!!
+			// this can clash with seeking slightly
+			// 
+			// since below in that area, seeking can be done, but then you can also resize the used sections,
+			// so the area above is nice for seeking freely,
+			// and i even added section start and end time seek time snapping on that top title bar
+			// 
+			// but then if the close button is there, you have to press below it
+			// pressing the delete key on the keyboard is a better approach
+			#if 0
 			// draw delete button
 			const float     CLOSE_BTN_SIZE  = ImGui::GetTextLineHeight();
 			const float     close_btn_diff  = ( ImGui::GetFrameHeight() - CLOSE_BTN_SIZE ) * 0.5f;
@@ -774,6 +784,12 @@ void timeline_draw()
 			}
 
 			draw_list->AddRectFilled( close_btn_min, close_btn_max, close_btn_color, style.FrameRounding, ImDrawFlags_RoundCornersAll );
+			#endif
+
+			if ( clip_data::current_group_source == source_use_i && capture_inputs && g_selected_section == UINT32_MAX && ImGui::IsKeyPressed( ImGuiKey_Delete, false ) )
+			{
+				delete_current_vid = true;
+			}
 
 			// TODO: draw sorting buttons for ordering clips
 
@@ -1168,7 +1184,7 @@ void timeline_draw()
 
 	if ( capture_inputs && g_selected_section != UINT32_MAX && ImGui::IsKeyPressed( ImGuiKey_Delete ) )
 	{
-		clip_remove_time_range( clip_data::current_output, clip_data::current_input, g_selected_section );
+		clip_remove_time_range( clip_data::current_output, clip_data::current_source, g_selected_section );
 		g_selected_section = UINT32_MAX;
 	}
 

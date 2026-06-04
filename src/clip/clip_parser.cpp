@@ -412,10 +412,6 @@ bool clip_parse_output_group( clip_output_video_t& output, json_object_t& root, 
 				return false;
 			}
 		}
-		else if ( util_strncmp( "ffmpeg_cmd", 10, object.aName.data, object.aName.size ) )
-		{
-			// soon.....
-		}
 		else if ( util_strncmp( "sources", 7, object.aName.data, object.aName.size ) )
 		{
 			if ( object.aType != e_json_type_array )
@@ -887,64 +883,6 @@ void clip_save_settings( const char* path )
 
 	// write to file
 }
-
-
-// ============================================================================================================================
-
-
-#if 0
-static bool clip_save_encode_override( clip_encode_override_t& encode_override, json_object_t& root )
-{
-	root.aName          = json_strn( "encode_overrides", 16 );
-	root.aType          = e_json_type_array;
-	root.aObjects.count = encode_override.presets_count;
-	root.aObjects.data  = ch_malloc< json_object_t >( encode_override.presets_count );
-
-	if ( !root.aObjects.data )
-		return false;
-
-	for ( u32 i = 0; i < encode_override.presets_count; i++ )
-	{
-		json_object_t& entry = root.aObjects.data[ i ];
-		entry.aType          = e_json_type_string;
-		entry.aString        = json_str( clip_data::preset[ encode_override.presets[ i ] ].name );
-	}
-
-	return true;
-}
-#else
-static bool clip_save_encode_override( clip_encode_settings_t& encode_override, json_object_t& root )
-{
-	root.aName          = json_strn( "encode_overrides", 16 );
-	root.aType          = e_json_type_object;
-	root.aObjects.count = 2;
-	root.aObjects.data  = ch_malloc< json_object_t >( 2 );
-
-	if ( !root.aObjects.data )
-		return false;
-
-	root.aObjects.data[ 0 ].aName          = json_strn( "presets", 7 );
-	root.aObjects.data[ 0 ].aType          = e_json_type_array;
-	root.aObjects.data[ 0 ].aObjects.count = encode_override.presets_count;
-	root.aObjects.data[ 0 ].aObjects.data  = ch_malloc< json_object_t >( encode_override.presets_count );
-
-	if ( !root.aObjects.data[ 0 ].aObjects.data )
-		return false;
-
-	for ( u32 i = 0; i < encode_override.presets_count; i++ )
-	{
-		json_object_t& entry = root.aObjects.data[ 0 ].aObjects.data[ i ];
-		entry.aType          = e_json_type_string;
-		entry.aString        = json_str( clip_data::preset[ encode_override.presets[ i ] ].name );
-	}
-
-	root.aObjects.data[ 1 ].aName   = json_strn( "ffmpeg_cmd", 10 );
-	root.aObjects.data[ 1 ].aType   = e_json_type_string;
-	root.aObjects.data[ 1 ].aString = {};
-
-	return true;
-}
-#endif
 
 
 // ============================================================================================================================

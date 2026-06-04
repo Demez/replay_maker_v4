@@ -21,7 +21,7 @@ namespace clip_data
 
 	clip_output_video_t*  current_output       = nullptr;
 	u32                   current_output_index = UINT32_MAX;
-	u32                   current_input        = 0;
+	u32                   current_source       = 0;
 	u32                   current_group_source = 0;
 	u32                   current_group        = 0;
 };

@@ -170,7 +170,7 @@ namespace clip_data
 
 	extern clip_output_video_t*  current_output;
 	extern u32                   current_output_index;
-	extern u32                   current_input;
+	extern u32                   current_source;
 	extern u32                   current_group_source;
 	extern u32                   current_group;
 }

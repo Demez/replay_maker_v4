@@ -33,7 +33,7 @@ void                           draw_replay_list( int size[ 2 ] );
 void replay_editor_reset()
 {
 	clip_data::current_output = nullptr;
-	clip_data::current_input  = 0;
+	clip_data::current_source  = 0;
 	memset( g_output_name_buf, 0, 512 * sizeof( char ) );
 
 	timeline_reset();
@@ -58,7 +58,7 @@ bool replay_editor_set_video( u32 output_i, u32 input_i )
 
 	clip_data::current_output       = &output;
 	clip_data::current_output_index = output_i;
-	clip_data::current_input        = input_i;
+	clip_data::current_source        = input_i;
 
 	memcpy( g_output_name_buf, output.name, strlen( output.name ) * sizeof( char ) );
 	g_focus_replay_maker = true;
@@ -109,7 +109,7 @@ void replay_editor_set_group( u32 output_i, u32 group_i, u32 group_src_i )
 	clip_output_group_t& group = output.groups[ group_i ];
 
 	// No sources in current group
-	if ( group_src_i >= group.sources.size() )
+	if ( group.sources.empty() )
 	{
 		mpv_cmd_close_video();
 		clip_data::current_group        = group_i;
@@ -117,6 +117,15 @@ void replay_editor_set_group( u32 output_i, u32 group_i, u32 group_src_i )
 		replay_editor_set_video( output_i, 0 );
 		return;
 	}
+
+	// if ( group_src_i >= group.sources.size() )
+	// {
+	// 	mpv_cmd_close_video();
+	// 	clip_data::current_group        = group_i;
+	// 	clip_data::current_group_source = group_src_i;
+	// 	replay_editor_set_video( output_i, 0 );
+	// 	return;
+	// }
 
 	clip_source_usage_t& source_use = group.sources[ group_src_i ];
 
@@ -196,7 +205,7 @@ void replay_editor_load( clip_output_video_t* output )
 	replay_editor_reset();
 
 	clip_data::current_output = output;
-	clip_data::current_input  = 0;
+	clip_data::current_source  = 0;
 
 	memcpy( g_output_name_buf, output->name, strlen( output->name ) * sizeof( char ) );
 	g_focus_replay_maker = true;
