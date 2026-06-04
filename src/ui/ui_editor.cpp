@@ -14,9 +14,6 @@ u8                             g_recently_opened_count      = 0;
 
 char                           g_output_name_buf[ 512 ]     = { 0 };
 
-static clip_encode_settings_t* g_encode_override        = nullptr;
-static clip_time_range_t*      g_edit_time_range        = nullptr;
-
 // constexpr ImVec4               g_selected_btn_color( 1.f, 1.f, 1.f, 1.f );
 // constexpr ImVec4               g_selected_btn_color( 0.21f, 0.45f, 0.73f, 1.f );
 constexpr ImVec4               g_selected_btn_color( 0.31f, 0.55f, 0.86f, 1.f );
@@ -36,8 +33,6 @@ void                           draw_replay_list( int size[ 2 ] );
 void replay_editor_reset()
 {
 	clip_data::current_output = nullptr;
-	g_encode_override         = nullptr;
-	g_edit_time_range         = nullptr;
 	clip_data::current_input  = 0;
 	memset( g_output_name_buf, 0, 512 * sizeof( char ) );
 
@@ -113,10 +108,13 @@ void replay_editor_set_group( u32 output_i, u32 group_i, u32 group_src_i )
 
 	clip_output_group_t& group = output.groups[ group_i ];
 
+	// No sources in current group
 	if ( group_src_i >= group.sources.size() )
 	{
+		mpv_cmd_close_video();
 		clip_data::current_group        = group_i;
 		clip_data::current_group_source = group_src_i;
+		replay_editor_set_video( output_i, 0 );
 		return;
 	}
 

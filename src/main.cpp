@@ -58,9 +58,6 @@ namespace app
 
 static SDL_GLContext g_gl_context          = nullptr;
 
-int                  g_grabbed_divider_idx = -1;
-bool                 g_hovered_divider     = false;
-
 char*                g_videos_file_path;
 
 std::thread*         g_clip_load_thread       = nullptr;
@@ -874,10 +871,8 @@ auto main( int argc, char* argv[] ) -> int
 			// assume these are clips
 			clip_thread_open_file( argv[ 1 ] );
 
-			{
-				update_recently_opened( argv[ 1 ] );
-				g_videos_file_path = util_strdup( argv[ 1 ] );
-			}
+			update_recently_opened( argv[ 1 ] );
+			g_videos_file_path = util_strdup( argv[ 1 ] );
 		}
 	}
 

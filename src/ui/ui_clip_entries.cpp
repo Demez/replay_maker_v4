@@ -16,40 +16,56 @@ static ImVec2 mouse_pos_diff{};
 
 void draw_replay_edit_video_info( int size[ 2 ] )
 {
+	// if ( !ImGui::BeginChild( "##clip_info_edit", {}, ImGuiChildFlags_Borders | ImGuiChildFlags_AutoResizeY ) )
 	if ( !ImGui::BeginChild( "##clip_info_edit", {}, ImGuiChildFlags_Borders | ImGuiChildFlags_AutoResizeY ) )
 	{
 		ImGui::EndChild();
 		return;
 	}
 
+	ImGuiStyle& style = ImGui::GetStyle();
+
+	ImVec2 save_pos = ImGui::GetCursorPos();
+
+	ImGui::SetCursorPosY( save_pos.y + ( ImGui::GetFrameHeight() - ImGui::GetTextLineHeight() ) * 0.5f );
 	ImGui::TextUnformatted( "Output Video Info" );
+	ImGui::SameLine();
+
+	ImGui::SetCursorPos( save_pos );
 
 	ImGui::BeginDisabled( !clip_data::current_output );
-
-	ImGuiStyle& style         = ImGui::GetStyle();
 
 	ImVec2      line_remain   = ImGui::GetContentRegionAvail();
 
 	float       spacing_width = line_remain.x;
-	spacing_width -= ImGui::CalcTextSize( "Delete" ).x;
+	spacing_width -= ImGui::CalcTextSize( "Delete Video" ).x;
 	spacing_width -= style.FramePadding.x * 2;
 	spacing_width -= style.ItemSpacing.x;
 
 	spacing_width                 = MAX( -style.ItemSpacing.x, spacing_width );
 
-	//	ImGui::Dummy( { spacing_width, 0.f } );
-	//	ImGui::SameLine();
-	//
-	//	if ( ImGui::Button( "Delete" ) )
-	//	{
-	//		clip_remove_output( clip_data::current_output );
-	//		replay_editor_reset();
-	//		ImGui::EndDisabled();
-	//		ImGui::EndChild();
-	//		return;
-	//	}
-	//
-	//	ImGui::Separator();
+	ImGui::Dummy( { spacing_width, 0.f } );
+	ImGui::SameLine();
+
+	ImGui::PushStyleColor( ImGuiCol_ButtonActive, COLOR_BTN_RED_ACTIVE );
+	ImGui::PushStyleColor( ImGuiCol_ButtonHovered, COLOR_BTN_RED_HOVER );
+	ImGui::PushStyleColor( ImGuiCol_Button, COLOR_BTN_RED );
+
+	ImGui::SetCursorPosY( save_pos.y );
+	if ( ImGui::Button( "Delete Video" ) )
+	{
+		ImGui::PopStyleColor( 3 );
+
+		clip_remove_output( clip_data::current_output );
+		replay_editor_reset();
+		ImGui::EndDisabled();
+		ImGui::EndChild();
+		return;
+	}
+
+	ImGui::PopStyleColor( 3 );
+
+	ImGui::Separator();
 
 	const ImVec2 name_text_size   = ImGui::CalcTextSize( "Name" );
 	const ImVec2 prefix_text_size = ImGui::CalcTextSize( "Prefix" );
@@ -440,9 +456,7 @@ void draw_replay_list( int size[ 2 ] )
 				preset_remove = i;
 			}
 
-			ImGui::PopStyleColor();
-			ImGui::PopStyleColor();
-			ImGui::PopStyleColor();
+			ImGui::PopStyleColor( 3 );
 		}
 
 		if ( preset_remove != SIZE_MAX )
@@ -492,6 +506,7 @@ void draw_replay_list( int size[ 2 ] )
 	bottom_area_height += ImGui::GetFrameHeightWithSpacing() * 2;  // encode section
 	bottom_area_height += ImGui::GetFrameHeightWithSpacing() * 2;  // video name and prefix field
 	bottom_area_height += ImGui::GetFrameHeightWithSpacing();      // output vid section title
+	bottom_area_height += style.ItemSpacing.y * 2.f;      // output vid delete video button
 
 	//if ( !ImGui::BeginChild( "##video_list", {}, ImGuiChildFlags_Border ) )
 	if ( ImGui::BeginChild( "##video_list", { -1, region_avail.y - bottom_area_height }, ImGuiChildFlags_Border ) )
@@ -789,6 +804,13 @@ void draw_replay_list( int size[ 2 ] )
 					{
 						// Set to MPV Loose video
 						replay_editor_load_loose_video( source.path );
+					}
+
+					ImGui::SameLine();
+
+					if ( ImGui::Button( "Delete" ) )
+					{
+						// clip_remove_source();
 					}
 				}
 

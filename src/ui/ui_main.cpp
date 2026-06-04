@@ -6,9 +6,10 @@
 
 #include <SDL3/SDL.h>
 
-extern int   g_grabbed_divider_idx;
-extern bool  g_hovered_divider;
+int           g_grabbed_divider_idx = -1;
+bool          g_hovered_divider     = false;
 
+constexpr int DIVIDER_SIZE = 3;  // multiplied by 2
 
 // ===============================================================================================
 // Dividers

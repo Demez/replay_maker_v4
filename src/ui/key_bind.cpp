@@ -5,7 +5,6 @@
 #include <unordered_map>
 
 
-extern int  g_grabbed_divider_idx;
 extern bool g_hovered_divider;
 
 

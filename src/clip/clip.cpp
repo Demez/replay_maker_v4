@@ -122,6 +122,10 @@ char* clip_replay_name_trim( const char* name, u32 prefix_len )
 }
 
 
+// ========================================================================================================
+// Video Management
+
+
 clip_output_video_t* clip_add_output( const char* name )
 {
 	clip_output_video_t* new_data = ch_realloc< clip_output_video_t >( clip_data::output, clip_data::output_count + 1 );
@@ -168,7 +172,103 @@ clip_output_video_t* clip_add_output( const char* name )
 }
 
 
-u32 clip_add_input( clip_output_video_t* output, const char* path )
+void clip_remove_output( clip_output_video_t* output )
+{
+	// look for the pointer
+	u32 output_i = 0;
+	for ( ; output_i < clip_data::output_count; output_i++ )
+	{
+		if ( &clip_data::output[ output_i ] == output )
+			break;
+	}
+
+	if ( output_i == clip_data::output_count )
+	{
+		log_printf( "invalid output\n" );
+		return;
+	}
+
+	clip_remove_output( output_i );
+}
+
+
+void clip_remove_output( u32 output_i )
+{
+	if ( output_i > clip_data::output_count )
+	{
+		log_printf( "invalid output index\n" );
+		return;
+	}
+
+	clip_output_video_t& output = clip_data::output[ output_i ];
+
+	// remove source videos
+	for ( u32 i = 0; i < output.source_count; i++ )
+	{
+		free( output.source[ i ].path );
+	}
+
+	free( output.source );
+
+	util_array_remove_element( clip_data::output, clip_data::output_count, output_i );
+}
+
+
+void clip_move_output( u32 output_id, u32 insert_position )
+{
+	if ( output_id == insert_position )
+		return;
+
+	if ( output_id >= clip_data::output_count )
+		return;
+
+	if ( insert_position >= clip_data::output_count )
+		return;
+
+	clip_output_video_t* temp_data = ch_calloc< clip_output_video_t >( 1 );
+
+	if ( !temp_data )
+	{
+		log_printf( "Failed to allocate temp data to reorder output video\n" );
+		return;
+	}
+
+	// back up this data
+	memcpy( temp_data, &clip_data::output[ output_id ], sizeof( clip_output_video_t ) );
+
+	if ( output_id > insert_position )
+	{
+		// we want to move this output to an earlier spot in memor
+		// shift everything between the insert position and original output position forward by 1
+		u32 move_count = output_id - insert_position;
+		memmove( clip_data::output + insert_position + 1, clip_data::output + insert_position, sizeof( clip_output_video_t ) * move_count );
+
+		// now copy back the data
+		memcpy( &clip_data::output[ insert_position ], temp_data, sizeof( clip_output_video_t ) );
+	}
+	else
+	{
+		// we want to move this output to a further away spot in memory
+
+		// shift everything between the insert position and original output position back by 1
+		u32 move_count = insert_position - output_id;
+		memmove( clip_data::output + output_id, clip_data::output + output_id + 1, sizeof( clip_output_video_t ) * move_count );
+
+		// now copy back the data
+		memcpy( &clip_data::output[ insert_position ], temp_data, sizeof( clip_output_video_t ) );
+	}
+
+	//u32 move_count = clip_data::output_count - insert_position;
+	//memmove( clip_data::output, clip_data::output + insert_position, sizeof( clip_output_video_t ) * move_count );
+
+	free( temp_data );
+}
+
+
+// ========================================================================================================
+
+
+u32 clip_add_source( clip_output_video_t* output, const char* path )
 {
 	if ( !output )
 		return UINT32_MAX;
@@ -201,6 +301,26 @@ u32 clip_add_input( clip_output_video_t* output, const char* path )
 	clip_get_video_metadata( *source );
 
 	return output->source_count++;
+}
+
+
+void clip_remove_source( clip_output_video_t* output, u32 input_i )
+{
+	if ( !output )
+		return;
+
+	if ( input_i > output->source_count )
+	{
+		log_printf( "invalid source index\n" );
+		return;
+	}
+
+	clip_source_t& source = output->source[ input_i ];
+
+	free( source.path );
+	free( source.filename );
+
+	util_array_remove_element( output->source, output->source_count, input_i );
 }
 
 
@@ -301,7 +421,7 @@ u32  clip_group_add_source( clip_output_video_t* output, u32 group_index, const 
 	if ( !output )
 		return UINT32_MAX;
 
-	u32 source_i = clip_add_input( output, path );
+	u32 source_i = clip_add_source( output, path );
 
 	if ( source_i == UINT32_MAX )
 		return UINT32_MAX;
@@ -388,6 +508,7 @@ void clip_group_remove_preset( clip_output_video_t& output, u32 group_index, u32
 }
 
 
+// REMOVE ME
 void duplicate_encode_overrides( clip_encode_settings_t& src, clip_encode_settings_t& dst )
 {
 	if ( src.presets )
@@ -439,68 +560,6 @@ u32 clip_duplicate_input( clip_output_video_t* output, u32 input_i )
 
 	return input_dst_i;
 #endif
-}
-
-
-void clip_remove_output( clip_output_video_t* output )
-{
-	// look for the pointer
-	u32 output_i = 0;
-	for ( ; output_i < clip_data::output_count; output_i++ )
-	{
-		if ( &clip_data::output[ output_i ] == output )
-			break;
-	}
-
-	if ( output_i == clip_data::output_count )
-	{
-		log_printf( "invalid output\n" );
-		return;
-	}
-
-	clip_remove_output( output_i );
-}
-
-
-void clip_remove_output( u32 output_i )
-{
-	if ( output_i > clip_data::output_count )
-	{
-		log_printf( "invalid output index\n" );
-		return;
-	}
-
-	clip_output_video_t& output = clip_data::output[ output_i ];
-
-	// remove source videos
-	for ( u32 i = 0; i < output.source_count; i++ )
-	{
-		free( output.source[ i ].path );
-	}
-
-	free( output.source );
-
-	util_array_remove_element( clip_data::output, clip_data::output_count, output_i );
-}
-
-
-void clip_remove_input( clip_output_video_t* output, u32 input_i )
-{
-	if ( !output )
-		return;
-
-	if ( input_i > output->source_count )
-	{
-		log_printf( "invalid source index\n" );
-		return;
-	}
-
-	clip_source_t& source = output->source[ input_i ];
-	
-	free( source.path );
-	free( source.filename );
-
-	util_array_remove_element( output->source, output->source_count, input_i );
 }
 
 
@@ -585,6 +644,7 @@ void clip_duplicate_time_range( clip_output_video_t* output, u32 input_i, u32 sr
 }
 
 
+// REMOVE ME
 void clip_add_preset_to_encode_override( clip_encode_settings_t& override, u32 preset_index )
 {
 	if ( array_append( override.presets, override.presets_count ) )
@@ -594,6 +654,7 @@ void clip_add_preset_to_encode_override( clip_encode_settings_t& override, u32 p
 }
 
 
+// REMOVE ME
 void clip_add_preset_to_encode_override( clip_encode_settings_t& override, const char* preset_name )
 {
 	// look for a preset with this name
@@ -610,6 +671,7 @@ void clip_add_preset_to_encode_override( clip_encode_settings_t& override, const
 }
 
 
+// REMOVE ME
 void clip_add_preset( clip_output_video_t& output, u32 preset_index )
 {
 	// for ( clip_output_group_t& preset_out : output.groups )
@@ -623,6 +685,7 @@ void clip_add_preset( clip_output_video_t& output, u32 preset_index )
 }
 
 
+// REMOVE ME
 void clip_remove_preset( clip_output_video_t& output, u32 preset_index )
 {
 	// for ( size_t i = 0; i < output.groups.size(); i++ )
@@ -647,54 +710,4 @@ clip_output_group_t* clip_get_group( clip_output_video_t* output, u32 group_inde
 	return &output->groups[ group_index ];
 }
 
-
-void clip_move_output( u32 output_id, u32 insert_position )
-{
-	if ( output_id == insert_position )
-		return;
-
-	if ( output_id >= clip_data::output_count )
-		return;
-
-	if ( insert_position >= clip_data::output_count )
-		return;
-
-	clip_output_video_t* temp_data = ch_calloc< clip_output_video_t >( 1 );
-
-	if ( !temp_data )
-	{
-		log_printf( "Failed to allocate temp data to reorder output video\n" );
-		return;
-	}
-
-	// back up this data
-	memcpy( temp_data, &clip_data::output[ output_id ], sizeof( clip_output_video_t ) );
-
-	if ( output_id > insert_position )
-	{
-		// we want to move this output to an earlier spot in memor
-		// shift everything between the insert position and original output position forward by 1
-		u32 move_count = output_id - insert_position;
-		memmove( clip_data::output + insert_position + 1, clip_data::output + insert_position, sizeof( clip_output_video_t ) * move_count );
-
-		// now copy back the data
-		memcpy( &clip_data::output[ insert_position ], temp_data, sizeof( clip_output_video_t ) );
-	}
-	else
-	{
-		// we want to move this output to a further away spot in memory
-
-		// shift everything between the insert position and original output position back by 1
-		u32 move_count = insert_position - output_id;
-		memmove( clip_data::output + output_id, clip_data::output + output_id + 1, sizeof( clip_output_video_t ) * move_count );
-
-		// now copy back the data
-		memcpy( &clip_data::output[ insert_position ], temp_data, sizeof( clip_output_video_t ) );
-	}
-
-	//u32 move_count = clip_data::output_count - insert_position;
-	//memmove( clip_data::output, clip_data::output + insert_position, sizeof( clip_output_video_t ) * move_count );
-
-	free( temp_data );
-}
 

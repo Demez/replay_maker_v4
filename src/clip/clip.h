@@ -54,7 +54,7 @@ struct video_metadata_t
 
 
 // controls how to use parts of videos in a encode preset
-// REMOVED IN VERSION 4
+// REMOVED IN VERSION 4 - REMOVE FROM CODE LATER
 struct clip_encode_settings_t
 {
 	// TODO: implement this! this will only be allowed with one encode preset being used, and still needs a preset active to override
@@ -177,6 +177,7 @@ namespace clip_data
 
 
 // ----------------------------------------------------------------------------
+// Clip Data Mangagement
 
 
 void                  clip_data_reset();
@@ -201,13 +202,26 @@ clip_encode_preset_t* clip_create_encode_preset();
 u32                   clip_add_prefix( const char* name, const char* prefix );
 clip_encode_preset_t* clip_add_encode_preset( const char* name, const char* ext );
 
+
+// ----------------------------------------------------------------------------
+// Video Management
+
+
 clip_output_video_t*  clip_add_output( const char* name );
-u32                   clip_add_input( clip_output_video_t* output, const char* path );
+
+void                  clip_remove_output( clip_output_video_t* output );
+void                  clip_remove_output( u32 output_i );
+
+void                  clip_move_output( u32 output_id, u32 insert_position );
+
+void                  clip_remove_source( clip_output_video_t* output, u32 source_i );
 
 // u32                   clip_add_source_to_preset( clip_output_video_t* output, u32 preset_index, const char* path );
 // void                  clip_remove_source_from_preset( clip_output_video_t* output, u32 preset_index, u32 preset_src_i );
 // void                  clip_remove_source_from_preset( clip_output_video_t* output, u32 preset_index, const char* path );
 
+// Groups
+clip_output_group_t*  clip_get_group( clip_output_video_t* output, u32 group_index );
 std::string           clip_group_get_name( clip_output_group_t& group );
 u32                   clip_group_add_source( clip_output_video_t* output, u32 group_index, const char* path );
 void                  clip_group_remove_source( clip_output_video_t* output, u32 group_index, u32 group_src_i );
@@ -218,23 +232,10 @@ void                  clip_group_add_preset( clip_output_video_t& output, clip_o
 void                  clip_group_remove_preset( clip_output_video_t& output, clip_output_group_t& group, u32 preset_i );
 void                  clip_group_remove_preset( clip_output_video_t& output, u32 group_index, u32 preset_i );
 
-u32                   clip_duplicate_input( clip_output_video_t* output, u32 input_i );
+//u32                   clip_duplicate_input( clip_output_video_t* output, u32 input_i );
 
-void                  clip_remove_output( clip_output_video_t* output );
-void                  clip_remove_output( u32 output_i );
-void                  clip_remove_input( clip_output_video_t* output, u32 input_i );
-
+// TODO: REWORK THESE FOR GROUPS
 void                  clip_add_time_range( clip_output_video_t* output, u32 input_i, float start_time, float end_time );
 void                  clip_remove_time_range( clip_output_video_t* output, u32 input_i, u32 time_range );
 void                  clip_duplicate_time_range( clip_output_video_t* output, u32 input_i, u32 time_range );
-
-void                  clip_add_preset_to_encode_override( clip_encode_settings_t& override, const char* preset_name );
-void                  clip_add_preset_to_encode_override( clip_encode_settings_t& override, u32 preset_index );
-
-void                  clip_add_preset( clip_output_video_t& output, u32 preset_index );
-void                  clip_remove_preset( clip_output_video_t& output, u32 preset_index );
-
-clip_output_group_t*  clip_get_group( clip_output_video_t* output, u32 group_index );
-
-void                  clip_move_output( u32 output_id, u32 insert_position );
 
