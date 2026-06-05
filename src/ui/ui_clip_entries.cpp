@@ -28,7 +28,7 @@ void draw_replay_edit_video_info( int size[ 2 ] )
 	ImVec2 save_pos = ImGui::GetCursorPos();
 
 	ImGui::SetCursorPosY( save_pos.y + ( ImGui::GetFrameHeight() - ImGui::GetTextLineHeight() ) * 0.5f );
-	ImGui::TextUnformatted( "Output Video Info" );
+	ImGui::TextUnformatted( "Clip Entry Info" );
 	ImGui::SameLine();
 
 	ImGui::SetCursorPos( save_pos );
