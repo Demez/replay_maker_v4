@@ -728,19 +728,19 @@ void clip_check_video( clip_t& clip )
 {
 	if ( clip.name == nullptr )
 	{
-		clip.state = e_output_state_invalid;
+		clip.state = e_clip_state_invalid;
 		return;
 	}
 
 	if ( clip.source_count == 0 || clip.source == nullptr )
 	{
-		clip.state = e_output_state_invalid;
+		clip.state = e_clip_state_invalid;
 		return;
 	}
 
 	if ( clip.groups.empty() )
 	{
-		clip.state = e_output_state_invalid;
+		clip.state = e_clip_state_invalid;
 		return;
 	}
 
@@ -860,7 +860,7 @@ void clip_check_video( clip_t& clip )
 		return;
 #endif
 
-	clip.state = e_output_state_wait;
+	clip.state = e_clip_state_wait;
 }
 
 

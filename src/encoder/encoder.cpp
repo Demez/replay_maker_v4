@@ -997,13 +997,13 @@ void run_encode_preset( clip_encode_preset_t& preset, u32 preset_i )
 
 		if ( !valid_preset )
 		{
-			clip.state = e_output_state_failed;
+			clip.state = e_clip_state_failed;
 			continue;
 		}
 
 		log_printf( "\n----------------------------------------------------\n\n" );
 
-		clip.state         = e_output_state_running;
+		clip.state         = e_clip_state_running;
 
 		std::string filename = g_encoder_data.output_dir + get_video_output_name( clip, preset );
 
@@ -1016,7 +1016,7 @@ void run_encode_preset( clip_encode_preset_t& preset, u32 preset_i )
 			if ( fs_file_size( filename.c_str() ) > 0 )
 			{
 				log_printf( log_result, "[PASS] [ALREADY EXISTS] %s\n", filename.c_str() );
-				clip.state = e_output_state_already_finished;
+				clip.state = e_clip_state_already_finished;
 				continue;
 			}
 		}
@@ -1028,7 +1028,7 @@ void run_encode_preset( clip_encode_preset_t& preset, u32 preset_i )
 		if ( video_data.segment_count == 0 )
 		{
 			// ?? use this state?
-			clip.state = e_output_state_finished;
+			clip.state = e_clip_state_finished;
 			continue;
 		}
 		
@@ -1049,11 +1049,11 @@ void run_encode_preset( clip_encode_preset_t& preset, u32 preset_i )
 		{
 			// concat them together
 			if ( !create_output_video( clip, filename.c_str(), video_data, !preset.target_size, preset_i ) )
-				clip.state = e_output_state_failed;
+				clip.state = e_clip_state_failed;
 		}
 		else
 		{
-			clip.state = e_output_state_failed;
+			clip.state = e_clip_state_failed;
 		}
 
 		// free data
@@ -1062,8 +1062,8 @@ void run_encode_preset( clip_encode_preset_t& preset, u32 preset_i )
 
 		free( video_data.segment );
 
-		if ( clip.state != e_output_state_failed )
-			clip.state = e_output_state_finished;
+		if ( clip.state != e_clip_state_failed )
+			clip.state = e_clip_state_finished;
 
 		if ( !encode_check_state() )
 			break;

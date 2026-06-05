@@ -114,7 +114,7 @@ void encode_draw_sidebar()
 				char name_buf[ 512 ]{};
 				snprintf( name_buf, 512, " %zu - %s", vid_i, clip.name );
 
-				bool draw_bg_color = clip.state != e_output_state_wait;
+				bool draw_bg_color = clip.state != e_clip_state_wait;
 
 				if ( draw_bg_color )
 				{
@@ -135,21 +135,21 @@ void encode_draw_sidebar()
 					switch ( clip.state )
 					{
 						default:
-						case e_output_state_running:
-						case e_output_state_count:
+						case e_clip_state_running:
+						case e_clip_state_count:
 							break;
 
-						case e_output_state_user_skipped:
+						case e_clip_state_user_skipped:
 							color = COLOR_PURPLE;
 							break;
 
-						case e_output_state_failed:
-						case e_output_state_invalid:
+						case e_clip_state_failed:
+						case e_clip_state_invalid:
 							color = COLOR_BTN_RED;
 							break;
 
-						case e_output_state_finished:
-						case e_output_state_already_finished:
+						case e_clip_state_finished:
+						case e_clip_state_already_finished:
 							color = COLOR_GREEN;
 							break;
 					}

@@ -258,7 +258,7 @@ bool collect_video_info()
 			}
 		}
 
-		clip.state = e_output_state_wait;
+		clip.state = e_clip_state_wait;
 		log_printf( "----------------------------------------------------\n" );
 	}
 

@@ -25,17 +25,17 @@ enum e_encode_preset
 };
 
 
-enum e_output_state
+enum e_clip_state
 {
-	e_output_state_invalid,  // there is something wrong with the video in some way that prevents us from processing it
-	e_output_state_wait,
-	e_output_state_running,
-	e_output_state_finished,
-	e_output_state_already_finished,
-	e_output_state_user_skipped,
-	e_output_state_failed,
+	e_clip_state_invalid,  // there is something wrong with the video in some way that prevents us from processing it
+	e_clip_state_wait,
+	e_clip_state_running,
+	e_clip_state_finished,
+	e_clip_state_already_finished,
+	e_clip_state_user_skipped,
+	e_clip_state_failed,
 
-	e_output_state_count,
+	e_clip_state_count,
 };
 
 
@@ -101,7 +101,7 @@ struct clip_t
 	// these are the real outputs this video has, use for format 4
 	ChVector< clip_group_t > groups;
 
-	e_output_state           state;
+	e_clip_state           state;
 	bool                     enabled;  // if false, don't encode this video
 };
 

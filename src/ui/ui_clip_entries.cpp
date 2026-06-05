@@ -244,7 +244,7 @@ void draw_replay_list_entry( u64& imgui_id, u32 out_i, bool collapse_all )
 	if ( current_clip )
 		ImGui::PushStyleColor( ImGuiCol_Button, { 0.28f, 1.f, 0.21f, 0.31f } );
 
-	else if ( clip.state == e_output_state_invalid )
+	else if ( clip.state == e_clip_state_invalid )
 		ImGui::PushStyleColor( ImGuiCol_Button, COLOR_BTN_RED );
 
 	ImGui::PushStyleVar( ImGuiStyleVar_ButtonTextAlign, { 0.f, 0.5f } );
@@ -254,7 +254,7 @@ void draw_replay_list_entry( u64& imgui_id, u32 out_i, bool collapse_all )
 	{
 		replay_editor_set_group( out_i, 0, 0 );
 
-		//if ( current_clip || output.state == e_output_state_invalid )
+		//if ( current_clip || output.state == e_clip_state_invalid )
 		//	ImGui::PopStyleColor();
 		//
 		//ImGui::PopID();
@@ -263,7 +263,7 @@ void draw_replay_list_entry( u64& imgui_id, u32 out_i, bool collapse_all )
 
 	ImGui::PopStyleVar();
 
-	if ( current_clip || clip.state == e_output_state_invalid )
+	if ( current_clip || clip.state == e_clip_state_invalid )
 		ImGui::PopStyleColor();
 
 	ImGui::PopID();

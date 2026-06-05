@@ -66,19 +66,6 @@ e_clip_parse_state   g_clip_load_thread_state = e_clip_parse_state_idle;
 static ivec2         g_old_mpv_size;
 static ivec2         g_old_window_size;
 
-//#define TEST_VIDEO L"H:\\videos\\av1_testing\\Replay 2024-07-21 23-10-44.mkv"
-//#define TEST_VIDEO L"D:\\projects\\replay_maker_v4\\out\\test.mp4"
-
-// #define TEST_VIDEO L"D:\\usr\\Downloads\\[twitter] Sigida_plushies—2024.08.09—1821928888315814020—hHiapz5PrN8XJ76v.mp4"
-// #define TEST_VIDEO_ANSI "D:\\usr\\Downloads\\[twitter] Sigida_plushies—2024.08.09—1821928888315814020—hHiapz5PrN8XJ76v.mp4"
-
-#define TEST_VIDEO L"H:\\videos\\av1_testing\\Replay 2024-06-25 21-11-40.mkv"
-#define TEST_VIDEO_ANSI "H:\\videos\\av1_testing\\Replay 2024-06-25 21-11-40.mkv"
-
-//#define TEST_VIDEO L"D:\\projects\\replay_maker_v4_window_test\\build\\output4\\raw\\test_max_path\\testingtestingtestingtestingtestingtesting\\raw_gmod_d_test_ball_flip_video__raw_gmod_d_test_ball_flip_video__raw_gmod_d_test_ball_flip_video__raw_gmod_d_test_ball_flip_video____raw_gmod_d_test_ball_flip_video____ra.mkv"
-//#define TEST_VIDEO_ANSI "D:\\projects\\replay_maker_v4_window_test\\build\\output4\\raw\\test_max_path\\testingtestingtestingtestingtestingtesting\\raw_gmod_d_test_ball_flip_video__raw_gmod_d_test_ball_flip_video__raw_gmod_d_test_ball_flip_video__raw_gmod_d_test_ball_flip_video____raw_gmod_d_test_ball_flip_video____ra.mkv"
-
-
 
 // ============================================================================================
 
