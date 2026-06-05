@@ -141,7 +141,7 @@ void save_videos()
 
 	if ( clip_save_videos( g_videos_file_path ) )
 	{
-		app::save_timer = 5000.f;
+		app::save_timer = 6.f;
 	}
 }
 
