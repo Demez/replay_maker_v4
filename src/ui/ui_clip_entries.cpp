@@ -28,7 +28,7 @@ void draw_replay_edit_video_info( int size[ 2 ] )
 	ImVec2 save_pos = ImGui::GetCursorPos();
 
 	ImGui::SetCursorPosY( save_pos.y + ( ImGui::GetFrameHeight() - ImGui::GetTextLineHeight() ) * 0.5f );
-	ImGui::TextUnformatted( "Clip Entry Info" );
+	ImGui::TextUnformatted( "Clip Info" );
 	ImGui::SameLine();
 
 	ImGui::SetCursorPos( save_pos );
@@ -247,6 +247,9 @@ void draw_replay_list_entry( u64& imgui_id, u32 out_i, bool collapse_all )
 	else if ( clip.state == e_clip_state_invalid )
 		ImGui::PushStyleColor( ImGuiCol_Button, COLOR_BTN_RED );
 
+	else if ( !clip.enabled )
+		ImGui::PushStyleColor( ImGuiCol_Button, COLOR_PURPLE );
+
 	ImGui::PushStyleVar( ImGuiStyleVar_ButtonTextAlign, { 0.f, 0.5f } );
 
 	// if ( !ImGui::CollapsingHeader( output.name ? header_name : "Loading...", current_clip ? ImGuiTreeNodeFlags_Selected | ImGuiTreeNodeFlags_Framed : 0 ) )
@@ -263,7 +266,7 @@ void draw_replay_list_entry( u64& imgui_id, u32 out_i, bool collapse_all )
 
 	ImGui::PopStyleVar();
 
-	if ( current_clip || clip.state == e_clip_state_invalid )
+	if ( current_clip || clip.state == e_clip_state_invalid || !clip.enabled )
 		ImGui::PopStyleColor();
 
 	ImGui::PopID();
@@ -341,8 +344,8 @@ void draw_replay_list( int size[ 2 ] )
 	{
 		ImGui::BeginDisabled( clip_thread_loading() );
 
-		ImGui::TextUnformatted( "Clip Entries" );
-		ImGui::Separator();
+		//ImGui::TextUnformatted( "Clips" );
+		//ImGui::Separator();
 
 		ImVec2 prefix_filter_size = ImGui::CalcTextSize( "Prefix Filter" );
 		ImVec2 search_size        = ImGui::CalcTextSize( "Search" );
@@ -814,10 +817,21 @@ void draw_replay_list( int size[ 2 ] )
 
 					ImGui::SameLine();
 
+					ImGui::BeginDisabled();
+
+					// moves the file to a separate location, might default to a specific move folder in the settings somewhere
+					if ( ImGui::Button( "Move File" ) )
+					{
+					}
+
+					ImGui::SameLine();
+
 					if ( ImGui::Button( "Delete" ) )
 					{
 						// clip_remove_source();
 					}
+
+					ImGui::EndDisabled();
 				}
 
 				ImGui::EndChild();

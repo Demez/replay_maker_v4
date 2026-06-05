@@ -138,10 +138,10 @@ void save_videos()
 	if ( g_clip_load_thread_state != e_clip_parse_state_idle )
 		return;
 
-	//if ( clip_save_videos( g_videos_file_path ) )
-	//{
-	//	app::save_timer = 5000.f;
-	//}
+	if ( clip_save_videos( g_videos_file_path ) )
+	{
+		app::save_timer = 5000.f;
+	}
 }
 
 

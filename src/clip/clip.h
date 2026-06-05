@@ -184,6 +184,7 @@ bool                  clip_save_videos( const char* path );
 
 clip_prefix_t*        clip_create_prefix();
 clip_encode_preset_t* clip_create_encode_preset();
+clip_encode_preset_t* clip_get_encode_preset( u32 preset_i );
 
 u32                   clip_add_prefix( const char* name, const char* prefix );
 clip_encode_preset_t* clip_add_encode_preset( const char* name, const char* ext );

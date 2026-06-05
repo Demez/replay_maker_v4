@@ -956,6 +956,17 @@ bool json_add_objects( json_object_t& object, size_t count )
 }
 
 
+bool json_add_objects( const char* name, size_t name_len, json_object_t& object, size_t count )
+{
+	object.aName = json_strn( name, name_len );
+
+	if ( object.aName.data == nullptr )
+		return false;
+
+	return json_add_objects( object, count );
+}
+
+
 bool json_add_array( json_object_t& object, size_t count )
 {
 	object.aType          = e_json_type_array;
@@ -963,5 +974,16 @@ bool json_add_array( json_object_t& object, size_t count )
 	object.aObjects.data  = ch_malloc< json_object_t >( count );
 
 	return object.aObjects.data;
+}
+
+
+bool json_add_array( const char* name, size_t name_len, json_object_t& object, size_t count )
+{
+	object.aName = json_strn( name, name_len );
+
+	if ( object.aName.data == nullptr )
+		return false;
+
+	return json_add_array( object, count );
 }
 

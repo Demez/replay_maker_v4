@@ -410,7 +410,7 @@ bool clip_parse_output_group( clip_t& clip, json_object_t& root, clip_group_t& g
 
 			if ( group.presets.empty() )
 			{
-				printf( "Failed to find valid encode preset for video\n" );
+				printf( "Failed to find valid encode preset for video: %s\n", clip.name );
 				return false;
 			}
 		}
@@ -494,7 +494,7 @@ bool clip_parse_output_group( clip_t& clip, json_object_t& root, clip_group_t& g
 void clip_parse_video( json_object_t& root, u32 output_i )
 {
 	clip_t& clip = clip_data::clip[ output_i ];
-	clip.enabled              = true;
+	clip.enabled = true;
 
 	for ( size_t root_i = 0; root_i < root.aObjects.count; root_i++ )
 	{
@@ -515,6 +515,10 @@ void clip_parse_video( json_object_t& root, u32 output_i )
 				clip.prefix = prefix_i;
 				break;
 			}
+		}
+		else if ( util_strncmp( "enabled", 7, object.aName.data, object.aName.size ) )
+		{
+			clip.enabled = object.aType == e_json_type_true ? true : false;
 		}
 		// version 3
 		else if ( util_strncmp( "inputs", 6, object.aName.data, object.aName.size ) )
@@ -696,6 +700,8 @@ bool clip_parse_videos( const char* path )
 
 	json_free( root );
 	free( file );
+
+	clip_data::version = CLIP_VIDEO_FORMAT_VER;
 
 	// scan videos
 	clip_check_videos();
@@ -885,11 +891,7 @@ void clip_save_settings( const char* path )
 
 bool clip_save_videos( const char* path )
 {
-	return false;
-
-#if 0
-	if ( !data )
-		return false;
+	// TODO: add in a validator for before writing the json to string
 
 	if ( !clip_data::clip_count )
 		return false;
@@ -922,100 +924,144 @@ bool clip_save_videos( const char* path )
 
 	for ( size_t root_i = 0; root_i < video_root.aObjects.count; root_i++ )
 	{
-		json_object_t&       output_json = video_root.aObjects.data[ root_i ];
-		clip_t& clip      = clip_data::clip[ root_i ];
-		output_json.aType                = e_json_type_object;
+		json_object_t& output_json = video_root.aObjects.data[ root_i ];
+		clip_t&        clip        = clip_data::clip[ root_i ];
 
-		// output video has 4 objects
-		output_json.aObjects.count       = 4;
-		output_json.aObjects.data        = ch_malloc< json_object_t >( 4 );
-
-		if ( !output_json.aObjects.data )
+		// output video has 5 objects
+		if ( !json_add_objects( output_json, 5 ) )
 		{
 			json_free( root );
 			return false;
 		}
 
 		// name
-		output_json.aObjects.data[ 0 ].aName   = json_strn( "name", 4 );
-		output_json.aObjects.data[ 0 ].aType   = e_json_type_string;
-		output_json.aObjects.data[ 0 ].aString = json_str( clip.name );
+		output_json.aObjects.data[ 0 ].aName          = json_strn( "name", 4 );
+		output_json.aObjects.data[ 0 ].aType          = e_json_type_string;
+		output_json.aObjects.data[ 0 ].aString        = json_str( clip.name );
 
 		// prefix
-		output_json.aObjects.data[ 1 ].aName   = json_strn( "prefix", 6 );
-		output_json.aObjects.data[ 1 ].aType   = e_json_type_string;
-		output_json.aObjects.data[ 1 ].aString = json_str( clip_data::prefix[ clip.prefix ].name );
+		output_json.aObjects.data[ 1 ].aName          = json_strn( "prefix", 6 );
+		output_json.aObjects.data[ 1 ].aType          = e_json_type_string;
+		output_json.aObjects.data[ 1 ].aString        = json_str( clip_data::prefix[ clip.prefix ].name );
 
-		// encode_overrides
-	//	if ( !clip_save_encode_override( data, output.encode_overrides, output_json.aObjects.data[ 2 ] ) )
-	//	{
-	//		json_free( root );
-	//		return;
-	//	}
+		// enabled
+		output_json.aObjects.data[ 2 ].aName          = json_strn( "enabled", 7 );
+		output_json.aObjects.data[ 2 ].aType          = clip.enabled ? e_json_type_true : e_json_type_false;
 
-		// inputs
-		output_json.aObjects.data[ 3 ].aName          = json_strn( "inputs", 6 );
+		// sources
+		output_json.aObjects.data[ 3 ].aName          = json_strn( "sources", 7 );
 		output_json.aObjects.data[ 3 ].aType          = e_json_type_array;
 		output_json.aObjects.data[ 3 ].aObjects.count = clip.source_count;
-		output_json.aObjects.data[ 3 ].aObjects.data  = ch_malloc< json_object_t >( clip.source_count );
 
 		if ( clip.source_count )
 		{
+			output_json.aObjects.data[ 3 ].aObjects.data = ch_malloc< json_object_t >( clip.source_count );
+
 			if ( !output_json.aObjects.data[ 3 ].aObjects.data )
 			{
 				json_free( root );
 				return false;
 			}
 
-			for ( u32 input_i = 0; input_i < clip.source_count; input_i++ )
+			for ( u32 src_i = 0; src_i < clip.source_count; src_i++ )
 			{
-				json_object_t&      input_json = output_json.aObjects.data[ 3 ].aObjects.data[ input_i ];
-				clip_source_t& source      = clip.source[ input_i ];
+				json_object_t& src_json = output_json.aObjects.data[ 3 ].aObjects.data[ src_i ];
+				clip_source_t& source   = clip.source[ src_i ];
 
-				if ( !json_add_objects( input_json, 3 ) )
+				src_json.aType          = e_json_type_string;
+				src_json.aString        = json_str( source.path );
+			}
+		}
+
+		// video groups
+		output_json.aObjects.data[ 4 ].aName          = json_strn( "groups", 6 );
+		output_json.aObjects.data[ 4 ].aType          = e_json_type_array;
+		output_json.aObjects.data[ 4 ].aObjects.count = clip.groups.size();
+
+		if ( clip.groups.size() )
+		{
+			output_json.aObjects.data[ 4 ].aObjects.data = ch_malloc< json_object_t >( clip.groups.size() );
+
+			if ( !output_json.aObjects.data[ 4 ].aObjects.data )
+			{
+				json_free( root );
+				return false;
+			}
+
+			for ( u32 group_i = 0; group_i < clip.groups.size(); group_i++ )
+			{
+				json_object_t& group_json = output_json.aObjects.data[ 4 ].aObjects.data[ group_i ];
+				clip_group_t&  group      = clip.groups[ group_i ];
+
+				if ( !json_add_objects( group_json, 2 ) )
 				{
 					json_free( root );
 					return false;
 				}
 
-				// path
-				input_json.aObjects.data[ 0 ].aName   = json_strn( "path", 4 );
-				input_json.aObjects.data[ 0 ].aType   = e_json_type_string;
-				input_json.aObjects.data[ 0 ].aString = json_str( source.path );
-
-				// encode_overrides
-				if ( !clip_save_encode_override( data, source.encode_settings, input_json.aObjects.data[ 1 ] ) )
+				// encode presets
+				if ( !json_add_array( "presets", 7, group_json.aObjects.data[ 0 ], group.presets.size() ) )
 				{
 					json_free( root );
 					return false;
 				}
 
-				// time_ranges
-				input_json.aObjects.data[ 2 ].aName = json_strn( "time_ranges", 11 );
+				for ( u32 preset_i = 0; preset_i < group.presets.size(); preset_i++ )
+				{
+					json_object_t&        preset_json = group_json.aObjects.data[ 0 ].aObjects.data[ preset_i ];
+					clip_encode_preset_t* preset      = clip_get_encode_preset( group.presets[ preset_i ] );
 
-				if ( !json_add_array( input_json.aObjects.data[ 2 ], source.time_range_count ) )
+					preset_json.aType                 = e_json_type_string;
+					preset_json.aString               = json_str( preset ? preset->name : "" );
+				}
+
+				// sources
+				if ( !json_add_array( "sources", 7, group_json.aObjects.data [ 1 ], group.sources.size() ) )
 				{
 					json_free( root );
 					return false;
 				}
 
-				for ( u32 time_i = 0; time_i < source.time_range_count; time_i++ )
+				for ( u32 source_i = 0; source_i < group.sources.size(); source_i++ )
 				{
-					json_object_t& json_time = input_json.aObjects.data[ 2 ].aObjects.data[ time_i ];
+					json_object_t&       source_json = group_json.aObjects.data[ 1 ].aObjects.data[ source_i ];
+					clip_source_usage_t& source_use  = group.sources[ source_i ];
 
-					if ( !json_add_array( json_time, 2 ) )
+					source_json.aType                = e_json_type_object;
+
+					if ( !json_add_objects( source_json, 2 ) )
 					{
 						json_free( root );
 						return false;
 					}
 
-					// json_time.aObjects.data[ 0 ].aName   = json_strn( "start", 5 );
-					json_time.aObjects.data[ 0 ].aType   = e_json_type_double;
-					json_time.aObjects.data[ 0 ].aDouble = source.time_range[ time_i ].start;
+					source_json.aObjects.data[ 0 ].aName = json_strn( "source", 6 );
+					source_json.aObjects.data[ 0 ].aType = e_json_type_int;
+					source_json.aObjects.data[ 0 ].aInt  = source_use.source_index;
 
-					// json_time.aObjects.data[ 1 ].aName   = json_strn( "end", 3 );
-					json_time.aObjects.data[ 1 ].aType   = e_json_type_double;
-					json_time.aObjects.data[ 1 ].aDouble = source.time_range[ time_i ].end;
+					// time_ranges
+					if ( !json_add_array( "time_ranges", 11, source_json.aObjects.data[ 1 ], source_use.time_range.size() ) )
+					{
+						json_free( root );
+						return false;
+					}
+
+					for ( u32 time_i = 0; time_i < source_use.time_range.size(); time_i++ )
+					{
+						json_object_t& json_time = source_json.aObjects.data[ 1 ].aObjects.data[ time_i ];
+
+						if ( !json_add_array( json_time, 2 ) )
+						{
+							json_free( root );
+							return false;
+						}
+
+						json_time.aObjects.data[ 0 ].aType   = e_json_type_double;
+						json_time.aObjects.data[ 0 ].aDouble = source_use.time_range[ time_i ].start;
+
+						json_time.aObjects.data[ 1 ].aType   = e_json_type_double;
+						json_time.aObjects.data[ 1 ].aDouble = source_use.time_range[ time_i ].end;
+					}
 				}
 			}
 		}
@@ -1044,6 +1090,5 @@ bool clip_save_videos( const char* path )
 
 	log_printf( "Saved videos to \"%s\"\n", path );
 	return true;
-#endif
 }
 

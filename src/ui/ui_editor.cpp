@@ -373,6 +373,37 @@ void draw_replay_info_menu_bar()
 		ImGui::EndMenu();
 	}
 
+	if ( ImGui::BeginMenu( "Edit" ) )
+	{
+		// Move all source videos to a different folder, useful for keeping track of used files
+		// and so you can easily delete yourself later
+		if ( ImGui::MenuItem( "Move All Source Videos", nullptr, false, false ) )
+		{
+		}
+
+		if ( ImGui::BeginItemTooltip() )
+		{
+			ImGui::PushTextWrapPos( 300.f );
+			ImGui::TextUnformatted( "Move all source videos to a different folder, useful for keeping track of used files, and so you can easily delete yourself later" );
+			ImGui::PopTextWrapPos();
+			ImGui::EndTooltip();
+		}
+
+		// Replaces an encode preset with a different one on all (or select?) videos
+		// replace raw with raw_edit for an override
+		if ( ImGui::MenuItem( "Mass Replace Encode Preset", nullptr, false, false ) )
+		{
+		}
+
+		if ( ImGui::BeginItemTooltip() )
+		{
+			ImGui::TextUnformatted( "Replaces an encode preset with a different one on all (or select?) videos\nExample: Replace \"raw\" with \"raw_edit\" for an override" );
+			ImGui::EndTooltip();
+		}
+
+		ImGui::EndMenu();
+	}
+
 	if ( ImGui::BeginMenu( "View" ) )
 	{
 		if ( ImGui::MenuItem( "Style Editor", nullptr, g_draw_built_in_menu == 1 ) )
@@ -649,9 +680,9 @@ void draw_replay_editor_window( int window_size[ 2 ] )
 		return;
 	}
 
-	if ( ImGui::BeginTabBar( "##replay_tabs" ) )
+	if ( ImGui::BeginTabBar( "##sidebar_tabs" ) )
 	{
-		if ( ImGui::BeginTabItem( "Clip Entries" ) )
+		if ( ImGui::BeginTabItem( "Clips" ) )
 		{
 			draw_replay_list( element_size );
 			ImGui::EndTabItem();

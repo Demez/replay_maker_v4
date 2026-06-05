@@ -92,6 +92,15 @@ clip_encode_preset_t* clip_create_encode_preset()
 }
 
 
+clip_encode_preset_t* clip_get_encode_preset( u32 preset_i )
+{
+	if ( preset_i >= clip_data::preset_count )
+		return nullptr;
+
+	return &clip_data::preset[ preset_i ];
+}
+
+
 // ========================================================================================================
 
 

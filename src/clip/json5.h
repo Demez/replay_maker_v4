@@ -117,5 +117,8 @@ json_str_t  json_str( const char* str );
 
 // json5 building
 bool        json_add_objects( json_object_t& object, size_t count );
+bool        json_add_objects( const char* name, size_t name_len, json_object_t& object, size_t count );
+
 bool        json_add_array( json_object_t& object, size_t count );
+bool        json_add_array( const char* name, size_t name_len, json_object_t& object, size_t count );
 
