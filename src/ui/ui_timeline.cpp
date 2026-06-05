@@ -588,7 +588,7 @@ void timeline_draw()
 				start_time = temp;
 			}
 
-			clip_group_add_time_range( clip_data::current_output, *group, clip_data::current_group_source, start_time, end_time );
+			clip_group_add_time_range( clip_data::current_output, *group, g_timeline_marker_source, start_time, end_time );
 
 			// reset markers
 			g_timeline_marker_active[ 0 ] = false;
@@ -954,8 +954,9 @@ void timeline_draw()
 					draw_list->AddRectFilled( ImVec2( section_pos_left, height_min ), ImVec2( section_pos_right, window_area_max.y ), border_color, style.FrameRounding, ImDrawFlags_RoundCornersAll );
 					draw_list->AddRectFilled( ImVec2( section_pos_left + 1, height_min + 1 ), ImVec2( section_pos_right - 1, window_area_max.y - 1 ), SECTION_COLOR_BASE, style.FrameRounding, ImDrawFlags_RoundCornersAll );
 
-					char title[ 16 ]{};
-					snprintf( title, 16, "%u", time_i );
+					char title[ TIME_BUFFER ]{};
+					// snprintf( title, 16, "%u", time_i );
+					util_format_time( title, TIME_BUFFER, time_range.end - time_range.start, true );
 
 					float  title_size = ImGui::GetFrameHeight();
 
@@ -963,8 +964,14 @@ void timeline_draw()
 
 					// draw titlebar
 					draw_list->AddRectFilled( ImVec2( section_pos_left, height_min ), ImVec2( section_pos_right, height_min + title_size ), border_color, style.FrameRounding, ImDrawFlags_RoundCornersAll );
+
+					ImGui::PushClipRect( ImVec2( section_pos_left, height_min ), ImVec2( section_pos_right, height_min + title_size ), true );
+
 					draw_list->AddText( title_pos, ImColor( 0, 0, 0 ), title );
 
+					ImGui::PopClipRect();
+
+#if 0
 					// Draw order changing buttons on time range
 
 					const float ORDER_BTN_SIZE        = ImGui::GetTextLineHeight();
@@ -1058,6 +1065,7 @@ void timeline_draw()
 						order_btn_min.x += ORDER_BTN_WIDTH + 2;
 						order_btn_max.x += ORDER_BTN_WIDTH + 2;
 					}
+					#endif
 
 					// draw grab points
 					//draw_list->AddRectFilled( ImVec2( section_pos_left, window_area_min.y ), ImVec2( section_pos_left + 16, window_area_max.y ), SECTION_COLOR_BORDER );

@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstdio>
+#include <string>
 #include <cstring>
 #include <stdlib.h>
 
@@ -307,7 +308,8 @@ void        util_append_str( str_buf_t& buffer, const char* str, size_t len, siz
 
 // kinda lame lol
 void        util_format_time( char* buffer, double time );  // expects at least TIME_BUFFER characters in buffer
-void        util_format_time( char* buffer, size_t buffer_size, double time );
+void        util_format_time( char* buffer, size_t buffer_size, double time, bool shorten = false );
+// std::string util_format_time( double time, bool shorten = false );
 
 
 // --------------------------------------------------------------------------------------------------------

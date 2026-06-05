@@ -160,7 +160,7 @@ void util_append_str( str_buf_t& buffer, const char* str, size_t len )
 }
 
 
-void util_format_time( char* buffer, size_t buffer_size, double time )
+void util_format_time( char* buffer, size_t buffer_size, double time, bool shorten )
 {
 	if ( buffer_size < 9 )
 		return;
@@ -170,23 +170,55 @@ void util_format_time( char* buffer, size_t buffer_size, double time )
 	struct tm* tm_info;
 
 	tm_info = gmtime( &time_time_pos );
-	strftime( buffer, 9, "%H:%M:%S", tm_info );
 
-	if ( buffer_size == 9 )
+	bool need_hour = false;
+	bool need_min  = false;
+	size_t buf_len   = 9;
+
+	if ( time > 60.0 )
+		need_min = true;
+
+	if ( time > 3660.0 )
+		need_hour = true;
+
+	if ( shorten )
+	{
+		if ( need_hour )
+		{
+			buf_len = 9;
+			strftime( buffer, 9, "%H:%M:%S", tm_info );
+		}
+		else if ( need_min )
+		{
+			buf_len = 6;
+			strftime( buffer, 6, "%M:%S", tm_info );
+		}
+		else
+		{
+			buf_len = 3;
+			strftime( buffer, 3, "%S", tm_info );
+		}
+	}
+	else
+	{
+		strftime( buffer, 9, "%H:%M:%S", tm_info );
+	}
+
+	if ( buffer_size == buf_len )
 		return;
 
 	// add miliseconds
-	snprintf( buffer + 8, buffer_size - 8, "%.8f", fmod( time, 1 ) );
+	snprintf( buffer + ( buf_len - 1 ), buffer_size - ( buf_len - 1 ), "%.3f", fmod( time, 1 ) );
 
 	// move it back to get rid of the 0 lol
-	memcpy( buffer + 8, buffer + 9, buffer_size - 9 );
-	buffer[ buffer_size - 1 ] = '0';
+	memcpy( buffer + ( buf_len - 1 ), buffer + buf_len, buffer_size - buf_len );
+	buffer[ ( buffer_size - buf_len ) - 1 ] = '0';
 }
 
 
 void util_format_time( char* buffer, double time )
 {
-	return util_format_time( buffer, TIME_BUFFER, time );
+	return util_format_time( buffer, TIME_BUFFER, time, false );
 }
 
 
