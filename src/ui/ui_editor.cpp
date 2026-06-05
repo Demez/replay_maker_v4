@@ -493,7 +493,7 @@ void draw_preset_dropdown( clip_t& clip, clip_group_t& group, bool edit )
 
 	if ( edit )
 	{
-		if ( ImGui::BeginCombo( "##presets", "Presets", ImGuiComboFlags_HeightLargest | ImGuiComboFlags_WidthFitPreview ) )
+		if ( ImGui::BeginCombo( "##presets", "Add Encode Preset", ImGuiComboFlags_HeightLargest | ImGuiComboFlags_WidthFitPreview ) )
 		{
 			for ( u32 i = 0; i < clip_data::preset_count; i++ )
 			{
@@ -547,6 +547,8 @@ void draw_preset_dropdown( clip_t& clip, clip_group_t& group, bool edit )
 		{
 			preset_remove = i;
 		}
+
+		ImGui::SetItemTooltip( "Click to Remove Preset \"%s\"", encode.name );
 
 		ImGui::PopStyleColor( 3 );
 	}
