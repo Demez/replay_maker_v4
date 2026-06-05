@@ -21,9 +21,23 @@ namespace clip_data
 
 	clip_t*               current_clip         = nullptr;
 	u32                   current_clip_index   = UINT32_MAX;
-	u32                   current_source       = 0;
-	u32                   current_group_source = 0;
+	// u32                   current_group_source = 0;
+
 	u32                   current_group        = 0;
+	ChVector< u32 >       current_group_source{};
+
+	u32                   current_source = 0;
+	
+	u32                   get_current_group_source()
+	{
+		if ( current_group_source.empty() )
+			return UINT32_MAX;
+
+		if ( current_group > current_group_source.size() )
+			return UINT32_MAX;
+
+		return current_group_source[ current_group ];
+	}
 };
 
 // --------------------------------------------------------------------------------------------------------
@@ -435,15 +449,21 @@ void clip_group_add_preset( clip_t& clip, clip_group_t& group, u32 preset_i )
 
 void clip_group_remove_preset( clip_t& clip, clip_group_t& group, u32 preset_i )
 {
-	for ( u32 i = 0; i < group.presets.size(); i++ )
-	{
-		if ( group.presets[ i ] == preset_i )
-		{
-			group.presets.remove( i );
-			clip_check_video( clip );
-			break;
-		}
-	}
+	if ( preset_i > group.presets.size() )
+		return;
+
+	group.presets.remove( preset_i );
+	clip_check_video( clip );
+
+	// for ( u32 i = 0; i < group.presets.size(); i++ )
+	// {
+	// 	if ( group.presets[ i ] == preset_i )
+	// 	{
+	// 		group.presets.remove( i );
+	// 		clip_check_video( clip );
+	// 		break;
+	// 	}
+	// }
 }
 
 

@@ -235,6 +235,7 @@ namespace app
 {
 	// Window
 	extern SDL_Window* window;
+	extern float       dpi;
 	extern ivec2       mpv_size;
 	extern ivec2       window_size;
 

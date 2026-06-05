@@ -356,10 +356,6 @@ void draw_playback_controls( int size[ 2 ] )
 		button_size.y      = ImGui::GetTextLineHeight();
 		button_size.x *= 0.5;
 
-		extern u32 clip_data::current_clip_index;
-		extern u32 clip_data::current_group_source;
-		extern u32 clip_data::current_group;
-
 		if ( ImGui::BeginTabBar( "##video_preview_tabs" ) )
 		{
 			if ( show_timeline )
@@ -372,7 +368,7 @@ void draw_playback_controls( int size[ 2 ] )
 			if ( ImGui::TabItemButton( "##timeline_view" ) )
 			{
 				set_mpv_index( 0 );
-				replay_editor_set_group( clip_data::current_clip_index, clip_data::current_group, clip_data::current_group_source );
+				replay_editor_set_group( clip_data::current_clip_index, clip_data::current_group, clip_data::get_current_group_source() );
 			}
 
 			if ( show_timeline )

@@ -106,14 +106,20 @@ void replay_editor_set_group( u32 output_i, u32 group_i, u32 group_src_i )
 	if ( group_i >= clip.groups.size() )
 		return;
 
+	if ( clip_data::current_clip_index != output_i )
+	{
+		clip_data::current_group_source.clear();
+		clip_data::current_group_source.resize( clip.groups.size() );
+	}
+
 	clip_group_t& group = clip.groups[ group_i ];
 
 	// No sources in current group
 	if ( group.sources.empty() )
 	{
 		mpv_cmd_close_video();
-		clip_data::current_group        = group_i;
-		clip_data::current_group_source = group_src_i;
+		clip_data::current_group                   = group_i;
+		clip_data::current_group_source[ group_i ] = group_src_i;
 		replay_editor_set_video( output_i, 0 );
 		return;
 	}
@@ -154,10 +160,10 @@ void replay_editor_set_group( u32 output_i, u32 group_i, u32 group_src_i )
 		// replay_editor_close_loose_video();
 	}
 
-	clip_data::current_group        = group_i;
-	clip_data::current_group_source = group_src_i;
+	clip_data::current_group                   = group_i;
+	clip_data::current_group_source[ group_i ] = group_src_i;
 
-	g_focus_replay_maker  = true;
+	g_focus_replay_maker                       = true;
 
 	// check current mpv instance for playback state
 	s32 paused                  = 0;

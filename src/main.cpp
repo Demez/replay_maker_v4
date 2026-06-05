@@ -37,6 +37,7 @@ namespace app
 {
 	// Window
 	SDL_Window* window              = nullptr;
+	float       dpi                 = 1.f;
 	ivec2       mpv_size            = { 0, 0 };
 	ivec2       window_size         = { 0, 0 };
 
@@ -463,6 +464,7 @@ void update_dpi( float dpi_override )
 
 	ImGui::GetStyle().ScaleAllSizes( scale );
 	ImGui::GetStyle().FontScaleDpi = scale;
+	app::dpi                       = scale;
 }
 
 

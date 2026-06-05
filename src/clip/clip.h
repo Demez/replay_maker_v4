@@ -156,9 +156,14 @@ namespace clip_data
 
 	extern clip_t*               current_clip;
 	extern u32                   current_clip_index;
-	extern u32                   current_source;
-	extern u32                   current_group_source;
+
+	//extern u32                   current_group_source;
 	extern u32                   current_group;
+	extern ChVector< u32 >       current_group_source;
+
+	extern u32                   current_source;
+
+	u32                          get_current_group_source();
 }
 
 

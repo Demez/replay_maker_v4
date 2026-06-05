@@ -76,10 +76,10 @@ void timeline_advance( bool prev )
 	if ( prev )
 	{
 		// try to change to the previous video
-		if ( clip_data::current_group_source > 0 )
+		if ( clip_data::current_group_source[ clip_data::current_group ] > 0 )
 		{
-			clip_data::current_group_source--;
-			replay_editor_set_group( clip_data::current_clip_index, clip_data::current_group, clip_data::current_group_source );
+			clip_data::current_group_source[ clip_data::current_group ]--;
+			replay_editor_set_group( clip_data::current_clip_index, clip_data::current_group, clip_data::current_group_source[ clip_data::current_group ] );
 		}
 	}
 	else
@@ -87,10 +87,10 @@ void timeline_advance( bool prev )
 		// try to change to the next video
 		clip_group_t* group = clip_get_group( clip_data::current_clip, clip_data::current_group );
 
-		if ( group && group->sources.size() > clip_data::current_group_source + 1 )
+		if ( group && group->sources.size() > clip_data::current_group_source[ clip_data::current_group ] + 1 )
 		{
-			clip_data::current_group_source++;
-			replay_editor_set_group( clip_data::current_clip_index, clip_data::current_group, clip_data::current_group_source );
+			clip_data::current_group_source[ clip_data::current_group ]++;
+			replay_editor_set_group( clip_data::current_clip_index, clip_data::current_group, clip_data::current_group_source[ clip_data::current_group ] );
 		}
 	}
 }
@@ -108,10 +108,10 @@ void timeline_seek( float seconds )
 	if ( new_time_pos < 0 )
 	{
 		// try to change to the previous video
-		if ( clip_data::current_group_source > 0 )
+		if ( clip_data::current_group_source[ clip_data::current_group ] > 0 )
 		{
-			clip_data::current_group_source--;
-			replay_editor_set_group( clip_data::current_clip_index, clip_data::current_group, clip_data::current_group_source );
+			clip_data::current_group_source[ clip_data::current_group ]--;
+			replay_editor_set_group( clip_data::current_clip_index, clip_data::current_group, clip_data::current_group_source[ clip_data::current_group ] );
 
 			double duration = 0;
 			p_mpv_get_property( get_mpv(), "duration", MPV_FORMAT_DOUBLE, &duration );
@@ -125,10 +125,10 @@ void timeline_seek( float seconds )
 		// try to change to the next video
 		clip_group_t* group = clip_get_group( clip_data::current_clip, clip_data::current_group );
 
-		if ( group && group->sources.size() > clip_data::current_group_source + 1 )
+		if ( group && group->sources.size() > clip_data::current_group_source[ clip_data::current_group ] + 1 )
 		{
-			clip_data::current_group_source++;
-			replay_editor_set_group( clip_data::current_clip_index, clip_data::current_group, clip_data::current_group_source );
+			clip_data::current_group_source[ clip_data::current_group ]++;
+			replay_editor_set_group( clip_data::current_clip_index, clip_data::current_group, clip_data::current_group_source[ clip_data::current_group ] );
 
 			new_time_pos = ( duration - time_pos ) - seconds;
 			timeline_set_seek_time_fast( abs( new_time_pos ) );
@@ -176,7 +176,7 @@ void timeline_marker_control( ImGuiIO& io, ImGuiKey key, int marker )
 		else
 		{
 			// set marker
-			if ( clip_data::current_group_source != g_timeline_marker_source )
+			if ( clip_data::get_current_group_source() != g_timeline_marker_source )
 			{
 				// remove the other marker since it was
 				if ( marker == 1 )
@@ -190,7 +190,7 @@ void timeline_marker_control( ImGuiIO& io, ImGuiKey key, int marker )
 					g_timeline_marker_times[ 1 ]  = 0.f;
 				}
 
-				g_timeline_marker_source = clip_data::current_group_source;
+				g_timeline_marker_source = clip_data::get_current_group_source();
 			}
 
 			double time_pos = 0;
@@ -205,17 +205,22 @@ void timeline_marker_control( ImGuiIO& io, ImGuiKey key, int marker )
 
 void delete_current_video( clip_group_t* group )
 {
-	clip_group_remove_source( clip_data::current_clip, clip_data::current_group, clip_data::current_group_source );
+	u32 group_source = clip_data::get_current_group_source();
+
+	clip_group_remove_source( clip_data::current_clip, clip_data::current_group, group_source );
 	timeline_reset();
 	// replay_editor_reset();
 
-	if ( group && clip_data::current_group_source > 0 && clip_data::current_group_source == group->sources.size() )
-		clip_data::current_group_source--;
+	//if ( group )
+	//	clip_data::current_group_source.remove( group_source );
+
+	if ( group && clip_data::current_group_source[ clip_data::current_group ] > 0 && clip_data::current_group_source[ clip_data::current_group ] == group->sources.size() )
+		clip_data::current_group_source[ clip_data::current_group ]--;
 
 	if ( group->sources.size() )
 	{
 		// clip_data::current_source = group->sources[ clip_data::current_group_source ].source_index;
-		replay_editor_set_group( clip_data::current_clip_index, clip_data::current_group, clip_data::current_group_source );
+		replay_editor_set_group( clip_data::current_clip_index, clip_data::current_group, clip_data::get_current_group_source() );
 	}
 	else
 	{
@@ -356,7 +361,7 @@ void timeline_draw()
 		video_path_matches = ( mpv_get_current_video() ? strcmp( clip_data::current_clip->source[ clip_data::current_source ].path, mpv_get_current_video() ) == 0 : false );
 	}
 
-	bool                      draw_tabs_and_sections = clip_data::current_clip && clip_data::current_group_source != UINT32_MAX && video_path_matches;
+	bool                      draw_tabs_and_sections = clip_data::current_clip && clip_data::get_current_group_source() != UINT32_MAX && video_path_matches;
 
 	// ------------------------------------------------------------------------------------------
 	// Draw tabs on top for which encode preset currently in use and current source video?
@@ -386,7 +391,7 @@ void timeline_draw()
 				{
 					if ( clip_data::current_group != group_i )
 					{
-						replay_editor_set_group( clip_data::current_clip_index, group_i, 0 );
+						replay_editor_set_group( clip_data::current_clip_index, group_i, clip_data::current_group_source[ group_i ] );
 					}
 				}
 
@@ -604,7 +609,7 @@ void timeline_draw()
 
 	if ( durations.size() && draw_tabs_and_sections && capture_inputs && group )
 	{
-		clip_source_usage_t& source = group->sources[ clip_data::current_group_source ];
+		clip_source_usage_t& source = group->sources[ clip_data::get_current_group_source() ];
 
 		if ( ImGui::IsKeyPressed( ImGuiKey_A, false ) )
 		{
@@ -614,10 +619,10 @@ void timeline_draw()
 			// search for the first notable time to snap to
 			float closest_time = 0.f;
 
-			if ( time_pos < TIMELINE_SKIP_TIME && clip_data::current_group_source > 0 )
+			if ( time_pos < TIMELINE_SKIP_TIME && clip_data::get_current_group_source() > 0 )
 			{
-				clip_source_usage_t& prev_source = group->sources[ clip_data::current_group_source - 1 ];
-				float                duration    = durations[ clip_data::current_group_source - 1 ].duration;
+				clip_source_usage_t& prev_source = group->sources[ clip_data::get_current_group_source() - 1 ];
+				float                duration    = durations[ clip_data::get_current_group_source() - 1 ].duration;
 
 				for ( u32 time_i = 0; time_i < prev_source.time_range.size(); time_i++ )
 				{
@@ -630,7 +635,7 @@ void timeline_draw()
 						closest_time = std::max( closest_time, time_range.end );
 				}
 
-				change_to_source_i = clip_data::current_group_source - 1;
+				change_to_source_i = clip_data::get_current_group_source() - 1;
 				new_time_pos       = closest_time;
 			}
 			else
@@ -661,10 +666,10 @@ void timeline_draw()
 			// search for the first notable time to snap to
 			float closest_time = durations[ focused_source ].duration;
 
-			if ( time_pos > closest_time - TIMELINE_SKIP_TIME && clip_data::current_group_source + 1 < group->sources.size() )
+			if ( time_pos > closest_time - TIMELINE_SKIP_TIME && clip_data::get_current_group_source() + 1 < group->sources.size() )
 			{
-				clip_source_usage_t& prev_source = group->sources[ clip_data::current_group_source + 1 ];
-				float                duration    = durations[ clip_data::current_group_source + 1 ].duration;
+				clip_source_usage_t& prev_source = group->sources[ clip_data::get_current_group_source() + 1 ];
+				float                duration    = durations[ clip_data::get_current_group_source() + 1 ].duration;
 				closest_time                     = duration;
 
 				for ( u32 time_i = 0; time_i < prev_source.time_range.size(); time_i++ )
@@ -678,7 +683,7 @@ void timeline_draw()
 						closest_time = std::min( closest_time, time_range.end );
 				}
 
-				change_to_source_i = clip_data::current_group_source + 1;
+				change_to_source_i = clip_data::get_current_group_source() + 1;
 				new_time_pos       = closest_time;
 			}
 			else
@@ -760,7 +765,7 @@ void timeline_draw()
 			ImColor              main_border_color = style.Colors[ ImGuiCol_FrameBgActive ];
 			ImColor              main_bg_color     = style.Colors[ ImGuiCol_FrameBg ];
 
-			if ( clip_data::current_group_source != source_use_i )
+			if ( clip_data::get_current_group_source() != source_use_i )
 			{
 				main_bg_color.Value.x *= style.DisabledAlpha;
 				main_bg_color.Value.y *= style.DisabledAlpha;
@@ -845,7 +850,7 @@ void timeline_draw()
 			draw_list->AddRectFilled( close_btn_min, close_btn_max, close_btn_color, style.FrameRounding, ImDrawFlags_RoundCornersAll );
 			#endif
 
-			if ( clip_data::current_group_source == source_use_i && capture_inputs && g_selected_section == UINT32_MAX && ImGui::IsKeyPressed( ImGuiKey_Delete, false ) )
+			if ( clip_data::get_current_group_source() == source_use_i && capture_inputs && g_selected_section == UINT32_MAX && ImGui::IsKeyPressed( ImGuiKey_Delete, false ) )
 			{
 				delete_current_vid = true;
 			}
@@ -930,7 +935,7 @@ void timeline_draw()
 			area_percents.push_back( last_percent );
 			last_percent += percent_of_area;
 
-			bool mouse_hovered_area = mouse_in_rect( vid_area_min, vid_area_max );
+			bool mouse_hovered_area = mouse_hovering_area( vid_area_min, vid_area_max );
 
 			if ( video_i < group->sources.size() )
 			{
@@ -946,7 +951,7 @@ void timeline_draw()
 					int                section_pos_left  = seek_pos_start + seek_area * ( time_range.start / source.metadata.duration );
 					int                section_pos_right = seek_pos_start + seek_area * ( time_range.end / source.metadata.duration );
 
-					bool               is_selected       = clip_data::current_group_source == video_i && g_selected_section == time_i;
+					bool               is_selected       = clip_data::get_current_group_source() == video_i && g_selected_section == time_i;
 					ImColor            border_color      = is_selected ? SECTION_COLOR_SELECT_BORDER : SECTION_COLOR_BORDER;
 
 					float              height_min        = window_area_min.y + ImGui::GetFrameHeight();
@@ -1079,14 +1084,16 @@ void timeline_draw()
 
 					int snap_to_time_range = 0;
 
-					if ( mouse_hovered && mouse_in_rect( ImVec2( section_pos_left - 3, window_area_min.y ), ImVec2( section_pos_left + 3, height_min ) ) )
+					const float snap_size          = 4 * app::dpi;
+
+					if ( mouse_hovered && mouse_in_rect( ImVec2( section_pos_left - snap_size, window_area_min.y ), ImVec2( section_pos_left + snap_size, height_min ) ) )
 					{
 						//ImGui::SetMouseCursor( ImGuiMouseCursor_Hand );
 						snap_to_time_range = 1;
 					}
 
 					// check snap to end time
-					if ( mouse_hovered && mouse_in_rect( ImVec2( section_pos_right - 3, window_area_min.y ), ImVec2( section_pos_right + 3, height_min ) ) )
+					if ( mouse_hovered && mouse_in_rect( ImVec2( section_pos_right - snap_size, window_area_min.y ), ImVec2( section_pos_right + snap_size, height_min ) ) )
 					{
 						//ImGui::SetMouseCursor( ImGuiMouseCursor_Hand );
 						snap_to_time_range = 2;
@@ -1098,7 +1105,7 @@ void timeline_draw()
 						new_time_pos       = snap_to_time_range == 1 ? time_range.start : time_range.end;
 						new_seek_percent   = new_time_pos / duration.duration;
 
-						if ( mouse_hovered_area && clip_data::current_group_source != video_i )
+						if ( mouse_hovered_area && clip_data::get_current_group_source() != video_i )
 						{
 							change_to_source_i = video_i;
 						}
@@ -1291,9 +1298,9 @@ void timeline_draw()
 						new_time_pos     = 0.f;
 					}
 
-					if ( seek_drag )
+					if ( seek_drag && mouse_hovered_area )
 					{
-						if ( mouse_hovered_area && clip_data::current_group_source != video_i )
+						if ( mouse_hovered_area && clip_data::get_current_group_source() != video_i )
 						{
 							change_to_source_i = video_i;
 						}
@@ -1319,7 +1326,7 @@ void timeline_draw()
 			// ------------------------------------------------------------------------------------------
 			// Draw Seek position on top of everything
 
-			if ( clip_data::current_group_source == video_i )
+			if ( clip_data::get_current_group_source() == video_i )
 			{
 				double time_pos_seconds = duration.duration ? duration.duration / time_pos : 0;
 				int    seek_pos_final   = duration.duration ? ( seek_area / time_pos_seconds ) + seek_pos_start : seek_pos_start;
@@ -1360,7 +1367,7 @@ void timeline_draw()
 
 	if ( group && capture_inputs && g_selected_section != UINT32_MAX && ImGui::IsKeyPressed( ImGuiKey_Delete ) )
 	{
-		clip_group_remove_time_range( clip_data::current_clip, *group, clip_data::current_group_source, g_selected_section );
+		clip_group_remove_time_range( clip_data::current_clip, *group, clip_data::get_current_group_source(), g_selected_section );
 		g_selected_section = UINT32_MAX;
 	}
 
@@ -1372,11 +1379,11 @@ void timeline_draw()
 
 	if ( !seek_drag && was_playing && paused && group && group->sources.size() )
 	{
-		if ( time_pos >= durations[ clip_data::current_group_source ].duration - 0.5f )
+		if ( time_pos >= durations[ clip_data::get_current_group_source() ].duration - 0.5f )
 		{
-			if ( group->sources.size() > clip_data::current_group_source + 1 )
+			if ( group->sources.size() > clip_data::get_current_group_source() + 1 )
 			{
-				change_to_source_i = ++clip_data::current_group_source;
+				change_to_source_i = ++clip_data::current_group_source[ clip_data::current_group ];
 				new_time_pos       = 0.f;
 			}
 		}
