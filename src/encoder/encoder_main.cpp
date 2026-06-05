@@ -99,7 +99,7 @@ bool collect_video_info()
 	return false;
 
 #if 0
-	g_output_videos = ch_calloc< enc_output_video_t >( clip_data::output_count );
+	g_output_videos = ch_calloc< enc_output_video_t >( clip_data::clip_count );
 
 	if ( !g_output_videos )
 	{
@@ -120,25 +120,25 @@ bool collect_video_info()
 	  "%d Output Videos\n"
 	  "====================================================================\n",
 	  g_output_dir,
-	  clip_data::preset_count, clip_data::prefix_count, clip_data::output_count );
+	  clip_data::preset_count, clip_data::prefix_count, clip_data::clip_count );
 
 	// check this for each encode preset
-	for ( u32 out_i = 0; out_i < clip_data::output_count; out_i++ )
+	for ( u32 out_i = 0; out_i < clip_data::clip_count; out_i++ )
 	{
-		clip_output_video_t& output     = clip_data::output[ out_i ];
+		clip_t& clip     = clip_data::clip[ out_i ];
 		enc_output_video_t&  enc_output = g_output_videos[ out_i ];
-		enc_output.output               = &output;
+		enc_output.clip               = &clip;
 		g_encoder_data.scan_index       = out_i;
 
-		log_printf( "%s%s\n", clip_data::prefix[ output.prefix ].prefix, output.name );
+		log_printf( "%s%s\n", clip_data::prefix[ clip.prefix ].prefix, clip.name );
 
 		// ----------------------------------------------------------------------------------------
 		// determine encode presets for this output video
 
 		// figure out what encode presets this runs on
-		for ( u32 in_i = 0; in_i < output.source_count; in_i++ )
+		for ( u32 in_i = 0; in_i < clip.source_count; in_i++ )
 		{
-			clip_source_t& source = output.source[ in_i ];
+			clip_source_t& source = clip.source[ in_i ];
 
 			for ( u32 preset_i = 0; preset_i < source.encode_settings.presets_count; preset_i++ )
 			{
@@ -186,9 +186,9 @@ bool collect_video_info()
 		// find all unique source videos, there will be duplicates for different encode presets
 		// this way we don't need get metadata for the same video multiple times
 
-		for ( u32 in_i = 0; in_i < output.source_count; in_i++ )
+		for ( u32 in_i = 0; in_i < clip.source_count; in_i++ )
 		{
-			clip_source_t& source = output.source[ in_i ];
+			clip_source_t& source = clip.source[ in_i ];
 
 			if ( source.file_missing || !fs_exists( source.path ) )
 			{
@@ -210,15 +210,15 @@ bool collect_video_info()
 			  "    Output:   %s/%s%s%s.%s\n",
 			  preset.out_folder_append ? preset.out_folder_append : "",
 			  preset.out_prefix ? preset.out_prefix : "",
-			  clip_data::prefix[ output.prefix ].prefix,
-			  output.name,
+			  clip_data::prefix[ clip.prefix ].prefix,
+			  clip.name,
 			  preset.ext );
 
 			float duration         = 0.f;
 			bool  duration_invalid = false;
-			for ( u32 in_i = 0; in_i < output.source_count; in_i++ )
+			for ( u32 in_i = 0; in_i < clip.source_count; in_i++ )
 			{
-				clip_source_t& source = output.source[ in_i ];
+				clip_source_t& source = clip.source[ in_i ];
 
 				if ( !used_in_preset( source.encode_settings, preset_i ) )
 					continue;
@@ -235,9 +235,9 @@ bool collect_video_info()
 			log_printf( "    Duration: %.4f%s\n\n", duration, duration_invalid ? " [INVALID]" : "" );
 
 			// print source videos for this preset and their time ranges
-			for ( u32 in_i = 0; in_i < output.source_count; in_i++ )
+			for ( u32 in_i = 0; in_i < clip.source_count; in_i++ )
 			{
-				clip_source_t& source = output.source[ in_i ];
+				clip_source_t& source = clip.source[ in_i ];
 
 				// validate preset
 				if ( !used_in_preset( source.encode_settings, preset_i ) )
@@ -258,7 +258,7 @@ bool collect_video_info()
 			}
 		}
 
-		output.state = e_output_state_wait;
+		clip.state = e_output_state_wait;
 		log_printf( "----------------------------------------------------\n" );
 	}
 
@@ -279,7 +279,7 @@ void encode_videos()
 		return;
 	}
 
-	if ( clip_data::output_count == 0 )
+	if ( clip_data::clip_count == 0 )
 	{
 		log_printf( log_error, "no output videos found!\n" );
 		return;

@@ -185,13 +185,13 @@ void draw_replay_edit_creation_info()
 		{
 			replay_editor_reset();
 
-			clip_output_video_t* output = clip_add_output( mpv->current_video );
-			clip_data::current_output   = output;
+			clip_t* clip = clip_add_entry( mpv->current_video );
+			clip_data::current_clip   = clip;
 
-			if ( output )
+			if ( clip )
 			{
-				u32                  new_group = clip_data::current_output->groups.size();
-				clip_output_group_t& group     = clip_data::current_output->groups.emplace_back();
+				u32                  new_group = clip_data::current_clip->groups.size();
+				clip_group_t& group     = clip_data::current_clip->groups.emplace_back();
 
 				group.presets.push_back( default_encode_preset );
 
@@ -201,9 +201,9 @@ void draw_replay_edit_creation_info()
 				p_mpv_get_property( mpv->mpv, "time-pos", MPV_FORMAT_DOUBLE, &time_pos );
 				p_mpv_get_property( mpv->mpv, "pause", MPV_FORMAT_FLAG, &paused );
 
-				clip_group_add_source( output, new_group, mpv->current_video );
-				replay_editor_set_group( clip_data::output_count - 1, new_group, 0 );
-				output->prefix = default_prefix;
+				clip_group_add_source( clip, new_group, mpv->current_video );
+				replay_editor_set_group( clip_data::clip_count - 1, new_group, 0 );
+				clip->prefix = default_prefix;
 
 				p_mpv_set_property( get_mpv(), "time-pos", MPV_FORMAT_DOUBLE, &time_pos );
 				// p_mpv_set_property( get_mpv(), "pause", MPV_FORMAT_FLAG, &paused );
@@ -259,20 +259,20 @@ void draw_replay_edit_creation_info()
 
 	ImGui::Separator();
 
-	if ( clip_data::current_output && mpv && mpv->current_video )
+	if ( clip_data::current_clip && mpv && mpv->current_video )
 	{
 		ImGui::TextUnformatted( "Add Video to Group" );
 
-		for ( u32 group_i = 0; group_i < clip_data::current_output->groups.size(); group_i++ )
+		for ( u32 group_i = 0; group_i < clip_data::current_clip->groups.size(); group_i++ )
 		{
-			clip_output_group_t& group = clip_data::current_output->groups[ group_i ];
+			clip_group_t& group = clip_data::current_clip->groups[ group_i ];
 			std::string group_name = clip_group_get_name( group );
 
 			ImGui::SameLine();
 			if ( ImGui::Button( group_name.c_str() ) )
 			{
-				u32 source_i = clip_group_add_source( clip_data::current_output, group_i, mpv->current_video );
-				replay_editor_set_group( clip_data::current_output_index, group_i, source_i );
+				u32 source_i = clip_group_add_source( clip_data::current_clip, group_i, mpv->current_video );
+				replay_editor_set_group( clip_data::current_clip_index, group_i, source_i );
 			}
 		}
 
@@ -356,7 +356,7 @@ void draw_playback_controls( int size[ 2 ] )
 		button_size.y      = ImGui::GetTextLineHeight();
 		button_size.x *= 0.5;
 
-		extern u32 clip_data::current_output_index;
+		extern u32 clip_data::current_clip_index;
 		extern u32 clip_data::current_group_source;
 		extern u32 clip_data::current_group;
 
@@ -372,7 +372,7 @@ void draw_playback_controls( int size[ 2 ] )
 			if ( ImGui::TabItemButton( "##timeline_view" ) )
 			{
 				set_mpv_index( 0 );
-				replay_editor_set_group( clip_data::current_output_index, clip_data::current_group, clip_data::current_group_source );
+				replay_editor_set_group( clip_data::current_clip_index, clip_data::current_group, clip_data::current_group_source );
 			}
 
 			if ( show_timeline )

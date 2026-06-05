@@ -224,9 +224,9 @@ bool run_ffmpeg_check( const char* cmd, const char* path )
 	str_buf_t buf;
 
 #if 1
-	str_buf_t output{};
-	bool      ret = sys_execute_read_callback( cmd, output, ffmpeg_callback_read );
-	free( output.data );
+	str_buf_t entry{};
+	bool      ret = sys_execute_read_callback( cmd, entry, ffmpeg_callback_read );
+	free( entry.data );
 
 	if ( !encode_check_state() )
 		return false;
@@ -288,14 +288,14 @@ u32 get_used_encode_preset_index( clip_encode_settings_t& override, u32 preset_i
 }
 
 
-void add_metadata_cmd( clip_output_video_t& output, char* ffmpeg_cmd, bool add_markers, u32 preset_i )
+void add_metadata_cmd( clip_t& clip, char* ffmpeg_cmd, bool add_markers, u32 preset_i )
 {
 #if CLIP_TEMP
 	// write ffmpeg metadata.txt file
 	char metadata_path[ 256 ] = { 0 };
 	strcat( metadata_path, g_temp_video_dir );
 	strcat( metadata_path, SEP_S );
-	strcat( metadata_path, output.name );
+	strcat( metadata_path, clip.name );
 	strcat( metadata_path, "__metadata.txt" );
 
 	char metadata_file[ 2048 ] = { 0 };
@@ -303,9 +303,9 @@ void add_metadata_cmd( clip_output_video_t& output, char* ffmpeg_cmd, bool add_m
 
 	char* time_file_path = nullptr;
 
-	for ( u32 in_i = 0; in_i < output.source_count; in_i++ )
+	for ( u32 in_i = 0; in_i < clip.source_count; in_i++ )
 	{
-		clip_source_t& source = output.source[ in_i ];
+		clip_source_t& source = clip.source[ in_i ];
 
 		// don't use this one if this file is from this preset
 		if ( source.encode_settings.presets_count <= 1 && uses_encode_preset( source.encode_settings, preset_i ) )
@@ -326,9 +326,9 @@ void add_metadata_cmd( clip_output_video_t& output, char* ffmpeg_cmd, bool add_m
 		u32                 time_offset = 0;
 		u32                 time_end    = 0;
 
-		for ( u32 src_i = 0; src_i < output.source_count; src_i++ )
+		for ( u32 src_i = 0; src_i < clip.source_count; src_i++ )
 		{
-			src_input = &output.source[ src_i ];
+			src_input = &clip.source[ src_i ];
 
 			// this video doesn't use this encode preset
 			if ( !uses_encode_preset( src_input->encode_overrides, preset_i ) )
@@ -363,9 +363,9 @@ void add_metadata_cmd( clip_output_video_t& output, char* ffmpeg_cmd, bool add_m
 			//if ( dst_input_preset_index == UINT32_MAX )
 			//	continue;
 
-			for ( u32 src_i = 0; src_i < output.source_count; src_i++ )
+			for ( u32 src_i = 0; src_i < clip.source_count; src_i++ )
 			{
-				src_input = &output.source[ src_i ];
+				src_input = &clip.source[ src_i ];
 
 				// this video doesn't use this encode preset
 				// if ( !uses_encode_preset( src_input->encode_overrides, preset_i ) )
@@ -473,7 +473,7 @@ void add_metadata_cmd( clip_output_video_t& output, char* ffmpeg_cmd, bool add_m
 }
 
 
-bool create_output_video( clip_output_video_t& output, const char* full_out_path, enc_video_data_t& video_data, bool add_markers, u32 preset_i )
+bool create_output_video( clip_t& clip, const char* full_out_path, enc_video_data_t& video_data, bool add_markers, u32 preset_i )
 {
 	// write ffmpeg concat.txt file
 	FILE* fp = fopen( "concat.txt", "wb" );
@@ -495,7 +495,7 @@ bool create_output_video( clip_output_video_t& output, const char* full_out_path
 
 	char ffmpeg_cmd[ FFMPEG_CMD_SIZE ] = { 0 };
 	strcat( ffmpeg_cmd, "ffmpeg -y -hide_banner -safe 0 -f concat -i concat.txt " );
-	add_metadata_cmd( output, ffmpeg_cmd, add_markers, preset_i );
+	add_metadata_cmd( entry, ffmpeg_cmd, add_markers, preset_i );
 	strcat( ffmpeg_cmd, " -c copy -map 0 \"" );
 	strcat( ffmpeg_cmd, full_out_path );
 	strcat( ffmpeg_cmd, "\"" );
@@ -538,7 +538,7 @@ void calc_target_bitrates( enc_video_data_t& video_data, clip_encode_preset_t& p
 	for ( u32 seg_i = 0; seg_i < video_data.segment_count; seg_i++ )
 	{
 		video_segment_t&    segment    = video_data.segment[ seg_i ];
-		clip_source_t& source      = video_data.output->source[ segment.source ];
+		clip_source_t& source      = video_data.clip->source[ segment.source ];
 		clip_time_range_t&  time_range = source.time_range[ segment.time ];
 
 		float               duration   = time_range.end - time_range.start;
@@ -587,7 +587,7 @@ int run_encode_inputs_target_size_pass( enc_video_data_t& video_data, clip_encod
 	for ( u32 seg_i = 0; seg_i < video_data.segment_count; seg_i++ )
 	{
 		video_segment_t&    segment    = video_data.segment[ seg_i ];
-		clip_source_t& source      = video_data.output->source[ segment.source ];
+		clip_source_t& source      = video_data.clip->source[ segment.source ];
 		clip_time_range_t&  time_range = source.time_range[ segment.time ];
 
 		// for raw encodes only right now, need to setup discord stuff later
@@ -791,7 +791,7 @@ bool run_encode_inputs_standard( enc_video_data_t& video_data, clip_encode_prese
 	for ( u32 seg_i = 0; seg_i < video_data.segment_count; seg_i++ )
 	{
 		video_segment_t&    segment    = video_data.segment[ seg_i ];
-		clip_source_t& source      = video_data.output->source[ segment.source ];
+		clip_source_t& source      = video_data.clip->source[ segment.source ];
 		clip_time_range_t&  time_range = source.time_range[ segment.time ];
 
 		// for raw encodes only right now, need to setup discord stuff later
@@ -815,14 +815,14 @@ bool run_encode_inputs_standard( enc_video_data_t& video_data, clip_encode_prese
 	#endif
 }
 #else
-bool run_encode_inputs_standard( clip_output_video_t& output, char**& segment_paths, u32& segment_i, clip_encode_preset_t& preset, u32 preset_i )
+bool run_encode_inputs_standard( clip_t& clip, char**& segment_paths, u32& segment_i, clip_encode_preset_t& preset, u32 preset_i )
 {
 	// create all video segments
 	bool failed = false;
 
-	for ( u32 in_i = 0; in_i < output.source_count; in_i++ )
+	for ( u32 in_i = 0; in_i < clip.source_count; in_i++ )
 	{
-		clip_input_video_t& source        = output.source[ in_i ];
+		clip_input_video_t& source        = clip.source[ in_i ];
 
 		// verify the encode preset
 		bool                valid_preset = source.encode_overrides.presets_count == 0;
@@ -884,20 +884,20 @@ bool run_encode_inputs_standard( clip_output_video_t& output, char**& segment_pa
 #endif
 
 
-enc_video_data_t get_video_segments( enc_output_video_t& enc_output, clip_output_video_t& output, u32 preset_i )
+enc_video_data_t get_video_segments( enc_output_video_t& enc_output, clip_t& clip, u32 preset_i )
 {
 	enc_video_data_t video_data{};
 	video_data.enc_output        = &enc_output;
-	video_data.output            = &output;
+	video_data.clip            = &clip;
 
 #if CLIP_TEMP
 	clip_encode_preset_t& preset = clip_data::preset[ preset_i ];
 
 	bool                  failed = false;
 
-	for ( u32 in_i = 0; in_i < output.source_count; in_i++ )
+	for ( u32 in_i = 0; in_i < clip.source_count; in_i++ )
 	{
-		clip_source_t& source        = output.source[ in_i ];
+		clip_source_t& source        = clip.source[ in_i ];
 
 		// verify the encode preset
 		if ( !uses_encode_preset( source.encode_settings, preset_i ) )
@@ -939,12 +939,12 @@ enc_video_data_t get_video_segments( enc_output_video_t& enc_output, clip_output
 
 #endif
 
-std::string get_video_output_name( clip_output_video_t& output, clip_encode_preset_t& preset )
+std::string get_video_output_name( clip_t& clip, clip_encode_preset_t& preset )
 {
-	if ( output.prefix >= clip_data::prefix_count )
+	if ( clip.prefix >= clip_data::prefix_count )
 		return {};
 
-	clip_prefix_t& prefix = clip_data::prefix[ output.prefix ];
+	clip_prefix_t& prefix = clip_data::prefix[ clip.prefix ];
 
 	std::string filename;
 
@@ -952,7 +952,7 @@ std::string get_video_output_name( clip_output_video_t& output, clip_encode_pres
 		filename.append( preset.out_prefix );
 
 	filename.append( prefix.prefix );
-	filename.append( output.name );
+	filename.append( clip.name );
 	filename.append( "." );
 	filename.append( preset.ext );
 	
@@ -969,18 +969,18 @@ void run_encode_preset( clip_encode_preset_t& preset, u32 preset_i )
 
 	g_encoder_data.encode_preset = preset_i;
 
-	for ( u32 out_i = 0; out_i < clip_data::output_count; out_i++ )
+	for ( u32 out_i = 0; out_i < clip_data::clip_count; out_i++ )
 	{
-		clip_output_video_t& output     = clip_data::output[ out_i ];
-		clip_prefix_t&       prefix     = clip_data::prefix[ output.prefix ];
+		clip_t& clip     = clip_data::clip[ out_i ];
+		clip_prefix_t&       prefix     = clip_data::prefix[ clip.prefix ];
 		enc_output_video_t&  enc_output = g_output_videos[ out_i ];
 
 		g_encoder_data.output_index     = out_i;
 
-		if ( output.state == e_encode_preset_invalid )
+		if ( clip.state == e_encode_preset_invalid )
 		{
-			log_printf( log_error,  "skipping invalid video: \"%s\"\n", output.name );
-			log_printf( log_result, "[FAIL] Invalid Video - %s\n", output.name );
+			log_printf( log_error,  "skipping invalid video: \"%s\"\n", clip.name );
+			log_printf( log_result, "[FAIL] Invalid Video - %s\n", clip.name );
 			continue;
 		}
 
@@ -997,15 +997,15 @@ void run_encode_preset( clip_encode_preset_t& preset, u32 preset_i )
 
 		if ( !valid_preset )
 		{
-			output.state = e_output_state_failed;
+			clip.state = e_output_state_failed;
 			continue;
 		}
 
 		log_printf( "\n----------------------------------------------------\n\n" );
 
-		output.state         = e_output_state_running;
+		clip.state         = e_output_state_running;
 
-		std::string filename = g_encoder_data.output_dir + get_video_output_name( output, preset );
+		std::string filename = g_encoder_data.output_dir + get_video_output_name( clip, preset );
 
 		log_printf( "Output Video \"%s\"\n", filename.c_str() );
 
@@ -1016,19 +1016,19 @@ void run_encode_preset( clip_encode_preset_t& preset, u32 preset_i )
 			if ( fs_file_size( filename.c_str() ) > 0 )
 			{
 				log_printf( log_result, "[PASS] [ALREADY EXISTS] %s\n", filename.c_str() );
-				output.state = e_output_state_already_finished;
+				clip.state = e_output_state_already_finished;
 				continue;
 			}
 		}
 
 		// ----------------------------------------------------------------------------
 		// get the list of source videos and time ranges we will use for this preset
-		enc_video_data_t video_data = get_video_segments( enc_output, output, preset_i );
+		enc_video_data_t video_data = get_video_segments( enc_output, clip, preset_i );
 
 		if ( video_data.segment_count == 0 )
 		{
 			// ?? use this state?
-			output.state = e_output_state_finished;
+			clip.state = e_output_state_finished;
 			continue;
 		}
 		
@@ -1048,12 +1048,12 @@ void run_encode_preset( clip_encode_preset_t& preset, u32 preset_i )
 		if ( !skip_output )
 		{
 			// concat them together
-			if ( !create_output_video( output, filename.c_str(), video_data, !preset.target_size, preset_i ) )
-				output.state = e_output_state_failed;
+			if ( !create_output_video( clip, filename.c_str(), video_data, !preset.target_size, preset_i ) )
+				clip.state = e_output_state_failed;
 		}
 		else
 		{
-			output.state = e_output_state_failed;
+			clip.state = e_output_state_failed;
 		}
 
 		// free data
@@ -1062,8 +1062,8 @@ void run_encode_preset( clip_encode_preset_t& preset, u32 preset_i )
 
 		free( video_data.segment );
 
-		if ( output.state != e_output_state_failed )
-			output.state = e_output_state_finished;
+		if ( clip.state != e_output_state_failed )
+			clip.state = e_output_state_finished;
 
 		if ( !encode_check_state() )
 			break;

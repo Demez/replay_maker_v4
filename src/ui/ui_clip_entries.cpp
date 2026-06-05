@@ -33,7 +33,7 @@ void draw_replay_edit_video_info( int size[ 2 ] )
 
 	ImGui::SetCursorPos( save_pos );
 
-	ImGui::BeginDisabled( !clip_data::current_output );
+	ImGui::BeginDisabled( !clip_data::current_clip );
 
 	ImVec2      line_remain   = ImGui::GetContentRegionAvail();
 
@@ -56,7 +56,7 @@ void draw_replay_edit_video_info( int size[ 2 ] )
 	{
 		ImGui::PopStyleColor( 3 );
 
-		clip_remove_output( clip_data::current_output );
+		clip_remove_entry( clip_data::current_clip );
 		replay_editor_reset();
 		ImGui::EndDisabled();
 		ImGui::EndChild();
@@ -83,28 +83,28 @@ void draw_replay_edit_video_info( int size[ 2 ] )
 		// lol
 		size_t name_len = strlen( g_output_name_buf );
 
-		char*  new_data = ch_realloc( clip_data::current_output->name, name_len + 1 );
+		char*  new_data = ch_realloc( clip_data::current_clip->name, name_len + 1 );
 
 		if ( new_data )
 		{
-			clip_data::current_output->name = new_data;
-			memcpy( clip_data::current_output->name, g_output_name_buf, name_len * sizeof( char ) );
-			clip_data::current_output->name[ name_len ] = '\0';
+			clip_data::current_clip->name = new_data;
+			memcpy( clip_data::current_clip->name, g_output_name_buf, name_len * sizeof( char ) );
+			clip_data::current_clip->name[ name_len ] = '\0';
 		}
 	}
 
 	// combo box to select prefix
 	char* current_prefix = nullptr;
 
-	if ( clip_data::current_output )
+	if ( clip_data::current_clip )
 	{
-		if ( clip_data::current_output->prefix >= clip_data::prefix_count )
+		if ( clip_data::current_clip->prefix >= clip_data::prefix_count )
 		{
 			// reset to general profile
-			clip_data::current_output->prefix = 0;
+			clip_data::current_clip->prefix = 0;
 		}
 
-		current_prefix = clip_data::prefix[ clip_data::current_output->prefix ].name;
+		current_prefix = clip_data::prefix[ clip_data::current_clip->prefix ].name;
 	}
 
 	ImGui::SetNextItemWidth( name_bar_width );
@@ -113,21 +113,21 @@ void draw_replay_edit_video_info( int size[ 2 ] )
 	{
 		for ( u32 i = 0; i < clip_data::prefix_count; i++ )
 		{
-			// if ( i == clip_data::current_output->prefix )
+			// if ( i == clip_data::current_clip->prefix )
 			// 	continue;
 
-			if ( ImGui::Selectable( clip_data::prefix[ i ].name, clip_data::current_output && i == clip_data::current_output->prefix ) )
+			if ( ImGui::Selectable( clip_data::prefix[ i ].name, clip_data::current_clip && i == clip_data::current_clip->prefix ) )
 			{
-				clip_data::current_output->prefix = i;
+				clip_data::current_clip->prefix = i;
 			}
 		}
 
 		ImGui::EndCombo();
 	}
 
-	bool enabled = clip_data::current_output ? clip_data::current_output->enabled : false;
+	bool enabled = clip_data::current_clip ? clip_data::current_clip->enabled : false;
 	if ( ImGui::Checkbox( "Enabled", &enabled ) )
-		clip_data::current_output->enabled = enabled;
+		clip_data::current_clip->enabled = enabled;
 
 	ImGui::EndDisabled();
 	ImGui::EndChild();
@@ -146,8 +146,8 @@ void draw_replay_list_entry( u64& imgui_id, u32 out_i, bool collapse_all )
 
 	bool                 drag_preview      = clip_reorder_drag::active && out_i == clip_reorder_drag::clip_id;
 
-	clip_output_video_t& output            = clip_data::output[ out_i ];
-	clip_prefix_t&       prefix            = clip_data::prefix[ output.prefix ];
+	clip_t& clip            = clip_data::clip[ out_i ];
+	clip_prefix_t&       prefix            = clip_data::prefix[ clip.prefix ];
 
 	ImVec2               drag_text_size    = ImGui::CalcTextSize( "--" );
 	ImVec2               drag_pos_min( cursor_screen_pos.x, cursor_screen_pos.y );
@@ -219,7 +219,7 @@ void draw_replay_list_entry( u64& imgui_id, u32 out_i, bool collapse_all )
 	ChVector< u32 > used_presets;
 	used_presets.reserve( clip_data::preset_count );
 
-	for ( clip_output_group_t& group : output.groups )
+	for ( clip_group_t& group : clip.groups )
 	{
 		for ( u32 preset : group.presets )
 		{
@@ -231,30 +231,30 @@ void draw_replay_list_entry( u64& imgui_id, u32 out_i, bool collapse_all )
 	}
 
 	// snprintf( header_name, 512, "%d %s - %s - %d Inputs", out_i, prefix.name, output.name, output.source_count );
-	snprintf( header_name, 512, "%s - %s - %u Export%s", prefix.name, output.name ? output.name : "Loading...", used_presets.size(), used_presets.size() > 1 ? "s" : "" );
+	snprintf( header_name, 512, "%s - %s - %u Export%s", prefix.name, clip.name ? clip.name : "Loading...", used_presets.size(), used_presets.size() > 1 ? "s" : "" );
 
 	//if ( collapse_all )
 	//	ImGui::SetNextItemOpen( false );
 
 	ImGui::PushID( imgui_id++ );
 
-	bool current_output = &output == clip_data::current_output;
+	bool current_clip = &clip == clip_data::current_clip;
 
 	// TODO THEME: change to a green color
-	if ( current_output )
+	if ( current_clip )
 		ImGui::PushStyleColor( ImGuiCol_Button, { 0.28f, 1.f, 0.21f, 0.31f } );
 
-	else if ( output.state == e_output_state_invalid )
+	else if ( clip.state == e_output_state_invalid )
 		ImGui::PushStyleColor( ImGuiCol_Button, COLOR_BTN_RED );
 
 	ImGui::PushStyleVar( ImGuiStyleVar_ButtonTextAlign, { 0.f, 0.5f } );
 
-	// if ( !ImGui::CollapsingHeader( output.name ? header_name : "Loading...", current_output ? ImGuiTreeNodeFlags_Selected | ImGuiTreeNodeFlags_Framed : 0 ) )
-	if ( ImGui::Button( output.name ? header_name : "Loading...", { -FLT_MIN, 0 } ) )
+	// if ( !ImGui::CollapsingHeader( output.name ? header_name : "Loading...", current_clip ? ImGuiTreeNodeFlags_Selected | ImGuiTreeNodeFlags_Framed : 0 ) )
+	if ( ImGui::Button( clip.name ? header_name : "Loading...", { -FLT_MIN, 0 } ) )
 	{
 		replay_editor_set_group( out_i, 0, 0 );
 
-		//if ( current_output || output.state == e_output_state_invalid )
+		//if ( current_clip || output.state == e_output_state_invalid )
 		//	ImGui::PopStyleColor();
 		//
 		//ImGui::PopID();
@@ -263,7 +263,7 @@ void draw_replay_list_entry( u64& imgui_id, u32 out_i, bool collapse_all )
 
 	ImGui::PopStyleVar();
 
-	if ( current_output || output.state == e_output_state_invalid )
+	if ( current_clip || clip.state == e_output_state_invalid )
 		ImGui::PopStyleColor();
 
 	ImGui::PopID();
@@ -378,9 +378,9 @@ void draw_replay_list( int size[ 2 ] )
 				char           prefix_display[ MAX_LEN_PRESET_NAME + 16 ] = { 0 };
 				u32            result_count                               = 0;
 
-				for ( u32 out_i = 0; out_i < clip_data::output_count; out_i++ )
+				for ( u32 out_i = 0; out_i < clip_data::clip_count; out_i++ )
 				{
-					if ( i == clip_data::output[ out_i ].prefix )
+					if ( i == clip_data::clip[ out_i ].prefix )
 						result_count++;
 				}
 
@@ -399,16 +399,16 @@ void draw_replay_list( int size[ 2 ] )
 
 		// do the search again for this text lol
 		u32 result_count = 0;
-		for ( u32 out_i = 0; out_i < clip_data::output_count; out_i++ )
+		for ( u32 out_i = 0; out_i < clip_data::clip_count; out_i++ )
 		{
-			clip_output_video_t& output = clip_data::output[ out_i ];
+			clip_t& clip = clip_data::clip[ out_i ];
 
 			if ( prefix_search != UINT32_MAX )
-				if ( prefix_search != output.prefix )
+				if ( prefix_search != clip.prefix )
 					continue;
 
 			if ( search_box[ 0 ] != '\0' )
-				if ( !strcasestr( output.name, search_box ) )
+				if ( !strcasestr( clip.name, search_box ) )
 					continue;
 
 			result_count++;
@@ -536,12 +536,12 @@ void draw_replay_list( int size[ 2 ] )
 		{
 			ImGui::SetMouseCursor( ImGuiMouseCursor_ResizeNS );
 
-			u32         out_i     = sort_newest_top ? clip_data::output_count - 1 : 0;
+			u32         out_i     = sort_newest_top ? clip_data::clip_count - 1 : 0;
 
 			ImDrawList* draw_list = ImGui::GetWindowDrawList();
 
-			// for ( u32 out_i = clip_data::output_count; out_i > 0; --out_i )
-			for ( u32 loop_index = 0; loop_index < clip_data::output_count; loop_index++ )
+			// for ( u32 out_i = clip_data::clip_count; out_i > 0; --out_i )
+			for ( u32 loop_index = 0; loop_index < clip_data::clip_count; loop_index++ )
 			{
 				// check if point is in rect here
 				ImVec2 insert_area_min( cursor_screen_pos.x, cursor_screen_pos.y + ( loop_index * ( entry_height + style.ItemSpacing.y ) ) );
@@ -563,20 +563,20 @@ void draw_replay_list( int size[ 2 ] )
 		u64    imgui_id        = 1;
 
 		ImVec2 prev_cursor_pos = ImGui::GetCursorPos();
-		u32    out_i           = sort_newest_top ? clip_data::output_count - 1 : 0;
+		u32    out_i           = sort_newest_top ? clip_data::clip_count - 1 : 0;
 
-		// for ( u32 out_i = clip_data::output_count; out_i > 0; --out_i )
-		for ( u32 loop_index = 0; loop_index < clip_data::output_count; loop_index++ )
+		// for ( u32 out_i = clip_data::clip_count; out_i > 0; --out_i )
+		for ( u32 loop_index = 0; loop_index < clip_data::clip_count; loop_index++ )
 		{
-			clip_output_video_t& output = clip_data::output[ out_i ];
-			clip_prefix_t&       prefix = clip_data::prefix[ output.prefix ];
+			clip_t& clip = clip_data::clip[ out_i ];
+			clip_prefix_t&       prefix = clip_data::prefix[ clip.prefix ];
 
 			if ( prefix_search != UINT32_MAX )
-				if ( prefix_search != output.prefix )
+				if ( prefix_search != clip.prefix )
 					continue;
 
 			if ( search_box[ 0 ] != '\0' )
-				if ( !strcasestr( output.name, search_box ) )
+				if ( !strcasestr( clip.name, search_box ) )
 					continue;
 
 			if ( preset_search.size() )
@@ -588,9 +588,9 @@ void draw_replay_list( int size[ 2 ] )
 					if ( preset_found )
 						break;
 
-					for ( size_t preset_use_i = 0; preset_use_i < output.groups.size(); preset_use_i++ )
+					for ( size_t preset_use_i = 0; preset_use_i < clip.groups.size(); preset_use_i++ )
 					{
-						clip_output_group_t& preset_use = output.groups[ preset_use_i ];
+						clip_group_t& preset_use = clip.groups[ preset_use_i ];
 
 						if ( preset_use.presets.index( preset_i ) != UINT32_MAX )
 						{
@@ -768,18 +768,18 @@ void draw_replay_list( int size[ 2 ] )
 
 	if ( ImGui::BeginChild( "source_list", {}, ImGuiChildFlags_Borders | ImGuiChildFlags_AutoResizeY ) )
 	{
-		if ( clip_data::current_output )
+		if ( clip_data::current_clip )
 		{
-			for ( u32 source_i = 0; source_i < clip_data::current_output->source_count; source_i++ )
+			for ( u32 source_i = 0; source_i < clip_data::current_clip->source_count; source_i++ )
 			{
-				clip_source_t& source               = clip_data::current_output->source[ source_i ];
+				clip_source_t& source               = clip_data::current_clip->source[ source_i ];
 
 				// Check if this source is used in the current group
 				bool           source_used_in_group = false;
 
-				if ( clip_data::current_group != UINT32_MAX && clip_data::current_group < clip_data::current_output->groups.size() )
+				if ( clip_data::current_group != UINT32_MAX && clip_data::current_group < clip_data::current_clip->groups.size() )
 				{
-					clip_output_group_t& group = clip_data::current_output->groups[ clip_data::current_group ];
+					clip_group_t& group = clip_data::current_clip->groups[ clip_data::current_group ];
 
 					for ( u32 source_use_i = 0; source_use_i < group.sources.size(); source_use_i++ )
 					{
@@ -800,8 +800,8 @@ void draw_replay_list( int size[ 2 ] )
 
 					if ( ImGui::Button( "Add to Current Group" ) )
 					{
-						u32 i = clip_group_add_source( clip_data::current_output, clip_data::current_group, source.path );
-						replay_editor_set_group( clip_data::current_output_index, clip_data::current_group, i );
+						u32 i = clip_group_add_source( clip_data::current_clip, clip_data::current_group, source.path );
+						replay_editor_set_group( clip_data::current_clip_index, clip_data::current_group, i );
 					}
 
 					ImGui::SameLine();
@@ -840,7 +840,7 @@ void draw_replay_list( int size[ 2 ] )
 		ImGui::InputText( "Output Path", g_output_dir, 512 );
 		// ImGui::InputText( "Temp Path", g_temp_video_dir, 512 );
 
-		ImGui::BeginDisabled( clip_data::output_count == 0 || g_encode_running );
+		ImGui::BeginDisabled( clip_data::clip_count == 0 || g_encode_running );
 
 		if ( ImGui::Button( "Export" ) )
 		{
@@ -851,7 +851,7 @@ void draw_replay_list( int size[ 2 ] )
 
 		// implement later
 		ImGui::BeginDisabled();
-		ImGui::BeginDisabled( clip_data::current_output == nullptr );
+		ImGui::BeginDisabled( clip_data::current_clip == nullptr );
 
 		if ( ImGui::Button( "Export Selected" ) )
 		{
@@ -883,28 +883,28 @@ void draw_replay_list( int size[ 2 ] )
 	if ( clip_thread_idle() && clip_reorder_drag::active && ImGui::IsMouseReleased( ImGuiMouseButton_Left ) )
 	{
 		clip_reorder_drag::active = false;
-		clip_move_output( clip_reorder_drag::clip_id, clip_reorder_drag::target_id );
+		clip_move_entry( clip_reorder_drag::clip_id, clip_reorder_drag::target_id );
 
 		// update the current output index and pointer
-		if ( clip_data::current_output_index != UINT32_MAX )
+		if ( clip_data::current_clip_index != UINT32_MAX )
 		{
 			u32 min_i = std::min( clip_reorder_drag::clip_id, clip_reorder_drag::target_id );
 			u32 max_i = std::max( clip_reorder_drag::clip_id, clip_reorder_drag::target_id );
 
-			if ( clip_data::current_output_index == clip_reorder_drag::clip_id )
+			if ( clip_data::current_clip_index == clip_reorder_drag::clip_id )
 			{
-				clip_data::current_output_index = clip_reorder_drag::target_id;
+				clip_data::current_clip_index = clip_reorder_drag::target_id;
 			}
-			else if ( min_i <= clip_data::current_output_index && max_i >= clip_data::current_output_index )
+			else if ( min_i <= clip_data::current_clip_index && max_i >= clip_data::current_clip_index )
 			{
 				if ( clip_reorder_drag::clip_id < clip_reorder_drag::target_id )
-					clip_data::current_output_index--;
+					clip_data::current_clip_index--;
 
 				else if ( clip_reorder_drag::clip_id > clip_reorder_drag::target_id )
-					clip_data::current_output_index++;
+					clip_data::current_clip_index++;
 			}
 
-			clip_data::current_output = &clip_data::output[ clip_data::current_output_index ];
+			clip_data::current_clip = &clip_data::clip[ clip_data::current_clip_index ];
 		}
 
 		clip_reorder_drag::clip_id   = 0;

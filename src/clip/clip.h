@@ -82,28 +82,27 @@ struct clip_source_usage_t
 };
 
 
-struct clip_output_group_t
+struct clip_group_t
 {
 	ChVector< clip_source_usage_t > sources;
 	ChVector< u32 >                 presets;
 };
 
 
-// RENAME FROM OUTPUT TO SOMETHING ELSE, LIKE VIDEO GROUP?
-struct clip_output_video_t
+struct clip_t
 {
-	char*                           name;
+	char*                    name;
 
-	clip_source_t*                  source;
-	u32                             source_count;
+	clip_source_t*           source;
+	u32                      source_count;
 
-	u32                             prefix;
+	u32                      prefix;
 
 	// these are the real outputs this video has, use for format 4
-	ChVector< clip_output_group_t > groups;
+	ChVector< clip_group_t > groups;
 
-	e_output_state                  state;
-	bool                            enabled;  // if false, don't encode this video
+	e_output_state           state;
+	bool                     enabled;  // if false, don't encode this video
 };
 
 
@@ -146,8 +145,8 @@ namespace clip_data
 {
 	extern u32                   version;
 
-	extern clip_output_video_t*  output;
-	extern u32                   output_count;
+	extern clip_t*               clip;
+	extern u32                   clip_count;
 
 	extern clip_encode_preset_t* preset;
 	extern u32                   preset_count;
@@ -155,8 +154,8 @@ namespace clip_data
 	extern clip_prefix_t*        prefix;
 	extern u32                   prefix_count;
 
-	extern clip_output_video_t*  current_output;
-	extern u32                   current_output_index;
+	extern clip_t*               current_clip;
+	extern u32                   current_clip_index;
 	extern u32                   current_source;
 	extern u32                   current_group_source;
 	extern u32                   current_group;
@@ -173,7 +172,7 @@ bool                  clip_parse_settings( const char* path );
 bool                  clip_parse_videos( const char* path );
 
 void                  clip_get_video_metadata( clip_source_t& source );
-void                  clip_check_video( clip_output_video_t& output );
+void                  clip_check_video( clip_t& clip );
 void                  clip_check_videos();
 
 void                  clip_save_settings( const char* path );
@@ -194,34 +193,34 @@ clip_encode_preset_t* clip_add_encode_preset( const char* name, const char* ext 
 // Video Management
 
 
-clip_output_video_t*  clip_add_output( const char* name );
+clip_t*               clip_add_entry( const char* name );
 
-void                  clip_remove_output( clip_output_video_t* output );
-void                  clip_remove_output( u32 output_i );
+void                  clip_remove_entry( clip_t* clip );
+void                  clip_remove_entry( u32 entry_i );
 
-void                  clip_move_output( u32 output_id, u32 insert_position );
+void                  clip_move_entry( u32 entry_id, u32 insert_position );
 
-void                  clip_remove_source( clip_output_video_t* output, u32 source_i );
+void                  clip_remove_source( clip_t* clip, u32 source_i );
 
 // Groups
-clip_output_group_t*  clip_get_group( clip_output_video_t* output, u32 group_index );
-std::string           clip_group_get_name( clip_output_group_t& group );
-u32                   clip_group_add_source( clip_output_video_t* output, u32 group_index, const char* path );
-void                  clip_group_remove_source( clip_output_video_t* output, u32 group_index, u32 group_src_i );
-// void                  clip_group_remove_source( clip_output_video_t* output, u32 group_index, const char* path );
+clip_group_t*         clip_get_group( clip_t* clip, u32 group_index );
+std::string           clip_group_get_name( clip_group_t& group );
+u32                   clip_group_add_source( clip_t* clip, u32 group_index, const char* path );
+void                  clip_group_remove_source( clip_t* clip, u32 group_index, u32 group_src_i );
+// void                  clip_group_remove_source( clip_t* output, u32 group_index, const char* path );
 
-void                  clip_group_add_preset( clip_output_video_t& output, clip_output_group_t& group, u32 preset_i );
+void                  clip_group_add_preset( clip_t& clip, clip_group_t& group, u32 preset_i );
 
-void                  clip_group_remove_preset( clip_output_video_t& output, clip_output_group_t& group, u32 preset_i );
-void                  clip_group_remove_preset( clip_output_video_t& output, u32 group_index, u32 preset_i );
+void                  clip_group_remove_preset( clip_t& clip, clip_group_t& group, u32 preset_i );
+void                  clip_group_remove_preset( clip_t& clip, u32 group_index, u32 preset_i );
 
-//u32                   clip_duplicate_input( clip_output_video_t* output, u32 input_i );
+//u32                   clip_duplicate_input( clip_t* output, u32 input_i );
 
-void                  clip_group_add_time_range( clip_output_video_t* output, clip_output_group_t& group, u32 source_i, float start_time, float end_time );
-void                  clip_group_remove_time_range( clip_output_video_t* output, clip_output_group_t& group, u32 source_i, u32 time_range );
+void                  clip_group_add_time_range( clip_t* clip, clip_group_t& group, u32 source_i, float start_time, float end_time );
+void                  clip_group_remove_time_range( clip_t* clip, clip_group_t& group, u32 source_i, u32 time_range );
 
 // direction = false for back, true for forward
-void                  clip_group_shift_time_range( clip_output_video_t* output, clip_output_group_t& group, u32 source_i, u32 time_range, bool direction );
+void                  clip_group_shift_time_range( clip_t* clip, clip_group_t& group, u32 source_i, u32 time_range, bool direction );
 
-//void                  clip_duplicate_time_range( clip_output_video_t* output, u32 input_i, u32 time_range );
+//void                  clip_duplicate_time_range( clip_t* output, u32 input_i, u32 time_range );
 

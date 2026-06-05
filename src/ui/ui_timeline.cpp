@@ -79,18 +79,18 @@ void timeline_advance( bool prev )
 		if ( clip_data::current_group_source > 0 )
 		{
 			clip_data::current_group_source--;
-			replay_editor_set_group( clip_data::current_output_index, clip_data::current_group, clip_data::current_group_source );
+			replay_editor_set_group( clip_data::current_clip_index, clip_data::current_group, clip_data::current_group_source );
 		}
 	}
 	else
 	{
 		// try to change to the next video
-		clip_output_group_t* group = clip_get_group( clip_data::current_output, clip_data::current_group );
+		clip_group_t* group = clip_get_group( clip_data::current_clip, clip_data::current_group );
 
 		if ( group && group->sources.size() > clip_data::current_group_source + 1 )
 		{
 			clip_data::current_group_source++;
-			replay_editor_set_group( clip_data::current_output_index, clip_data::current_group, clip_data::current_group_source );
+			replay_editor_set_group( clip_data::current_clip_index, clip_data::current_group, clip_data::current_group_source );
 		}
 	}
 }
@@ -111,7 +111,7 @@ void timeline_seek( float seconds )
 		if ( clip_data::current_group_source > 0 )
 		{
 			clip_data::current_group_source--;
-			replay_editor_set_group( clip_data::current_output_index, clip_data::current_group, clip_data::current_group_source );
+			replay_editor_set_group( clip_data::current_clip_index, clip_data::current_group, clip_data::current_group_source );
 
 			double duration = 0;
 			p_mpv_get_property( get_mpv(), "duration", MPV_FORMAT_DOUBLE, &duration );
@@ -123,12 +123,12 @@ void timeline_seek( float seconds )
 	else if ( new_time_pos > duration )
 	{
 		// try to change to the next video
-		clip_output_group_t* group = clip_get_group( clip_data::current_output, clip_data::current_group );
+		clip_group_t* group = clip_get_group( clip_data::current_clip, clip_data::current_group );
 
 		if ( group && group->sources.size() > clip_data::current_group_source + 1 )
 		{
 			clip_data::current_group_source++;
-			replay_editor_set_group( clip_data::current_output_index, clip_data::current_group, clip_data::current_group_source );
+			replay_editor_set_group( clip_data::current_clip_index, clip_data::current_group, clip_data::current_group_source );
 
 			new_time_pos = ( duration - time_pos ) - seconds;
 			timeline_set_seek_time_fast( abs( new_time_pos ) );
@@ -203,9 +203,9 @@ void timeline_marker_control( ImGuiIO& io, ImGuiKey key, int marker )
 }
 
 
-void delete_current_video( clip_output_group_t* group )
+void delete_current_video( clip_group_t* group )
 {
-	clip_group_remove_source( clip_data::current_output, clip_data::current_group, clip_data::current_group_source );
+	clip_group_remove_source( clip_data::current_clip, clip_data::current_group, clip_data::current_group_source );
 	timeline_reset();
 	// replay_editor_reset();
 
@@ -215,11 +215,11 @@ void delete_current_video( clip_output_group_t* group )
 	if ( group->sources.size() )
 	{
 		// clip_data::current_source = group->sources[ clip_data::current_group_source ].source_index;
-		replay_editor_set_group( clip_data::current_output_index, clip_data::current_group, clip_data::current_group_source );
+		replay_editor_set_group( clip_data::current_clip_index, clip_data::current_group, clip_data::current_group_source );
 	}
 	else
 	{
-		replay_editor_set_group( clip_data::current_output_index, clip_data::current_group, 0 );
+		replay_editor_set_group( clip_data::current_clip_index, clip_data::current_group, 0 );
 		clip_data::current_source        = UINT32_MAX;
 		clip_data::current_group_source = UINT32_MAX;
 	}
@@ -347,16 +347,16 @@ void timeline_draw()
 
 	// ------------------------------------------------------------------------------------------
 
-	clip_output_group_t*      group                  = clip_get_group( clip_data::current_output, clip_data::current_group );
+	clip_group_t*      group                  = clip_get_group( clip_data::current_clip, clip_data::current_group );
 
 	bool                      video_path_matches     = false;
 
-	if ( clip_data::current_output && clip_data::current_output->source_count > 0 && clip_data::current_source != UINT32_MAX )
+	if ( clip_data::current_clip && clip_data::current_clip->source_count > 0 && clip_data::current_source != UINT32_MAX )
 	{
-		video_path_matches = ( mpv_get_current_video() ? strcmp( clip_data::current_output->source[ clip_data::current_source ].path, mpv_get_current_video() ) == 0 : false );
+		video_path_matches = ( mpv_get_current_video() ? strcmp( clip_data::current_clip->source[ clip_data::current_source ].path, mpv_get_current_video() ) == 0 : false );
 	}
 
-	bool                      draw_tabs_and_sections = clip_data::current_output && clip_data::current_group_source != UINT32_MAX && video_path_matches;
+	bool                      draw_tabs_and_sections = clip_data::current_clip && clip_data::current_group_source != UINT32_MAX && video_path_matches;
 
 	// ------------------------------------------------------------------------------------------
 	// Draw tabs on top for which encode preset currently in use and current source video?
@@ -364,11 +364,11 @@ void timeline_draw()
 
 	if ( ImGui::BeginTabBar( "##timeline_tabs" ) )
 	{
-		if ( clip_data::current_output )
+		if ( clip_data::current_clip )
 		{
-			for ( u32 group_i = 0; group_i < clip_data::current_output->groups.size(); group_i++ )
+			for ( u32 group_i = 0; group_i < clip_data::current_clip->groups.size(); group_i++ )
 			{
-				clip_output_group_t& group = clip_data::current_output->groups[ group_i ];
+				clip_group_t& group = clip_data::current_clip->groups[ group_i ];
 
 				std::string          group_name = clip_group_get_name( group );
 
@@ -386,7 +386,7 @@ void timeline_draw()
 				{
 					if ( clip_data::current_group != group_i )
 					{
-						replay_editor_set_group( clip_data::current_output_index, group_i, 0 );
+						replay_editor_set_group( clip_data::current_clip_index, group_i, 0 );
 					}
 				}
 
@@ -410,10 +410,10 @@ void timeline_draw()
 
 			if ( ImGui::TabItemButton( "New Group" ) )
 			{
-				u32 new_group = clip_data::current_output->groups.size();
-				clip_data::current_output->groups.emplace_back();
+				u32 new_group = clip_data::current_clip->groups.size();
+				clip_data::current_clip->groups.emplace_back();
 
-				replay_editor_set_group( clip_data::current_output_index, new_group, 0 );
+				replay_editor_set_group( clip_data::current_clip_index, new_group, 0 );
 			}
 
 			ImGui::PopStyleColor( 3 );
@@ -432,9 +432,9 @@ void timeline_draw()
 					clip_encode_preset_t& preset        = clip_data::preset[ preset_i ];
 					bool                  preset_in_use = false;
 
-					for ( u32 group_i = 0; group_i < clip_data::current_output->groups.size(); group_i++ )
+					for ( u32 group_i = 0; group_i < clip_data::current_clip->groups.size(); group_i++ )
 					{
-						clip_output_group_t& group = clip_data::current_output->groups[ group_i ];
+						clip_group_t& group = clip_data::current_clip->groups[ group_i ];
 
 						for ( u32 group_preset_i = 0; group_preset_i < group.presets.size(); group_preset_i++ )
 						{
@@ -454,11 +454,11 @@ void timeline_draw()
 
 					if ( ImGui::Selectable( preset.name ) )
 					{
-						u32                  new_group = clip_data::current_output->groups.size();
-						clip_output_group_t& group     = clip_data::current_output->groups.emplace_back();
+						u32                  new_group = clip_data::current_clip->groups.size();
+						clip_group_t& group     = clip_data::current_clip->groups.emplace_back();
 
-						clip_group_add_preset( *clip_data::current_output, group, preset_i );
-						replay_editor_set_group( clip_data::current_output_index, new_group, 0 );
+						clip_group_add_preset( *clip_data::current_clip, group, preset_i );
+						replay_editor_set_group( clip_data::current_clip_index, new_group, 0 );
 					}
 				}
 
@@ -474,12 +474,12 @@ void timeline_draw()
 	{
 		// ImGui::BeginDisabled( !draw_tabs_and_sections );
 		// ImGui::SameLine();
-		ImGui::BeginDisabled( !clip_data::current_output );
+		ImGui::BeginDisabled( !clip_data::current_clip );
 
 		// if ( ImGui::Button( "Add Loaded Video" ) )
 		// {
-		// 	u32 i = clip_group_add_source( clip_data::current_output, clip_data::current_group, mpv_get_current_video() );
-		// 	replay_editor_set_group( clip_data::current_output_index, clip_data::current_group, i );
+		// 	u32 i = clip_group_add_source( clip_data::current_clip, clip_data::current_group, mpv_get_current_video() );
+		// 	replay_editor_set_group( clip_data::current_clip_index, clip_data::current_group, i );
 		// }
 		// 
 		// ImGui::SameLine();
@@ -489,13 +489,13 @@ void timeline_draw()
 		ImGui::PushStyleColor( ImGuiCol_Button, COLOR_BTN_RED );
 
 		ImGui::EndDisabled();
-		// ImGui::BeginDisabled( !( clip_data::current_output && clip_data::current_group_source != UINT32_MAX ) );
-		//ImGui::BeginDisabled( !clip_data::current_output );
+		// ImGui::BeginDisabled( !( clip_data::current_clip && clip_data::current_group_source != UINT32_MAX ) );
+		//ImGui::BeginDisabled( !clip_data::current_clip );
 		//
 		//if ( ImGui::Button( "Delete Video" ) )
 		//{
-		//	clip_group_remove_source( clip_data::current_output, clip_data::current_group, clip_data::current_group_source );
-		//	clip_remove_output( clip_data::current_output_index );
+		//	clip_group_remove_source( clip_data::current_clip, clip_data::current_group, clip_data::current_group_source );
+		//	clip_remove_entry( clip_data::current_clip_index );
 		//	timeline_reset();
 		//	replay_editor_reset();
 		//	mpv_cmd_close_video();
@@ -527,9 +527,9 @@ void timeline_draw()
 
 		if ( ImGui::Button( "Delete Current Group" ) )
 		{
-			clip_data::current_output->groups.remove( clip_data::current_group );
+			clip_data::current_clip->groups.remove( clip_data::current_group );
 
-			if ( clip_data::current_group > 0 && clip_data::current_group == clip_data::current_output->groups.size() )
+			if ( clip_data::current_group > 0 && clip_data::current_group == clip_data::current_clip->groups.size() )
 				clip_data::current_group--;
 
 			timeline_reset();
@@ -551,7 +551,7 @@ void timeline_draw()
 			ImGui::SeparatorEx( ImGuiSeparatorFlags_Vertical );
 			ImGui::SameLine();
 
-			draw_preset_dropdown( *clip_data::current_output, *group, true );
+			draw_preset_dropdown( *clip_data::current_clip, *group, true );
 		}
 	}
 
@@ -562,7 +562,7 @@ void timeline_draw()
 	{
 		for ( clip_source_usage_t& source_use : group->sources )
 		{
-			clip_source_t& source = clip_data::current_output->source[ source_use.source_index ];
+			clip_source_t& source = clip_data::current_clip->source[ source_use.source_index ];
 			durations.emplace_back( source.metadata.duration, duration_total );
 			duration_total += source.metadata.duration;
 		}
@@ -588,7 +588,7 @@ void timeline_draw()
 				start_time = temp;
 			}
 
-			clip_group_add_time_range( clip_data::current_output, *group, g_timeline_marker_source, start_time, end_time );
+			clip_group_add_time_range( clip_data::current_clip, *group, g_timeline_marker_source, start_time, end_time );
 
 			// reset markers
 			g_timeline_marker_active[ 0 ] = false;
@@ -754,7 +754,7 @@ void timeline_draw()
 		for ( size_t source_use_i = 0; source_use_i < group->sources.size(); source_use_i++ )
 		{
 			clip_source_usage_t& source_use        = group->sources[ source_use_i ];
-			clip_source_t&       source            = clip_data::current_output->source[ source_use.source_index ];
+			clip_source_t&       source            = clip_data::current_clip->source[ source_use.source_index ];
 			duration_t           duration          = durations[ source_use_i ];
 
 			ImColor              main_border_color = style.Colors[ ImGuiCol_FrameBgActive ];
@@ -935,7 +935,7 @@ void timeline_draw()
 			if ( video_i < group->sources.size() )
 			{
 				clip_source_usage_t& source_use         = group->sources[ video_i ];
-				clip_source_t&       source             = clip_data::current_output->source[ source_use.source_index ];
+				clip_source_t&       source             = clip_data::current_clip->source[ source_use.source_index ];
 
 				// ----------------------------------------------------------------------------------------------------------
 				// Draw Each Time Range in Video Source
@@ -1360,7 +1360,7 @@ void timeline_draw()
 
 	if ( group && capture_inputs && g_selected_section != UINT32_MAX && ImGui::IsKeyPressed( ImGuiKey_Delete ) )
 	{
-		clip_group_remove_time_range( clip_data::current_output, *group, clip_data::current_group_source, g_selected_section );
+		clip_group_remove_time_range( clip_data::current_clip, *group, clip_data::current_group_source, g_selected_section );
 		g_selected_section = UINT32_MAX;
 	}
 
@@ -1389,7 +1389,7 @@ void timeline_draw()
 		// 
 		// int ret = p_mpv_set_option_string( get_mpv(), "start", time_pos_str );
 
-		replay_editor_set_group( clip_data::current_output_index, clip_data::current_group, change_to_source_i );
+		replay_editor_set_group( clip_data::current_clip_index, clip_data::current_group, change_to_source_i );
 		// timeline_set_seek_time( new_time_pos );
 
 		// HACK: despite trying to wait for mpv to load the video fully, or even starting at at the desired time
@@ -1426,7 +1426,7 @@ void timeline_draw()
 	{
 		if ( shift_time_range )
 		{
-			clip_group_shift_time_range( clip_data::current_output, *group, shift_time_range_vid, shift_time_range_hovered, shift_time_range_dir );
+			clip_group_shift_time_range( clip_data::current_clip, *group, shift_time_range_vid, shift_time_range_hovered, shift_time_range_dir );
 		}
 
 		if ( delete_current_vid )

@@ -32,7 +32,7 @@ void                           draw_replay_list( int size[ 2 ] );
 
 void replay_editor_reset()
 {
-	clip_data::current_output = nullptr;
+	clip_data::current_clip = nullptr;
 	clip_data::current_source  = 0;
 	memset( g_output_name_buf, 0, 512 * sizeof( char ) );
 
@@ -42,12 +42,12 @@ void replay_editor_reset()
 
 bool replay_editor_set_video( u32 output_i, u32 input_i )
 {
-	if ( output_i >= clip_data::output_count )
+	if ( output_i >= clip_data::clip_count )
 		return false;
 
-	clip_output_video_t& output = clip_data::output[ output_i ];
+	clip_t& clip = clip_data::clip[ output_i ];
 
-	if ( input_i >= output.source_count )
+	if ( input_i >= clip.source_count )
 	{
 		input_i = 0;
 		printf( "invalid source index\n" );
@@ -56,11 +56,11 @@ bool replay_editor_set_video( u32 output_i, u32 input_i )
 
 	// replay_editor_reset();
 
-	clip_data::current_output       = &output;
-	clip_data::current_output_index = output_i;
+	clip_data::current_clip       = &clip;
+	clip_data::current_clip_index = output_i;
 	clip_data::current_source        = input_i;
 
-	memcpy( g_output_name_buf, output.name, strlen( output.name ) * sizeof( char ) );
+	memcpy( g_output_name_buf, clip.name, strlen( clip.name ) * sizeof( char ) );
 	g_focus_replay_maker = true;
 
 	set_mpv_index( input_i );
@@ -98,15 +98,15 @@ void replay_editor_set_group( u32 output_i, u32 group_i, u32 group_src_i )
 		return;
 	}
 
-	if ( output_i >= clip_data::output_count )
+	if ( output_i >= clip_data::clip_count )
 		return;
 
-	clip_output_video_t& output       = clip_data::output[ output_i ];
+	clip_t& clip       = clip_data::clip[ output_i ];
 
-	if ( group_i >= output.groups.size() )
+	if ( group_i >= clip.groups.size() )
 		return;
 
-	clip_output_group_t& group = output.groups[ group_i ];
+	clip_group_t& group = clip.groups[ group_i ];
 
 	// No sources in current group
 	if ( group.sources.empty() )
@@ -133,7 +133,7 @@ void replay_editor_set_group( u32 output_i, u32 group_i, u32 group_src_i )
 	///if ( !replay_editor_set_video( output_i, input_i ) )
 	//	return;
 
-	if ( output.source_count <= source_use.source_index )
+	if ( clip.source_count <= source_use.source_index )
 	{
 		mpv_cmd_close_video();
 		set_mpv_index( 0 );
@@ -141,15 +141,15 @@ void replay_editor_set_group( u32 output_i, u32 group_i, u32 group_src_i )
 		return;
 	}
 
-	clip_source_t& source                   = output.source[ source_use.source_index ];
+	clip_source_t& source                   = clip.source[ source_use.source_index ];
 
-	bool           swapping_group_or_output = clip_data::current_output_index != output_i || clip_data::current_group != group_i;
+	bool           swapping_group_or_output = clip_data::current_clip_index != output_i || clip_data::current_group != group_i;
 	// bool pause_video              = swapping_group_or_output;
-	bool           pause_video              = clip_data::current_output_index != output_i;
+	bool           pause_video              = clip_data::current_clip_index != output_i;
 
 	pause_video |= mpv_get_current_video() && strcmp( mpv_get_current_video(), source.path ) != 0;
 
-	if ( g_mpv_extra_vid_on && clip_data::current_output_index != output_i )
+	if ( g_mpv_extra_vid_on && clip_data::current_clip_index != output_i )
 	{
 		// replay_editor_close_loose_video();
 	}
@@ -164,11 +164,11 @@ void replay_editor_set_group( u32 output_i, u32 group_i, u32 group_src_i )
 	p_mpv_get_property( get_mpv(), "pause", MPV_FORMAT_FLAG, &paused );
 
 	// load all mpv instances
-	set_mpv_count( output.source_count );
+	set_mpv_count( clip.source_count );
 
-	for ( u32 i = 0; i < output.source_count; i++ )
+	for ( u32 i = 0; i < clip.source_count; i++ )
 	{
-		mpv_cmd_loadfile( output.source[ i ].path, i );
+		mpv_cmd_loadfile( clip.source[ i ].path, i );
 
 		mpv_data_t* mpv = get_mpv_data( i );
 
@@ -204,14 +204,14 @@ void replay_editor_set_group( u32 output_i, u32 group_i, u32 group_src_i )
 }
 
 
-void replay_editor_load( clip_output_video_t* output )
+void replay_editor_load( clip_t* clip )
 {
 	replay_editor_reset();
 
-	clip_data::current_output = output;
+	clip_data::current_clip = clip;
 	clip_data::current_source  = 0;
 
-	memcpy( g_output_name_buf, output->name, strlen( output->name ) * sizeof( char ) );
+	memcpy( g_output_name_buf, clip->name, strlen( clip->name ) * sizeof( char ) );
 	g_focus_replay_maker = true;
 }
 
@@ -450,7 +450,7 @@ void draw_replay_info_menu_bar()
 }
 
 
-void draw_preset_dropdown( clip_output_video_t& output, clip_output_group_t& group, bool edit )
+void draw_preset_dropdown( clip_t& clip, clip_group_t& group, bool edit )
 {
 	ImGuiStyle& style = ImGui::GetStyle();
 
@@ -462,9 +462,9 @@ void draw_preset_dropdown( clip_output_video_t& output, clip_output_group_t& gro
 			{
 				// lmao what the fuck
 				bool skip = false;
-				for ( u32 g = 0; g < output.groups.size(); g++ )
+				for ( u32 g = 0; g < clip.groups.size(); g++ )
 				{
-					clip_output_group_t& group_ = output.groups[ g ];
+					clip_group_t& group_ = clip.groups[ g ];
 
 					for ( u32 used_preset_i = 0; used_preset_i < group_.presets.size(); used_preset_i++ )
 					{
@@ -484,7 +484,7 @@ void draw_preset_dropdown( clip_output_video_t& output, clip_output_group_t& gro
 
 				if ( ImGui::Selectable( clip_data::preset[ i ].name ) )
 				{
-					clip_group_add_preset( output, group, i );
+					clip_group_add_preset( clip, group, i );
 				}
 			}
 
@@ -516,7 +516,7 @@ void draw_preset_dropdown( clip_output_video_t& output, clip_output_group_t& gro
 
 	if ( preset_remove != UINT32_MAX )
 	{
-		clip_group_remove_preset( output, group, preset_remove );
+		clip_group_remove_preset( clip, group, preset_remove );
 	}
 }
 

@@ -10,8 +10,8 @@ namespace clip_data
 {
 	u32                   version              = CLIP_VIDEO_FORMAT_VER;
 
-	clip_output_video_t*  output               = nullptr;
-	u32                   output_count         = 0;
+	clip_t*               clip                 = nullptr;
+	u32                   clip_count           = 0;
 
 	clip_encode_preset_t* preset               = nullptr;
 	u32                   preset_count         = 0;
@@ -19,8 +19,8 @@ namespace clip_data
 	clip_prefix_t*        prefix               = nullptr;
 	u32                   prefix_count         = 0;
 
-	clip_output_video_t*  current_output       = nullptr;
-	u32                   current_output_index = UINT32_MAX;
+	clip_t*               current_clip         = nullptr;
+	u32                   current_clip_index   = UINT32_MAX;
 	u32                   current_source       = 0;
 	u32                   current_group_source = 0;
 	u32                   current_group        = 0;
@@ -126,108 +126,108 @@ char* clip_replay_name_trim( const char* name, u32 prefix_len )
 // Video Management
 
 
-clip_output_video_t* clip_add_output( const char* name )
+clip_t* clip_add_entry( const char* name )
 {
-	clip_output_video_t* new_data = ch_realloc< clip_output_video_t >( clip_data::output, clip_data::output_count + 1 );
+	clip_t* new_data = ch_realloc< clip_t >( clip_data::clip, clip_data::clip_count + 1 );
 
 	if ( !new_data )
 		return nullptr;
 
-	clip_data::output = new_data;
-	memset( &clip_data::output[ clip_data::output_count ], 0, sizeof( clip_output_video_t ) );
+	clip_data::clip = new_data;
+	memset( &clip_data::clip[ clip_data::clip_count ], 0, sizeof( clip_t ) );
 
-	clip_output_video_t* output = &clip_data::output[ clip_data::output_count ];
-	output->name                = fs_get_filename_no_ext( name );
-	output->enabled             = true;
+	clip_t* clip = &clip_data::clip[ clip_data::clip_count ];
+	clip->name                = fs_get_filename_no_ext( name );
+	clip->enabled             = true;
 
 	size_t name_len             = strlen( name );
 
 	// convenience, if it starts with "Replay ", or "Replay_" (2019 clips), remove it
 	// then also check if it has a title appended to it
 	// TODO: just check if it has Replay in it, because on older clips i tended to add a title to the start instead of the end
-	if ( name_len > 7 && strncmp( output->name, "Replay ", 7 ) == 0 )
+	if ( name_len > 7 && strncmp( clip->name, "Replay ", 7 ) == 0 )
 	{
-		char* custom_name = clip_replay_name_trim( output->name, 7 );
+		char* custom_name = clip_replay_name_trim( clip->name, 7 );
 
 		if ( custom_name )
 		{
-			free( output->name );
-			output->name = custom_name;
+			free( clip->name );
+			clip->name = custom_name;
 		}
 	}
-	else if ( name_len > 9 && strncmp( output->name, "Replay__ ", 9 ) == 0 )
+	else if ( name_len > 9 && strncmp( clip->name, "Replay__ ", 9 ) == 0 )
 	{
-		char* custom_name = clip_replay_name_trim( output->name, 9 );
+		char* custom_name = clip_replay_name_trim( clip->name, 9 );
 
 		if ( custom_name )
 		{
-			free( output->name );
-			output->name = custom_name;
+			free( clip->name );
+			clip->name = custom_name;
 		}
 	}
 
-	clip_data::output_count++;
+	clip_data::clip_count++;
 
 	// add a group to it
 
-	return output;
+	return clip;
 }
 
 
-void clip_remove_output( clip_output_video_t* output )
+void clip_remove_entry( clip_t* clip )
 {
 	// look for the pointer
-	u32 output_i = 0;
-	for ( ; output_i < clip_data::output_count; output_i++ )
+	u32 entry_i = 0;
+	for ( ; entry_i < clip_data::clip_count; entry_i++ )
 	{
-		if ( &clip_data::output[ output_i ] == output )
+		if ( &clip_data::clip[ entry_i ] == clip )
 			break;
 	}
 
-	if ( output_i == clip_data::output_count )
+	if ( entry_i == clip_data::clip_count )
 	{
 		log_printf( "invalid output\n" );
 		return;
 	}
 
-	clip_remove_output( output_i );
+	clip_remove_entry( entry_i );
 }
 
 
-void clip_remove_output( u32 output_i )
+void clip_remove_entry( u32 output_i )
 {
-	if ( output_i > clip_data::output_count )
+	if ( output_i > clip_data::clip_count )
 	{
 		log_printf( "invalid output index\n" );
 		return;
 	}
 
-	clip_output_video_t& output = clip_data::output[ output_i ];
+	clip_t& clip = clip_data::clip[ output_i ];
 
 	// remove source videos
-	for ( u32 i = 0; i < output.source_count; i++ )
+	for ( u32 i = 0; i < clip.source_count; i++ )
 	{
-		free( output.source[ i ].path );
+		free( clip.source[ i ].path );
 	}
 
-	free( output.source );
+	free( clip.source );
 
-	util_array_remove_element( clip_data::output, clip_data::output_count, output_i );
+	util_array_remove_element( clip_data::clip, clip_data::clip_count, output_i );
 }
 
 
-void clip_move_output( u32 output_id, u32 insert_position )
+void clip_move_entry( u32 entry_id, u32 insert_position )
 {
-	if ( output_id == insert_position )
+	if ( entry_id == insert_position )
 		return;
 
-	if ( output_id >= clip_data::output_count )
+	if ( entry_id >= clip_data::clip_count )
 		return;
 
-	if ( insert_position >= clip_data::output_count )
+	if ( insert_position >= clip_data::clip_count )
 		return;
 
-	clip_output_video_t* temp_data = ch_calloc< clip_output_video_t >( 1 );
+	clip_t* temp_data = ch_calloc< clip_t >( 1 );
 
 	if ( !temp_data )
 	{
@@ -236,31 +236,31 @@ void clip_move_output( u32 output_id, u32 insert_position )
 	}
 
 	// back up this data
-	memcpy( temp_data, &clip_data::output[ output_id ], sizeof( clip_output_video_t ) );
+	memcpy( temp_data, &clip_data::clip[ entry_id ], sizeof( clip_t ) );
 
-	if ( output_id > insert_position )
+	if ( entry_id > insert_position )
 	{
 		// we want to move this output to an earlier spot in memor
 		// shift everything between the insert position and original output position forward by 1
-		u32 move_count = output_id - insert_position;
-		memmove( clip_data::output + insert_position + 1, clip_data::output + insert_position, sizeof( clip_output_video_t ) * move_count );
+		u32 move_count = entry_id - insert_position;
+		memmove( clip_data::clip + insert_position + 1, clip_data::clip + insert_position, sizeof( clip_t ) * move_count );
 
 		// now copy back the data
-		memcpy( &clip_data::output[ insert_position ], temp_data, sizeof( clip_output_video_t ) );
+		memcpy( &clip_data::clip[ insert_position ], temp_data, sizeof( clip_t ) );
 	}
 	else
 	{
 		// we want to move this output to a further away spot in memory
 
 		// shift everything between the insert position and original output position back by 1
-		u32 move_count = insert_position - output_id;
-		memmove( clip_data::output + output_id, clip_data::output + output_id + 1, sizeof( clip_output_video_t ) * move_count );
+		u32 move_count = insert_position - entry_id;
+		memmove( clip_data::clip + entry_id, clip_data::clip + entry_id + 1, sizeof( clip_t ) * move_count );
 
 		// now copy back the data
-		memcpy( &clip_data::output[ insert_position ], temp_data, sizeof( clip_output_video_t ) );
+		memcpy( &clip_data::clip[ insert_position ], temp_data, sizeof( clip_t ) );
 	}
 
-	//u32 move_count = clip_data::output_count - insert_position;
+	//u32 move_count = clip_data::clip_count - insert_position;
 	//memmove( clip_data::output, clip_data::output + insert_position, sizeof( clip_output_video_t ) * move_count );
 
 	free( temp_data );
@@ -270,63 +270,63 @@ void clip_move_output( u32 output_id, u32 insert_position )
 // ========================================================================================================
 
 
-u32 clip_add_source( clip_output_video_t* output, const char* path )
+u32 clip_add_source( clip_t* clip, const char* path )
 {
-	if ( !output )
+	if ( !clip )
 		return UINT32_MAX;
 	
 	// Search if this exists already
-	for ( u32 i = 0; i < output->source_count; i++ )
+	for ( u32 i = 0; i < clip->source_count; i++ )
 	{
-		if ( strcmp( output->source[ i ].path, path ) == 0 )
+		if ( strcmp( clip->source[ i ].path, path ) == 0 )
 		{
 			return i;
 		}
 	}
 
-	if ( output->source_count > 0 )
+	if ( clip->source_count > 0 )
 		printf( "WOW2\n" );
 
 	// Not found, add it
-	clip_source_t* new_data = ch_realloc< clip_source_t >( output->source, output->source_count + 1 );
+	clip_source_t* new_data = ch_realloc< clip_source_t >( clip->source, clip->source_count + 1 );
 
 	if ( !new_data )
 		return UINT32_MAX;
 
-	output->source = new_data;
-	memset( &output->source[ output->source_count ], 0, sizeof( clip_source_t ) );
+	clip->source = new_data;
+	memset( &clip->source[ clip->source_count ], 0, sizeof( clip_source_t ) );
 
-	clip_source_t* source = &output->source[ output->source_count ];
+	clip_source_t* source = &clip->source[ clip->source_count ];
 	source->path          = util_strdup( path );
 	source->filename      = fs_get_filename( source->path );
 
 	clip_get_video_metadata( *source );
 
-	return output->source_count++;
+	return clip->source_count++;
 }
 
 
-void clip_remove_source( clip_output_video_t* output, u32 input_i )
+void clip_remove_source( clip_t* clip, u32 input_i )
 {
-	if ( !output )
+	if ( !clip )
 		return;
 
-	if ( input_i > output->source_count )
+	if ( input_i > clip->source_count )
 	{
 		log_printf( "invalid source index\n" );
 		return;
 	}
 
-	clip_source_t& source = output->source[ input_i ];
+	clip_source_t& source = clip->source[ input_i ];
 
 	free( source.path );
 	free( source.filename );
 
-	util_array_remove_element( output->source, output->source_count, input_i );
+	util_array_remove_element( clip->source, clip->source_count, input_i );
 }
 
 
-std::string clip_group_get_name( clip_output_group_t& group )
+std::string clip_group_get_name( clip_group_t& group )
 {
 	// collect presets used
 	char title[ 128 ]{};
@@ -356,101 +356,101 @@ std::string clip_group_get_name( clip_output_group_t& group )
 }
 
 
-u32  clip_group_add_source( clip_output_video_t* output, u32 group_index, const char* path )
+u32  clip_group_add_source( clip_t* clip, u32 group_index, const char* path )
 {
-	if ( !output )
+	if ( !clip )
 		return UINT32_MAX;
 
-	u32 source_i = clip_add_source( output, path );
+	u32 source_i = clip_add_source( clip, path );
 
 	if ( source_i == UINT32_MAX )
 		return UINT32_MAX;
 
-	if ( group_index >= output->groups.size() )
+	if ( group_index >= clip->groups.size() )
 		return UINT32_MAX;
 
-	clip_output_group_t& group = output->groups[ group_index ];
+	clip_group_t& group = clip->groups[ group_index ];
 
 	clip_source_usage_t& source = group.sources.emplace_back();
 	source.source_index         = source_i;
 
-	clip_check_video( *output );
+	clip_check_video( *clip );
 
 	return group.sources.size() - 1;
 }
 
 
-void clip_group_remove_source( clip_output_video_t* output, u32 group_index, u32 group_src_i )
+void clip_group_remove_source( clip_t* clip, u32 group_index, u32 group_src_i )
 {
-	if ( !output )
+	if ( !clip )
 		return;
 
-	if ( group_index >= output->groups.size() )
+	if ( group_index >= clip->groups.size() )
 		return;
 
-	clip_output_group_t& group = output->groups[ group_index ];
+	clip_group_t& group = clip->groups[ group_index ];
 
 	if ( group_src_i >= group.sources.size() )
 		return;
 
 	group.sources.remove( group_src_i );
 
-	clip_check_video( *output );
+	clip_check_video( *clip );
 }
 
 
-void clip_group_remove_source( clip_output_video_t* output, u32 group_index, const char* path )
+void clip_group_remove_source( clip_t* clip, u32 group_index, const char* path )
 {
-	if ( !output )
+	if ( !clip )
 		return;
 
-	for ( u32 i = 0; i < output->source_count; i++ )
+	for ( u32 i = 0; i < clip->source_count; i++ )
 	{
-		if ( strcmp( output->source[ i ].path, path ) == 0 )
+		if ( strcmp( clip->source[ i ].path, path ) == 0 )
 		{
-			return clip_group_remove_source( output, group_index, i );
+			return clip_group_remove_source( clip, group_index, i );
 		}
 	}
 }
 
 
-void clip_group_add_preset( clip_output_video_t& output, clip_output_group_t& group, u32 preset_i )
+void clip_group_add_preset( clip_t& clip, clip_group_t& group, u32 preset_i )
 {
 	if ( group.presets.index( preset_i ) != UINT32_MAX )
 		return;
 
 	group.presets.push_back( preset_i );
-	clip_check_video( output );
+	clip_check_video( clip );
 }
 
 
-void clip_group_remove_preset( clip_output_video_t& output, clip_output_group_t& group, u32 preset_i )
+void clip_group_remove_preset( clip_t& clip, clip_group_t& group, u32 preset_i )
 {
 	for ( u32 i = 0; i < group.presets.size(); i++ )
 	{
 		if ( group.presets[ i ] == preset_i )
 		{
 			group.presets.remove( i );
-			clip_check_video( output );
+			clip_check_video( clip );
 			break;
 		}
 	}
 }
 
 
-void clip_group_remove_preset( clip_output_video_t& output, u32 group_index, u32 preset_i )
+void clip_group_remove_preset( clip_t& clip, u32 group_index, u32 preset_i )
 {
-	if ( group_index >= output.groups.size() )
+	if ( group_index >= clip.groups.size() )
 		return;
 
-	clip_output_group_t& group = output.groups[ group_index ];
-	clip_group_remove_preset( output, group, preset_i );
+	clip_group_t& group = clip.groups[ group_index ];
+	clip_group_remove_preset( clip, group, preset_i );
 }
 
 
-void clip_group_add_time_range( clip_output_video_t* output, clip_output_group_t& group, u32 source_i, float start_time, float end_time )
+void clip_group_add_time_range( clip_t* clip, clip_group_t& group, u32 source_i, float start_time, float end_time )
 {
-	if ( !output )
+	if ( !clip )
 		return;
 
 	if ( source_i > group.sources.size() )
@@ -469,12 +469,12 @@ void clip_group_add_time_range( clip_output_video_t* output, clip_output_group_t
 }
 
 
-void clip_group_remove_time_range( clip_output_video_t* output, clip_output_group_t& group, u32 source_i, u32 time_range )
+void clip_group_remove_time_range( clip_t* clip, clip_group_t& group, u32 source_i, u32 time_range )
 {
-	if ( !output )
+	if ( !clip )
 		return;
 
-	if ( source_i > output->source_count )
+	if ( source_i > clip->source_count )
 	{
 		log_printf( "invalid source index\n" );
 		return;
@@ -493,12 +493,12 @@ void clip_group_remove_time_range( clip_output_video_t* output, clip_output_grou
 
 
 // direction = false for back, true for forward
-void clip_group_shift_time_range( clip_output_video_t* output, clip_output_group_t& group, u32 source_i, u32 time_range_i, bool direction )
+void clip_group_shift_time_range( clip_t* clip, clip_group_t& group, u32 source_i, u32 time_range_i, bool direction )
 {
-	if ( !output )
+	if ( !clip )
 		return;
 
-	if ( source_i > output->source_count )
+	if ( source_i > clip->source_count )
 	{
 		log_printf( "invalid source index\n" );
 		return;
@@ -538,19 +538,19 @@ void clip_group_shift_time_range( clip_output_video_t* output, clip_output_group
 }
 
 
-void clip_duplicate_time_range( clip_output_video_t* output, u32 input_i, u32 src_time_range_i )
+void clip_duplicate_time_range( clip_t* clip, u32 input_i, u32 src_time_range_i )
 {
 #if 0
-	if ( !output )
+	if ( !clip )
 		return;
 
-	if ( input_i > output->source_count )
+	if ( input_i > clip->source_count )
 	{
 		log_printf( "invalid source index\n" );
 		return;
 	}
 
-	clip_source_t& source = output->source[ input_i ];
+	clip_source_t& source = clip->source[ input_i ];
 
 	if ( src_time_range_i > source.time_range_count )
 	{
@@ -570,15 +570,15 @@ void clip_duplicate_time_range( clip_output_video_t* output, u32 input_i, u32 sr
 }
 
 
-clip_output_group_t* clip_get_group( clip_output_video_t* output, u32 group_index )
+clip_group_t* clip_get_group( clip_t* clip, u32 group_index )
 {
-	if ( !output )
+	if ( !clip )
 		return nullptr;
 
-	if ( group_index >= output->groups.size() )
+	if ( group_index >= clip->groups.size() )
 		return nullptr;
 
-	return &output->groups[ group_index ];
+	return &clip->groups[ group_index ];
 }
 
 

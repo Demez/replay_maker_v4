@@ -70,9 +70,9 @@ void encode_draw_sidebar()
 
 		if ( ImGui::BeginChild( "##video_list", {}, ImGuiChildFlags_Borders /*| ImGuiChildFlags_ResizeY*/ ) )
 		{
-			for ( size_t vid_i = 0; vid_i < clip_data::output_count; vid_i++ )
+			for ( size_t vid_i = 0; vid_i < clip_data::clip_count; vid_i++ )
 			{
-				clip_output_video_t& output     = clip_data::output[ vid_i ];
+				clip_t& clip     = clip_data::clip[ vid_i ];
 				enc_output_video_t&  enc_output = g_output_videos[ vid_i ];
 
 				u32 preset_idx = g_encoder_data.encode_preset;
@@ -112,9 +112,9 @@ void encode_draw_sidebar()
 					continue;
 
 				char name_buf[ 512 ]{};
-				snprintf( name_buf, 512, " %zu - %s", vid_i, output.name );
+				snprintf( name_buf, 512, " %zu - %s", vid_i, clip.name );
 
-				bool draw_bg_color = output.state != e_output_state_wait;
+				bool draw_bg_color = clip.state != e_output_state_wait;
 
 				if ( draw_bg_color )
 				{
@@ -132,7 +132,7 @@ void encode_draw_sidebar()
 
 					ImColor color = style.Colors[ ImGuiCol_Button ];
 
-					switch ( output.state )
+					switch ( clip.state )
 					{
 						default:
 						case e_output_state_running:
@@ -223,7 +223,7 @@ void encode_draw_ffmpeg()
 	if ( output_select > -1 )
 		output_idx = output_select;
 
-	clip_output_video_t& output     = clip_data::output[ output_idx ];
+	clip_t& clip     = clip_data::clip[ output_idx ];
 	enc_output_video_t&  enc_output = g_output_videos[ output_idx ];
 
 	enc_output.ffmpeg_output_lock.lock();
@@ -260,11 +260,11 @@ void encode_draw_output_info()
 	if ( preset_select > -1 )
 		preset_idx = preset_select;
 
-	clip_output_video_t&  output     = clip_data::output[ output_idx ];
+	clip_t&  clip     = clip_data::clip[ output_idx ];
 	enc_output_video_t&   enc_output = g_output_videos[ output_idx ];
 	clip_encode_preset_t& preset     = clip_data::preset[ preset_idx ];
 
-	std::string           filename   = get_video_output_name( output, preset );
+	std::string           filename   = get_video_output_name( clip, preset );
 
 	ImGui::Text( "Output Path: %s", g_encoder_data.output_dir.c_str() );
 
@@ -278,9 +278,9 @@ void encode_draw_output_info()
 	ImGui::Separator();
 
 #if 0
-	for ( u32 in_i = 0; in_i < output.source_count; in_i++ )
+	for ( u32 in_i = 0; in_i < clip.source_count; in_i++ )
 	{
-		clip_source_t& source = output.source[ in_i ];
+		clip_source_t& source = clip.source[ in_i ];
 
 		if ( !used_in_preset( source.encode_settings, preset_idx ) )
 			continue;
@@ -383,7 +383,7 @@ void encode_draw()
 
 			ImGui::Separator();
 
-			ImGui::Text( "%d / %d Videos Scanned", g_encoder_data.scan_index, clip_data::output_count );
+			ImGui::Text( "%d / %d Videos Scanned", g_encoder_data.scan_index, clip_data::clip_count );
 		}
 
 		ImGui::PopStyleVar();

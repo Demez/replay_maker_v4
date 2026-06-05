@@ -17,7 +17,7 @@ enum e_target_size_state
 // encoder output video
 struct enc_output_video_t
 {
-	clip_output_video_t* output;
+	clip_t* clip;
 
 	// presets this output video uses
 	u32*                 presets;
@@ -47,7 +47,7 @@ struct video_segment_t
 struct enc_video_data_t
 {
 	enc_output_video_t*  enc_output;
-	clip_output_video_t* output;
+	clip_t* clip;
 
 	video_segment_t*     segment;
 	u32                  segment_count;
@@ -91,6 +91,6 @@ void                       encode_thread_stop();
 bool                       encode_check_state();
 
 float                      get_video_bitrate( const char* path );
-std::string                get_video_output_name( clip_output_video_t& output, clip_encode_preset_t& preset );
+std::string                get_video_output_name( clip_t& clip, clip_encode_preset_t& preset );
 
 void                       encode_draw();
