@@ -722,7 +722,7 @@ void timeline_draw()
 	ImVec2 mouse_pos     = ImGui::GetMousePos();
 
 	// is mouse within the frame here
-	bool   mouse_hovered = point_in_rect( mouse_pos, window_area_min, window_area_max );
+	bool   mouse_hovered = mouse_hovering_area( window_area_min, window_area_max );
 
 	// ------------------------------------------------------------------------------------------
 	// Draw Background
@@ -1079,14 +1079,14 @@ void timeline_draw()
 
 					int snap_to_time_range = 0;
 
-					if ( mouse_in_rect( ImVec2( section_pos_left - 3, window_area_min.y ), ImVec2( section_pos_left + 3, height_min ) ) )
+					if ( mouse_hovered && mouse_in_rect( ImVec2( section_pos_left - 3, window_area_min.y ), ImVec2( section_pos_left + 3, height_min ) ) )
 					{
 						//ImGui::SetMouseCursor( ImGuiMouseCursor_Hand );
 						snap_to_time_range = 1;
 					}
 
 					// check snap to end time
-					if ( mouse_in_rect( ImVec2( section_pos_right - 3, window_area_min.y ), ImVec2( section_pos_right + 3, height_min ) ) )
+					if ( mouse_hovered && mouse_in_rect( ImVec2( section_pos_right - 3, window_area_min.y ), ImVec2( section_pos_right + 3, height_min ) ) )
 					{
 						//ImGui::SetMouseCursor( ImGuiMouseCursor_Hand );
 						snap_to_time_range = 2;
@@ -1105,7 +1105,7 @@ void timeline_draw()
 					}
 
 					// check if we want to select this one
-					if ( io.MouseClicked[ 0 ] && mouse_in_rect( ImVec2( section_pos_left, height_min ), ImVec2( section_pos_right, window_area_max.y ) ) )
+					if ( mouse_hovered && io.MouseClicked[ 0 ] && mouse_in_rect( ImVec2( section_pos_left, height_min ), ImVec2( section_pos_right, window_area_max.y ) ) )
 					{
 						g_selected_section    = time_i;
 						just_selected_section = true;
@@ -1273,7 +1273,7 @@ void timeline_draw()
 
 			// if ( clip_data::current_group_source == source_use_i )
 			{
-				if ( capture_inputs && !section_resize && !seek_time_override && !ignore_seek_drag )
+				if ( mouse_hovered && capture_inputs && !section_resize && !seek_time_override && !ignore_seek_drag )
 				{
 					if ( mouse_hovered_area && io.MouseClicked[ 0 ] )
 					{
@@ -1283,7 +1283,7 @@ void timeline_draw()
 							g_selected_section = UINT32_MAX;
 					}
 
-					if ( !io.MouseDown[ 0 ] )
+					if ( seek_drag && !io.MouseDown[ 0 ] )
 					{
 						// timeline_set_seek_time( new_time_pos );
 						seek_drag        = false;
