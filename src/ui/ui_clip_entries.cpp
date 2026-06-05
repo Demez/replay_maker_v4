@@ -125,6 +125,10 @@ void draw_replay_edit_video_info( int size[ 2 ] )
 		ImGui::EndCombo();
 	}
 
+	bool enabled = clip_data::current_output ? clip_data::current_output->enabled : false;
+	if ( ImGui::Checkbox( "Enabled", &enabled ) )
+		clip_data::current_output->enabled = enabled;
+
 	ImGui::EndDisabled();
 	ImGui::EndChild();
 }
@@ -505,6 +509,7 @@ void draw_replay_list( int size[ 2 ] )
 	bottom_area_height += ImGui::GetFrameHeightWithSpacing();      // source videos text
 	bottom_area_height += ImGui::GetFrameHeightWithSpacing() * 2;  // encode section
 	bottom_area_height += ImGui::GetFrameHeightWithSpacing() * 2;  // video name and prefix field
+	bottom_area_height += ImGui::GetFrameHeightWithSpacing();      // enabled checkbox
 	bottom_area_height += ImGui::GetFrameHeightWithSpacing();      // output vid section title
 	bottom_area_height += style.ItemSpacing.y * 2.f;      // output vid delete video button
 
@@ -653,7 +658,7 @@ void draw_replay_list( int size[ 2 ] )
 				// this is stupid lmao
 				if ( sort_newest_top )
 				{
-					printf( "TARGET ID: %d\n", clip_reorder_drag::target_id );
+					//printf( "TARGET ID: %d\n", clip_reorder_drag::target_id );
 					// if the next one is the target id, move that one down twice
 					if ( out_i < clip_reorder_drag::clip_id && out_i == clip_reorder_drag::target_id )
 					{
@@ -732,8 +737,9 @@ void draw_replay_list( int size[ 2 ] )
 		//	ImGui::SetCursorScreenPos( base_pos );
 		//}
 
-		// ??????
-		draw_replay_list_entry_dummy( cursor_screen_pos, region_avail );
+		// imgui throws a fit if i don't do this, it used to work fine before
+		if ( clip_reorder_drag::active )
+			draw_replay_list_entry_dummy( cursor_screen_pos, region_avail );
 
 		ImGui::EndDisabled();
 
