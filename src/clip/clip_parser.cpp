@@ -710,58 +710,73 @@ bool clip_parse_videos( const char* path )
 		goto fail;
 	}
 
-	if ( root.aType != e_json_type_object )
+	if ( root.aType == e_json_type_array )
+	{
+		// earliest version didn't have a version entry, thanks past demez
+		clip_data::version = 1;
+		videos_root        = &root;
+	}
+	else if ( root.aType != e_json_type_object )
 	{
 		log_printf( "%s - Root Type is not an Object\n", path );
 		goto fail;
 	}
-
-	if ( root.aObjects.count != 2 )
+	
+	if ( clip_data::version > 1 )
 	{
-		log_printf( "Root object count is not 2 entries (version, videos)\n" );
-		goto fail;
-	}
-
-	if ( !root.aObjects.data[ 0 ].aName.size )
-	{
-		log_printf( "First object name is empty?\n" );
-		goto fail;
-	}
-
-	if ( util_strncmp( "version", 7, root.aObjects.data[ 0 ].aName.data, root.aObjects.data[ 0 ].aName.size ) )
-	{
-		json_object_t& version = root.aObjects.data[ 0 ];
-		if ( version.aType != e_json_type_int )
+		if ( root.aObjects.count != 2 )
 		{
-			log_printf( "Version entry is not an integer type!\n" );
-			goto fail;
-		}
-		else if ( version.aInt < CLIP_VIDEO_FORMAT_VER_MIN )
-		{
-			log_printf( "File is older video format version (got version %d, expected min version %d)\n", version.aInt, CLIP_VIDEO_FORMAT_VER_MIN );
-			goto fail;
-		}
-		else if ( version.aInt > CLIP_VIDEO_FORMAT_VER )
-		{
-			log_printf( "File is too new of a video format version (got version %d, expected version %d)\n", version.aInt, CLIP_VIDEO_FORMAT_VER );
+			log_printf( "Root object count is not 2 entries (version, videos)\n" );
 			goto fail;
 		}
 
-		clip_data::version = version.aInt;
-	}
-	else
-	{
-		log_printf( "First entry is not \"version\"\n" );
-		goto fail;
+		if ( !root.aObjects.data[ 0 ].aName.size )
+		{
+			log_printf( "First object name is empty?\n" );
+			goto fail;
+		}
+
+		if ( util_strncmp( "version", 7, root.aObjects.data[ 0 ].aName.data, root.aObjects.data[ 0 ].aName.size ) )
+		{
+			json_object_t& version = root.aObjects.data[ 0 ];
+			if ( version.aType != e_json_type_int )
+			{
+				log_printf( "Version entry is not an integer type!\n" );
+				goto fail;
+			}
+			else if ( version.aInt < CLIP_VIDEO_FORMAT_VER_MIN )
+			{
+				log_printf( "File is older video format version (got version %d, expected min version %d)\n", version.aInt, CLIP_VIDEO_FORMAT_VER_MIN );
+				goto fail;
+			}
+			else if ( version.aInt > CLIP_VIDEO_FORMAT_VER )
+			{
+				log_printf( "File is too new of a video format version (got version %d, expected version %d)\n", version.aInt, CLIP_VIDEO_FORMAT_VER );
+				goto fail;
+			}
+
+			clip_data::version = version.aInt;
+		}
+		else
+		{
+			log_printf( "First entry is not \"version\"\n" );
+			goto fail;
+		}
+
+		if ( !util_strncmp( "videos", 6, root.aObjects.data[ 1 ].aName.data, root.aObjects.data[ 1 ].aName.size ) )
+		{
+			log_printf( "Second entry is not \"videos\"\n" );
+			goto fail;
+		}
+
+		videos_root = &root.aObjects.data[ 1 ];
 	}
 
-	if ( !util_strncmp( "videos", 6, root.aObjects.data[ 1 ].aName.data, root.aObjects.data[ 1 ].aName.size ) )
+	if ( !videos_root )
 	{
-		log_printf( "Second entry is not \"videos\"\n" );
+		log_printf( "Failed to find list of videos\n" );
 		goto fail;
 	}
-
-	videos_root = &root.aObjects.data[ 1 ];
 
 	// allocate all the output videos now
 	new_data    = ch_realloc< clip_t >( clip_data::clip, videos_root->aObjects.count );

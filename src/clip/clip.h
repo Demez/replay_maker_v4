@@ -7,12 +7,14 @@
 #include <string>
 
 
-constexpr size_t MAX_LEN_EXT               = 5;
-constexpr size_t MAX_LEN_PRESET_NAME       = 64;
+constexpr size_t MAX_LEN_EXT                    = 5;
+constexpr size_t MAX_LEN_PRESET_NAME            = 64;
 
-constexpr u32    CLIP_VIDEO_FORMAT_VER     = 4;
-constexpr u32    CLIP_VIDEO_FORMAT_VER_MIN = 2;
-constexpr u32    CLIP_SETTINGS_VER         = 1;
+constexpr u32    CLIP_VIDEO_FORMAT_VER          = 4;
+constexpr u32    CLIP_VIDEO_FORMAT_VER_MIN_SAFE = 3;  // earliest version with full support
+constexpr u32    CLIP_VIDEO_FORMAT_VER_MIN      = 1;  // earliest version we can load, but may not be 100% loaded properly
+
+constexpr u32    CLIP_SETTINGS_VER              = 1;
 
 
 enum e_encode_preset
