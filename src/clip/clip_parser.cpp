@@ -191,7 +191,7 @@ bool clip_parse_settings( const char* path )
 
 
 // ============================================================================================================================
-
+// Legacy format 2 and 3 parsing
 
 ChVector< u32 > clip_parse_encode_override( clip_t& clip, json_object_t& root )
 {
@@ -245,6 +245,76 @@ clip_source_usage_t* clip_get_source_use_v3()
 u32  clip_add_source( clip_t* clip, const char* path );
 
 
+clip_group_t* clip_parse_encode_overrides_v3( clip_t& clip, json_object_t& object, clip_group_t* fallback, clip_time_range_t* time_range )
+{
+	// get the encode presets used first
+	ChVector< u32 > encode_presets = clip_parse_encode_override( clip, object );
+
+	if ( encode_presets.empty() && fallback )
+		return fallback;
+
+	// create a new group for format 2, format 3 doesn't use this path
+	clip_group_t* group = nullptr;
+	bool          add_to_group = false;
+
+	// check the time range of the first source usage
+	if ( time_range )
+	{
+		if ( time_range->start == 0.f && time_range->end == 0.f )
+		{
+			group        = fallback;
+			add_to_group = true;
+		}
+	}
+
+	// then look for a group with a matching set of encode presets used
+	for ( u32 group_i = 0; group_i < clip.groups.size(); group_i++ )
+	{
+		clip_group_t& _group = clip.groups[ group_i ];
+
+		if ( _group.presets.size() != encode_presets.size() )
+			continue;
+
+		bool all_valid    = true;
+		u32  src_preset_i = 0;
+		for ( u32 preset_i : _group.presets )
+		{
+			if ( preset_i != encode_presets[ src_preset_i++ ] )
+			{
+				all_valid = false;
+				break;
+			}
+		}
+
+		if ( all_valid )
+		{
+			group = &_group;
+			break;
+		}
+	}
+
+	if ( !group )
+	{
+		group          = &clip.groups.emplace_back();
+		group->presets = encode_presets;
+	}
+	else if ( add_to_group )
+	{
+		for ( u32 i = 0; i < encode_presets.size(); i++ )
+		{
+			u32 index = group->presets.index( encode_presets[ i ] );
+
+			if ( index != UINT32_MAX )
+				continue;
+
+			group->presets.push_back( encode_presets[ i ] );
+		}
+	}
+
+	return group;
+}
+
+
 // version 3 parsing
 bool clip_parse_input_v3( clip_t& clip, json_object_t& root )
 {
@@ -284,7 +354,7 @@ bool clip_parse_input_v3( clip_t& clip, json_object_t& root )
 				if ( _group.presets.size() != encode_presets.size() )
 					continue;
 
-				bool all_valid = true;
+				bool all_valid    = true;
 				u32  src_preset_i = 0;
 				for ( u32 preset_i : _group.presets )
 				{
@@ -344,6 +414,15 @@ bool clip_parse_input_v3( clip_t& clip, json_object_t& root )
 
 						else if ( util_strncmp( time_entry.aName.data, time_entry.aName.size, "end", 3 ) )
 							time_range.end = time_entry.aDouble;
+
+						else if ( util_strncmp( time_entry.aName.data, time_entry.aName.size, "encode_overrides", 16 ) )
+						{
+							group = clip_parse_encode_overrides_v3( clip, time_entry, group, &time_range );
+							// ChVector< u32 > encode_presets = clip_parse_encode_override( clip, object );
+							// 
+							// if ( encode_presets.empty() )
+							// 	continue;
+						}
 					}
 				}
 				else if ( range_json.aType == e_json_type_array )
@@ -372,6 +451,9 @@ bool clip_parse_input_v3( clip_t& clip, json_object_t& root )
 	return true;
 }
 
+
+// ============================================================================================================================
+// Format 4+ Parsing
 
 bool clip_parse_output_group( clip_t& clip, json_object_t& root, clip_group_t& group )
 {
@@ -520,7 +602,7 @@ void clip_parse_video( json_object_t& root, u32 output_i )
 		{
 			clip.enabled = object.aType == e_json_type_true ? true : false;
 		}
-		// version 3
+		// version 2 or 3
 		else if ( util_strncmp( "inputs", 6, object.aName.data, object.aName.size ) )
 		{
 			if ( object.aType != e_json_type_array )
@@ -737,6 +819,9 @@ void clip_check_video( clip_t& clip )
 	if ( clip.name == nullptr )
 		return;
 
+	if ( clip.prefix > clip_data::prefix_count )
+		return;
+
 	if ( clip.source_count == 0 || clip.source == nullptr )
 		return;
 
@@ -749,7 +834,10 @@ void clip_check_video( clip_t& clip )
 	{
 		clip_source_t& source = clip.source[ source_i ];
 
-		if ( source.file_missing || !fs_is_file( source.path ) )
+		source.file_missing   = !fs_is_file( source.path );
+
+		// if ( source.file_missing || !fs_is_file( source.path ) )
+		if ( source.file_missing )
 		{
 			all_sources_exist   = false;
 			source.file_missing = true;

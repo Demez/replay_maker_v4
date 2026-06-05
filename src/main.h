@@ -59,6 +59,7 @@ enum e_mpv_cmd
 constexpr ImVec4 COLOR_BTN_RED_ACTIVE{ 0.9f, 0.1f, 0.1f, 1.0f };
 constexpr ImVec4 COLOR_BTN_RED_HOVER{ 0.7f, 0.2f, 0.2f, 1.0f };
 constexpr ImVec4 COLOR_BTN_RED{ 0.5f, 0.1f, 0.1f, 1.0f };
+constexpr ImVec4 COLOR_RED_FRAME{ 0.5f, 0.1f, 0.1f, 0.5f };
 
 constexpr ImVec4 COLOR_GREEN_ACTIVE{ 0.1f, 0.9f, 0.1f, 1.0f };
 constexpr ImVec4 COLOR_GREEN_HOVER{ 0.2f, 0.7f, 0.2f, 1.0f };
@@ -161,6 +162,8 @@ void                               mpv_cmd_hook_window_mpv();
 
 void                               mpv_handle_error();
 
+extern std::vector< std::string >  g_mpv_exts;
+
 // --------------------------------------------------------------------------------------------------------
 // Keybindings
 
@@ -202,6 +205,7 @@ void                               draw_playback_controls( int window_size[ 2 ] 
 // void                               replay_editor_load_input( u32 output_i, u32 input_i );
 void                               replay_editor_load_loose_video( const char* path );
 void                               replay_editor_set_group( u32 output_i, u32 group_i, u32 group_src_i );
+void                               replay_editor_current_set_group( u32 group_i, u32 group_src_i );
 void                               replay_editor_reset();
 
 void                               draw_replay_edit_creation_info();
@@ -225,6 +229,8 @@ void                               save_settings();
 // save videos to currently opened file
 void                               save_videos();
 
+void                               on_file_dialog_open();
+void                               on_file_dialog_exit();
 
 void                               write_recently_opened();
 void                               load_recently_opened();

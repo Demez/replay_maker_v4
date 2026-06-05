@@ -14,6 +14,7 @@ bool                          g_mpv_extra_vid_on = false;
 GLuint                        g_fbo              = 0;
 GLuint                        g_fbo_tex          = 0;
 
+std::vector< std::string >    g_mpv_exts;
 
 #define FUNC_PTR( func ) func##_t p_##func = nullptr
 
@@ -377,6 +378,31 @@ bool start_mpv( mpv_data_t& mpv )
 
 	p_mpv_set_property_string( mpv.mpv, "keep-open", "always" );
 
+	if ( g_mpv_exts.empty() )
+	{
+		// Load supported extensions
+		char* exts = p_mpv_get_property_string( mpv.mpv, "video-exts" );
+
+		if ( !exts )
+		{
+			printf( "no supported extensions from mpv??\n" );
+			return false;
+		}
+
+		char* ext_cur  = exts;
+		char* ext_next = strchr( ext_cur, ',' );
+
+		while ( ext_next != nullptr )
+		{
+			std::string ext = ".";
+			ext.append( ext_cur, ext_next - ext_cur );
+			g_mpv_exts.push_back( ext );
+
+			ext_cur  = ext_next + 1;
+			ext_next = strchr( ext_cur, ',' );
+		}
+	}
+
 	return true;
 }
 
@@ -635,6 +661,9 @@ void mpv_cmd_loadfile( const char* file, u32 index )
 		return;
 
 	if ( mpv->current_video && strcmp( file, mpv->current_video ) == 0 )
+		return;
+
+	if ( !fs_is_file( file ) )
 		return;
 
 	printf( "Loading Video: %s\n", file );

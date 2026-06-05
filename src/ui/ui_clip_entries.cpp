@@ -1,5 +1,6 @@
 #include "main.h"
 
+#include "nfd.h"
 
 namespace clip_reorder_drag
 {
@@ -839,10 +840,30 @@ void draw_replay_list( int size[ 2 ] )
 					}
 				}
 
+				bool missing = source.file_missing;
+
+				if ( missing )
+				{
+					ImGui::PushStyleColor( ImGuiCol_FrameBg, COLOR_RED_FRAME );
+					ImGui::PushStyleColor( ImGuiCol_Button, COLOR_BTN_RED );
+					ImGui::PushStyleColor( ImGuiCol_ButtonHovered, COLOR_BTN_RED_HOVER );
+					ImGui::PushStyleColor( ImGuiCol_ButtonActive, COLOR_BTN_RED_ACTIVE );
+				}
+
 				if ( ImGui::BeginChild( source_i + 1, {}, ImGuiChildFlags_Borders | ImGuiChildFlags_AutoResizeY | ImGuiChildFlags_FrameStyle ) )
 				{
-					ImGui::TextUnformatted( source.path );
+					if ( missing )
+					{
+						ImGui::Text( "MISSING - %s", source.path );
+					}
+					else
+					{
+						ImGui::TextUnformatted( source.path );
+					}
+
 					ImGui::Separator();
+
+					ImGui::BeginDisabled( missing );
 
 					if ( ImGui::Button( "Add to Current Group" ) )
 					{
@@ -858,6 +879,57 @@ void draw_replay_list( int size[ 2 ] )
 						replay_editor_load_loose_video( source.path );
 					}
 
+					ImGui::EndDisabled();
+
+					ImGui::SameLine();
+
+					// moves the file to a separate location, might default to a specific move folder in the settings somewhere
+					if ( ImGui::Button( "Replace File" ) )
+					{
+						on_file_dialog_open();
+
+						char*                 cwd      = sys_get_cwd();
+						nfdu8char_t*          out_path = nullptr;
+
+						char*                 exts     = p_mpv_get_property_string( get_mpv(), "video-exts" );
+						nfdu8filteritem_t     filter   = { "MPV Supported Videos", exts };
+
+						nfdopendialogu8args_t args     = { 0 };
+
+						args.filterList                = &filter;
+						args.filterCount               = 1;
+						//args.defaultPath               = cwd;
+
+						nfdresult_t result             = NFD_OpenDialogU8_With( &out_path, &args );
+
+						if ( result == NFD_OKAY )
+						{
+							source.path     = util_strdup_r( source.path, out_path );
+
+							if ( source.filename )
+								free( source.filename );
+
+							source.filename = fs_get_filename( source.path );
+
+							clip_get_video_metadata( source );
+							clip_check_video( *clip_data::current_clip );
+
+							// replay_editor_current_set_group( clip_data::current_group, clip_data::get_current_group_source() );
+
+							NFD_FreePathU8( out_path );
+
+							mpv_cmd_loadfile( source.path );
+						}
+						else if ( result == NFD_ERROR )
+						{
+							printf( "NativeFileDialog Error: %s\n", NFD_GetError() );
+						}
+
+						free( cwd );
+
+						on_file_dialog_exit();
+					}
+
 					ImGui::SameLine();
 
 					ImGui::BeginDisabled();
@@ -869,7 +941,7 @@ void draw_replay_list( int size[ 2 ] )
 
 					ImGui::SameLine();
 
-					if ( ImGui::Button( "Delete" ) )
+					if ( ImGui::Button( "Remove" ) )
 					{
 						// clip_remove_source();
 					}
@@ -878,6 +950,11 @@ void draw_replay_list( int size[ 2 ] )
 				}
 
 				ImGui::EndChild();
+
+				if ( missing )
+				{
+					ImGui::PopStyleColor( 4 );
+				}
 			}
 		}
 	}

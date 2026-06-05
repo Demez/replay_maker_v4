@@ -577,8 +577,25 @@ void timeline_draw()
 		for ( clip_source_usage_t& source_use : group->sources )
 		{
 			clip_source_t& source = clip_data::current_clip->source[ source_use.source_index ];
-			durations.emplace_back( source.metadata.duration, duration_total );
-			duration_total += source.metadata.duration;
+
+			if ( !source.file_missing )
+			{
+				durations.emplace_back( source.metadata.duration, duration_total );
+				duration_total += source.metadata.duration;
+			}
+			else
+			{
+				// find the last valid time range for now
+				float temp_duration = 0.f;
+
+				for ( u32 time_i = 0; time_i < source_use.time_range.size(); time_i++ )
+				{
+					temp_duration = std::max( temp_duration, source_use.time_range[ time_i ].end );
+				}
+
+				durations.emplace_back( temp_duration, duration_total );
+				duration_total += temp_duration;
+			}
 		}
 	}
 
@@ -774,6 +791,12 @@ void timeline_draw()
 			ImColor              main_border_color = style.Colors[ ImGuiCol_FrameBgActive ];
 			ImColor              main_bg_color     = style.Colors[ ImGuiCol_FrameBg ];
 
+			if ( source.file_missing )
+			{
+				main_border_color = COLOR_BTN_RED;
+				main_bg_color     = COLOR_RED_FRAME;
+			}
+
 			if ( clip_data::get_current_group_source() != source_use_i )
 			{
 				main_bg_color.Value.x *= style.DisabledAlpha;
@@ -812,8 +835,9 @@ void timeline_draw()
 			ImVec2 time_title_bar_max = title_max;
 			time_title_bar_max.y += title_size;
 
-			ImVec4 time_range_color = style.Colors[ ImGuiCol_FrameBg ];
-			time_range_color.w      = 0.5;
+			// ImVec4 time_range_color = style.Colors[ ImGuiCol_FrameBg ];
+			ImVec4 time_range_color = main_border_color;
+			time_range_color.w      = 0.25;
 
 			draw_list->AddRectFilled( vid_area_min, time_title_bar_max, ImColor( time_range_color ) );
 

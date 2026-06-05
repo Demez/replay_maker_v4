@@ -11,7 +11,7 @@ constexpr size_t MAX_LEN_EXT               = 5;
 constexpr size_t MAX_LEN_PRESET_NAME       = 64;
 
 constexpr u32    CLIP_VIDEO_FORMAT_VER     = 4;
-constexpr u32    CLIP_VIDEO_FORMAT_VER_MIN = 3;
+constexpr u32    CLIP_VIDEO_FORMAT_VER_MIN = 2;
 constexpr u32    CLIP_SETTINGS_VER         = 1;
 
 
@@ -101,7 +101,7 @@ struct clip_t
 	// these are the real outputs this video has, use for format 4
 	ChVector< clip_group_t > groups;
 
-	e_clip_state           state;
+	e_clip_state             state;
 	bool                     enabled;  // if false, don't encode this video
 };
 

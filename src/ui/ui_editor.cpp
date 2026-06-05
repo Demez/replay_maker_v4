@@ -60,6 +60,7 @@ bool replay_editor_set_video( u32 output_i, u32 input_i )
 	clip_data::current_clip_index = output_i;
 	clip_data::current_source        = input_i;
 
+	memset( g_output_name_buf, 0, 512 * sizeof( char ) );
 	memcpy( g_output_name_buf, clip.name, strlen( clip.name ) * sizeof( char ) );
 	g_focus_replay_maker = true;
 
@@ -174,6 +175,12 @@ void replay_editor_set_group( u32 output_i, u32 group_i, u32 group_src_i )
 
 	for ( u32 i = 0; i < clip.source_count; i++ )
 	{
+		if ( clip.source[ i ].file_missing )
+		{
+			mpv_cmd_close_video( i );
+			continue;
+		}
+
 		mpv_cmd_loadfile( clip.source[ i ].path, i );
 
 		mpv_data_t* mpv = get_mpv_data( i );
@@ -207,6 +214,13 @@ void replay_editor_set_group( u32 output_i, u32 group_i, u32 group_src_i )
 	}
 
 	set_mpv_index( source_use.source_index );
+}
+
+
+
+void replay_editor_current_set_group( u32 group_i, u32 group_src_i )
+{
+	replay_editor_set_group( clip_data::current_clip_index, group_i, group_src_i );
 }
 
 
