@@ -28,7 +28,7 @@ enum e_encode_preset
 enum e_clip_state
 {
 	e_clip_state_invalid,  // there is something wrong with the video in some way that prevents us from processing it
-	e_clip_state_wait,
+	e_clip_state_valid,    // valid, in edit mode or waiting to encode
 	e_clip_state_running,
 	e_clip_state_finished,
 	e_clip_state_already_finished,

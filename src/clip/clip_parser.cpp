@@ -732,24 +732,75 @@ void clip_get_video_metadata( clip_source_t& source )
 
 void clip_check_video( clip_t& clip )
 {
+	clip.state = e_clip_state_invalid;
+
 	if ( clip.name == nullptr )
-	{
-		clip.state = e_clip_state_invalid;
 		return;
-	}
 
 	if ( clip.source_count == 0 || clip.source == nullptr )
-	{
-		clip.state = e_clip_state_invalid;
 		return;
-	}
 
 	if ( clip.groups.empty() )
-	{
-		clip.state = e_clip_state_invalid;
 		return;
+
+	// Check Sources
+	bool all_sources_exist = true;
+	for ( u32 source_i = 0; source_i < clip.source_count; source_i++ )
+	{
+		clip_source_t& source = clip.source[ source_i ];
+
+		if ( source.file_missing || !fs_is_file( source.path ) )
+		{
+			all_sources_exist   = false;
+			source.file_missing = true;
+			break;
+		}
 	}
 
+	if ( !all_sources_exist )
+		return;
+
+	// Check Groups
+	for ( u32 group_i = 0; group_i < clip.groups.size(); group_i++ )
+	{
+		clip_group_t& group = clip.groups[ group_i ];
+
+		if ( group.sources.empty() )
+			return;
+
+		if ( group.presets.empty() )
+			return;
+
+		for ( u32 preset_i = 0; preset_i < group.presets.size(); preset_i++ )
+		{
+			if ( group.presets[ preset_i ] > clip_data::preset_count )
+				return;
+		}
+		
+		for ( u32 source_i = 0; source_i < group.sources.size(); source_i++ )
+		{
+			clip_source_usage_t& source_use = group.sources[ source_i ];
+
+			if ( source_use.source_index > clip.source_count )
+				return;
+
+			clip_source_t& source           = clip.source[ source_use.source_index ];
+
+			float          duration         = 0.f;
+			bool           duration_invalid = false;
+
+			for ( u32 time_i = 0; time_i < source_use.time_range.size(); time_i++ )
+			{
+				if ( !valid_time_range( source_use.time_range[ time_i ], source.metadata ) )
+					return;
+				
+				//if ( !valid_time_range( source_use.time_range[ time_i ], source.metadata ) )
+				//	duration_invalid = true;
+				//
+				//duration += source_use.time_range[ time_i ].end - source_use.time_range[ time_i ].start;
+			}
+		}
+	}
 
 #if 0
 	// ----------------------------------------------------------------------------------------
@@ -866,7 +917,7 @@ void clip_check_video( clip_t& clip )
 		return;
 #endif
 
-	clip.state = e_clip_state_wait;
+	clip.state = e_clip_state_valid;
 }
 
 

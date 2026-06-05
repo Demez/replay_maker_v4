@@ -114,7 +114,7 @@ void encode_draw_sidebar()
 				char name_buf[ 512 ]{};
 				snprintf( name_buf, 512, " %zu - %s", vid_i, clip.name );
 
-				bool draw_bg_color = clip.state != e_clip_state_wait;
+				bool draw_bg_color = clip.state != e_clip_state_valid;
 
 				if ( draw_bg_color )
 				{
