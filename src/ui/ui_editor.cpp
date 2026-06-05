@@ -141,8 +141,13 @@ void replay_editor_set_group( u32 output_i, u32 group_i, u32 group_src_i )
 		return;
 	}
 
-	bool swapping_group_or_output = clip_data::current_output_index != output_i || clip_data::current_group != group_i;
-	bool pause_video              = swapping_group_or_output;
+	clip_source_t& source                   = output.source[ source_use.source_index ];
+
+	bool           swapping_group_or_output = clip_data::current_output_index != output_i || clip_data::current_group != group_i;
+	// bool pause_video              = swapping_group_or_output;
+	bool           pause_video              = clip_data::current_output_index != output_i;
+
+	pause_video |= mpv_get_current_video() && strcmp( mpv_get_current_video(), source.path ) != 0;
 
 	if ( g_mpv_extra_vid_on && clip_data::current_output_index != output_i )
 	{
@@ -152,7 +157,6 @@ void replay_editor_set_group( u32 output_i, u32 group_i, u32 group_src_i )
 	clip_data::current_group        = group_i;
 	clip_data::current_group_source = group_src_i;
 
-	clip_source_t& source = output.source[ source_use.source_index ];
 	g_focus_replay_maker  = true;
 
 	// check current mpv instance for playback state
