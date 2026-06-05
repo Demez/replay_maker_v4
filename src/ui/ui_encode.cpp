@@ -3,7 +3,7 @@
 
 #include "imgui_internal.h"
 
-bool used_in_preset( clip_encode_settings_t& override, u32 preset_i );
+//bool used_in_preset( clip_encode_settings_t& override, u32 preset_i );
 
 // makes sure the time range desired is valid for this source video
 bool valid_time_range( clip_time_range_t& range, video_metadata_t& metadata );

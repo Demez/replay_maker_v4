@@ -75,6 +75,7 @@ bool encode_check_state()
 	return true;
 }
 
+#if 0
 
 bool used_in_preset( clip_encode_settings_t& override, u32 preset_i )
 {
@@ -89,6 +90,8 @@ bool used_in_preset( clip_encode_settings_t& override, u32 preset_i )
 	// return !override.presets_count;
 	return false;
 }
+
+#endif
 
 
 bool collect_video_info()

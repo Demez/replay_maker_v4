@@ -53,19 +53,6 @@ struct video_metadata_t
 };
 
 
-// controls how to use parts of videos in a encode preset
-// REMOVED IN VERSION 4 - REMOVE FROM CODE LATER
-struct clip_encode_settings_t
-{
-	// TODO: implement this! this will only be allowed with one encode preset being used, and still needs a preset active to override
-	// or, should this just be global for the whole video? probably not imo
-//	char* ffmpeg_cmd;  // overrides the encode preset's ffmpeg cmd if not nullptr
-
-	u32*  presets;
-	u32   presets_count;
-};
-
-
 struct clip_time_range_t
 {
 	float start;
@@ -215,10 +202,6 @@ void                  clip_remove_output( u32 output_i );
 void                  clip_move_output( u32 output_id, u32 insert_position );
 
 void                  clip_remove_source( clip_output_video_t* output, u32 source_i );
-
-// u32                   clip_add_source_to_preset( clip_output_video_t* output, u32 preset_index, const char* path );
-// void                  clip_remove_source_from_preset( clip_output_video_t* output, u32 preset_index, u32 preset_src_i );
-// void                  clip_remove_source_from_preset( clip_output_video_t* output, u32 preset_index, const char* path );
 
 // Groups
 clip_output_group_t*  clip_get_group( clip_output_video_t* output, u32 group_index );

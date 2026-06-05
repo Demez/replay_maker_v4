@@ -140,10 +140,12 @@ clip_output_video_t* clip_add_output( const char* name )
 	output->name                = fs_get_filename_no_ext( name );
 	output->enabled             = true;
 
+	size_t name_len             = strlen( name );
+
 	// convenience, if it starts with "Replay ", or "Replay_" (2019 clips), remove it
 	// then also check if it has a title appended to it
 	// TODO: just check if it has Replay in it, because on older clips i tended to add a title to the start instead of the end
-	if ( strncmp( output->name, "Replay ", 7 ) == 0 )
+	if ( name_len > 7 && strncmp( output->name, "Replay ", 7 ) == 0 )
 	{
 		char* custom_name = clip_replay_name_trim( output->name, 7 );
 
@@ -153,7 +155,7 @@ clip_output_video_t* clip_add_output( const char* name )
 			output->name = custom_name;
 		}
 	}
-	else if ( strncmp( output->name, "Replay__ ", 9 ) == 0 )
+	else if ( name_len > 9 && strncmp( output->name, "Replay__ ", 9 ) == 0 )
 	{
 		char* custom_name = clip_replay_name_trim( output->name, 9 );
 
@@ -324,68 +326,6 @@ void clip_remove_source( clip_output_video_t* output, u32 input_i )
 }
 
 
-#if 0
-
-
-u32 clip_add_source_to_preset( clip_output_video_t* output, u32 preset_index, const char* path )
-{
-	if ( !output )
-		return UINT32_MAX;
-
-	u32 source_i = clip_add_input( output, path );
-
-	if ( source_i == UINT32_MAX )
-		return UINT32_MAX;
-
-	for ( clip_output_group_t& preset_out : output->groups )
-	{
-		if ( preset_out.presets.index( preset_index ) != UINT32_MAX )
-		{
-			clip_source_usage_t& source = preset_out.sources.emplace_back();
-			source.source_index         = source_i;
-			return preset_out.sources.size() - 1;
-		}
-	}
-
-	return UINT32_MAX;
-}
-
-
-void clip_remove_source_from_preset( clip_output_video_t* output, u32 preset_index, u32 preset_src_i )
-{
-	if ( !output )
-		return;
-
-	if ( preset_index >= output->groups.size() )
-		return;
-
-	clip_output_group_t& preset_out = output->groups[ preset_index ];
-
-	if ( preset_src_i >= preset_out.sources.size() )
-		return;
-
-	preset_out.sources.remove( preset_src_i );
-}
-
-
-void clip_remove_source_from_preset( clip_output_video_t* output, u32 preset_index, const char* path )
-{
-	if ( !output )
-		return;
-
-	for ( u32 i = 0; i < output->source_count; i++ )
-	{
-		if ( strcmp( output->source[ i ].path, path ) == 0 )
-		{
-			return clip_remove_source_from_preset( output, preset_index, i );
-		}
-	}
-}
-
-
-#endif
-
-
 std::string clip_group_get_name( clip_output_group_t& group )
 {
 	// collect presets used
@@ -508,61 +448,6 @@ void clip_group_remove_preset( clip_output_video_t& output, u32 group_index, u32
 }
 
 
-// REMOVE ME
-void duplicate_encode_overrides( clip_encode_settings_t& src, clip_encode_settings_t& dst )
-{
-	if ( src.presets )
-	{
-		dst.presets_count = src.presets_count;
-		dst.presets       = ch_malloc< u32 >( src.presets_count );
-
-		memcpy( dst.presets, src.presets, sizeof( u32 ) * src.presets_count );
-	}
-}
-
-
-u32 clip_duplicate_input( clip_output_video_t* output, u32 input_i )
-{
-	return UINT32_MAX;
-
-#if 0
-	if ( !output )
-		return UINT32_MAX;
-
-	if ( input_i >= output->source_count )
-	{
-		log_printf( "invalid source index\n" );
-		return UINT32_MAX;
-	}
-
-	u32 input_dst_i = clip_add_input( output, output->source[ input_i ].path );
-
-	if ( input_dst_i == UINT32_MAX )
-		return UINT32_MAX;
-
-	clip_source_t& input_src = output->source[ input_i ];
-	clip_source_t& input_dst = output->source[ input_dst_i ];
-	input_dst.metadata            = input_src.metadata;
-
-	if ( input_src.time_range_count )
-	{
-		input_dst.time_range_count = input_src.time_range_count;
-		input_dst.time_range       = ch_malloc< clip_time_range_t >( input_src.time_range_count );
-
-		for ( u32 i = 0; i < input_src.time_range_count; i++ )
-		{
-			input_dst.time_range[ i ].start = input_src.time_range[ i ].start;
-			input_dst.time_range[ i ].end   = input_src.time_range[ i ].end;
-		}
-	}
-
-	duplicate_encode_overrides( input_src.encode_settings, input_dst.encode_settings );
-
-	return input_dst_i;
-#endif
-}
-
-
 void clip_group_add_time_range( clip_output_video_t* output, clip_output_group_t& group, u32 source_i, float start_time, float end_time )
 {
 	if ( !output )
@@ -682,61 +567,6 @@ void clip_duplicate_time_range( clip_output_video_t* output, u32 input_i, u32 sr
 	dst_time.start              = src_time.start;
 	dst_time.end                = src_time.end;
 #endif
-}
-
-
-// REMOVE ME
-void clip_add_preset_to_encode_override( clip_encode_settings_t& override, u32 preset_index )
-{
-	if ( array_append( override.presets, override.presets_count ) )
-		return;
-
-	override.presets[ override.presets_count++ ] = preset_index;
-}
-
-
-// REMOVE ME
-void clip_add_preset_to_encode_override( clip_encode_settings_t& override, const char* preset_name )
-{
-	// look for a preset with this name
-	for ( u32 i = 0; i < clip_data::preset_count; i++ )
-	{
-		if ( strcmp( clip_data::preset[ i ].name, preset_name ) == 0 )
-		{
-			clip_add_preset_to_encode_override( override, i );
-			return;
-		}
-	}
-
-	log_printf( "Failed to find preset: %s\n", preset_name );
-}
-
-
-// REMOVE ME
-void clip_add_preset( clip_output_video_t& output, u32 preset_index )
-{
-	// for ( clip_output_group_t& preset_out : output.groups )
-	// {
-	// 	if ( preset_out.preset == preset_index )
-	// 		break;
-	// }
-	// 
-	// clip_output_group_t& preset_out = output.groups.emplace_back();
-	// preset_out.preset                = preset_index;
-}
-
-
-// REMOVE ME
-void clip_remove_preset( clip_output_video_t& output, u32 preset_index )
-{
-	// for ( size_t i = 0; i < output.groups.size(); i++ )
-	// {
-	// 	if ( output.groups[ i ].preset != preset_index )
-	// 		continue;
-	// 
-	// 	output.groups.remove( i );
-	// 	break;
-	// }
 }
 
 
