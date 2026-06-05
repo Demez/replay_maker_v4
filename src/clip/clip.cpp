@@ -282,6 +282,9 @@ u32 clip_add_source( clip_output_video_t* output, const char* path )
 		}
 	}
 
+	if ( output->source_count > 0 )
+		printf( "WOW2\n" );
+
 	// Not found, add it
 	clip_source_t* new_data = ch_realloc< clip_source_t >( output->source, output->source_count + 1 );
 
@@ -292,11 +295,8 @@ u32 clip_add_source( clip_output_video_t* output, const char* path )
 	memset( &output->source[ output->source_count ], 0, sizeof( clip_source_t ) );
 
 	clip_source_t* source = &output->source[ output->source_count ];
-	source->path          = ch_malloc< char >( strlen( path ) + 1 );
-
-	strcpy( source->path, path );
-	source->path[ strlen( path ) ] = 0;
-	source->filename                = fs_get_filename( source->path );
+	source->path          = util_strdup( path );
+	source->filename      = fs_get_filename( source->path );
 
 	clip_get_video_metadata( *source );
 

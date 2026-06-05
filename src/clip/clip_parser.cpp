@@ -193,13 +193,15 @@ bool clip_parse_settings( const char* path )
 // ============================================================================================================================
 
 
-void clip_parse_encode_override( clip_output_video_t& output, json_object_t& root, u32 source_i )
+ChVector< u32 > clip_parse_encode_override( clip_output_video_t& output, json_object_t& root )
 {
-#if 0
+#if 01
+	ChVector< u32 > presets_used{};
+
 	if ( root.aType != e_json_type_object )
 	{
 		log_printf( "expected encode_override to be an object!\n" );
-		return;
+		return presets_used;
 	}
 
 	for ( size_t root_i = 0; root_i < root.aObjects.count; root_i++ )
@@ -224,6 +226,10 @@ void clip_parse_encode_override( clip_output_video_t& output, json_object_t& roo
 					if ( !util_strncmp( json_preset.aString.data, json_preset.aString.size, clip_data::preset[ preset_i ].name, strlen( clip_data::preset[ preset_i ].name ) ) )
 						continue;
 
+					presets_used.push_back( preset_i );
+					break;
+
+  #if 0
 					// check if we have a preset with this already
 					bool found_preset = false;
 					for ( u32 preset_use_i = 0; preset_use_i < output.groups.size(); preset_use_i++ )
@@ -269,16 +275,28 @@ void clip_parse_encode_override( clip_output_video_t& output, json_object_t& roo
 					}
 
 					break;
+  #endif
 				}
 			}
 		}
 	}
+
+	return presets_used;
 #endif
 }
 
 
+clip_source_usage_t* clip_get_source_use_v3()
+{
+	return nullptr;
+}
+
+
+u32  clip_add_source( clip_output_video_t* output, const char* path );
+
+
 // version 3 parsing
-bool clip_parse_input_v3( clip_output_video_t& output, json_object_t& root, u32 input_i )
+bool clip_parse_input_v3( clip_output_video_t& output, json_object_t& root )
 {
 	if ( root.aType != e_json_type_object )
 	{
@@ -286,7 +304,12 @@ bool clip_parse_input_v3( clip_output_video_t& output, json_object_t& root, u32 
 		return false;
 	}
 
-	clip_source_t& source = output.source[ input_i ];
+	if ( output.source_count > 0 )
+		printf( "WOW\n" );
+
+	clip_source_t*       source   = nullptr;
+	u32                  source_i = UINT32_MAX;
+	clip_output_group_t* group    = nullptr;
 
 	for ( size_t root_i = 0; root_i < root.aObjects.count; root_i++ )
 	{
@@ -294,28 +317,71 @@ bool clip_parse_input_v3( clip_output_video_t& output, json_object_t& root, u32 
 
 		if ( util_strncmp( "path", 4, object.aName.data, object.aName.size ) )
 		{
-			source.path     = strdup( object.aString.data );
-			source.filename = fs_get_filename( source.path );
+			source_i = clip_add_source( &output, object.aString.data );
+
+			if ( source_i == UINT32_MAX )
+				return false;
+
+			source = &output.source[ source_i ];
+
+			if ( output.source_count > 0 )
+				printf( "WOW\n" );
 		}
 		else if ( util_strncmp( "encode_overrides", 16, object.aName.data, object.aName.size ) )
 		{
-			clip_parse_encode_override( output, object, input_i );
+			// get the encode presets used first
+			ChVector< u32 > encode_presets = clip_parse_encode_override( output, object );
+
+			// then look for a group with a matching set of encode presets used
+			for ( u32 group_i = 0; group_i < output.groups.size(); group_i++ )
+			{
+				clip_output_group_t& _group = output.groups[ group_i ];
+
+				if ( _group.presets.size() != encode_presets.size() )
+					continue;
+
+				bool all_valid = true;
+				u32  src_preset_i = 0;
+				for ( u32 preset_i : _group.presets )
+				{
+					if ( preset_i != encode_presets[ src_preset_i++ ] )
+					{
+						all_valid = false;
+						break;
+					}
+				}
+
+				if ( all_valid )
+				{
+					group = &_group;
+					break;
+				}
+			}
+
+			if ( !group )
+			{
+				group          = &output.groups.emplace_back();
+				group->presets = encode_presets;
+			}
 		}
 		else if ( util_strncmp( "time_ranges", 11, object.aName.data, object.aName.size ) )
 		{
-#if 0
+#if 01
+			if ( !group )
+			{
+				// INCORRECT ORDERING !!!!
+				log_printf( "no group created before time_ranges parsed !!\n" );
+				continue;
+			}
+
 			if ( object.aType != e_json_type_array )
 			{
 				log_printf( "expected time_ranges to be an array!\n" );
 				continue;
 			}
 
-			clip_time_range_t* time_range_array = ch_calloc< clip_time_range_t >( object.aObjects.count );
-
-			if ( !time_range_array )
-				continue;
-
-			source.time_range = time_range_array;
+			clip_source_usage_t& source_use = group->sources.emplace_back();
+			source_use.source_index         = source_i;
 
 			for ( size_t range_i = 0; range_i < object.aObjects.count; range_i++ )
 			{
@@ -323,25 +389,17 @@ bool clip_parse_input_v3( clip_output_video_t& output, json_object_t& root, u32 
 				
 				if ( range_json.aType == e_json_type_object )
 				{
-					clip_time_range_t& time_range = source.time_range[ source.time_range_count++ ];
+					clip_time_range_t& time_range = source_use.time_range.emplace_back();
 
 					for ( size_t time_i = 0; time_i < range_json.aObjects.count; time_i++ )
 					{
 						json_object_t& time_entry = range_json.aObjects.data[ time_i ];
 
-						if ( util_strncmp( time_entry.aName.data, time_entry.aName.size, "encode_overrides", 16 ) )
-						{
-							log_printf( log_error, "ENCODE OVERRIDES IN TIME RANGE - OBSOLETE\n" );
-							// clip_parse_encode_override( data, time_range.encode_settings, time_entry );
-						}
-						else if ( util_strncmp( time_entry.aName.data, time_entry.aName.size, "start", 5 ) )
-						{
+						if ( util_strncmp( time_entry.aName.data, time_entry.aName.size, "start", 5 ) )
 							time_range.start = time_entry.aDouble;
-						}
+
 						else if ( util_strncmp( time_entry.aName.data, time_entry.aName.size, "end", 3 ) )
-						{
 							time_range.end = time_entry.aDouble;
-						}
 					}
 				}
 				else if ( range_json.aType == e_json_type_array )
@@ -352,7 +410,7 @@ bool clip_parse_input_v3( clip_output_video_t& output, json_object_t& root, u32 
 						continue;
 					}
 
-					clip_time_range_t& time_range = source.time_range[ source.time_range_count++ ];
+					clip_time_range_t& time_range = source_use.time_range.emplace_back();
 					time_range.start              = range_json.aObjects.data[ 0 ].aDouble;
 					time_range.end                = range_json.aObjects.data[ 1 ].aDouble;
 				}
@@ -365,7 +423,7 @@ bool clip_parse_input_v3( clip_output_video_t& output, json_object_t& root, u32 
 		}
 	}
 
-	clip_get_video_metadata( source );
+	// clip_get_video_metadata( source );
 
 	return true;
 }
@@ -522,18 +580,10 @@ void clip_parse_video( json_object_t& root, u32 output_i )
 				continue;
 			}
 
-			clip_source_t* video_array = ch_calloc< clip_source_t >( object.aObjects.count );
-
-			if ( !video_array )
-				continue;
-
-			output.source = video_array;
-
 			for ( size_t video_i = 0; video_i < object.aObjects.count; video_i++ )
 			{
 				json_object_t& json_video = object.aObjects.data[ video_i ];
-				if ( clip_parse_input_v3( output, json_video, video_i ) )
-					output.source_count++;
+				clip_parse_input_v3( output, json_video );
 			}
 		}
 		else if ( util_strncmp( "sources", 7, object.aName.data, object.aName.size ) )
