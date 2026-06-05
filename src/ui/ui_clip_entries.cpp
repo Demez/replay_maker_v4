@@ -620,11 +620,11 @@ void draw_replay_list( int size[ 2 ] )
 
 			if ( prefix_search != UINT32_MAX )
 				if ( prefix_search != clip.prefix )
-					continue;
+					goto clip_loop_continue;
 
 			if ( search_box[ 0 ] != '\0' )
 				if ( !strcasestr( clip.name, search_box ) )
-					continue;
+					goto clip_loop_continue;
 
 			if ( preset_search.size() )
 			{
@@ -648,7 +648,7 @@ void draw_replay_list( int size[ 2 ] )
 				}
 
 				if ( !preset_found )
-					continue;
+					goto clip_loop_continue;
 			}
 
 			if ( clip_reorder_drag::active && !clip_reorder_drag::just_selected )
@@ -768,6 +768,8 @@ void draw_replay_list( int size[ 2 ] )
 			}
 
 			prev_cursor_pos = ImGui::GetCursorPos();
+
+clip_loop_continue:
 			out_i += sort_newest_top ? -1 : 1;
 		}
 
