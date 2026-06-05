@@ -195,7 +195,6 @@ bool clip_parse_settings( const char* path )
 
 ChVector< u32 > clip_parse_encode_override( clip_output_video_t& output, json_object_t& root )
 {
-#if 01
 	ChVector< u32 > presets_used{};
 
 	if ( root.aType != e_json_type_object )
@@ -228,61 +227,12 @@ ChVector< u32 > clip_parse_encode_override( clip_output_video_t& output, json_ob
 
 					presets_used.push_back( preset_i );
 					break;
-
-  #if 0
-					// check if we have a preset with this already
-					bool found_preset = false;
-					for ( u32 preset_use_i = 0; preset_use_i < output.groups.size(); preset_use_i++ )
-					{
-						clip_output_group_t& preset_use = output.groups[ preset_use_i ];
-						if ( preset_use.preset == preset_i )
-						{
-							found_preset      = true;
-							bool found_source = false;
-
-							// look for this source
-							for ( clip_source_usage_t& source_use : preset_use.sources )
-							{
-								if ( source_use.source_index == source_i )
-								{
-									found_source = true;
-									break;
-								}
-							}
-
-							if ( !found_source )
-							{
-								clip_source_usage_t& source_use = preset_use.sources.emplace_back();
-								source_use.source_index         = source_i;
-							}
-
-							break;
-						}
-					}
-
-					// create a new one and add it
-					if ( !found_preset )
-					{
-						// if ( array_append( output.preset, output.preset_count ) )
-						// {
-						// }
-
-						clip_output_group_t& preset_use = output.groups.emplace_back();
-						preset_use.preset                = preset_i;
-
-						clip_source_usage_t& source_use  = preset_use.sources.emplace_back();
-						source_use.source_index          = source_i;
-					}
-
-					break;
-  #endif
 				}
 			}
 		}
 	}
 
 	return presets_used;
-#endif
 }
 
 
@@ -304,9 +254,6 @@ bool clip_parse_input_v3( clip_output_video_t& output, json_object_t& root )
 		return false;
 	}
 
-	if ( output.source_count > 0 )
-		printf( "WOW\n" );
-
 	clip_source_t*       source   = nullptr;
 	u32                  source_i = UINT32_MAX;
 	clip_output_group_t* group    = nullptr;
@@ -323,9 +270,6 @@ bool clip_parse_input_v3( clip_output_video_t& output, json_object_t& root )
 				return false;
 
 			source = &output.source[ source_i ];
-
-			if ( output.source_count > 0 )
-				printf( "WOW\n" );
 		}
 		else if ( util_strncmp( "encode_overrides", 16, object.aName.data, object.aName.size ) )
 		{
@@ -550,6 +494,7 @@ bool clip_parse_output_group( clip_output_video_t& output, json_object_t& root, 
 void clip_parse_video( json_object_t& root, u32 output_i )
 {
 	clip_output_video_t& output = clip_data::output[ output_i ];
+	output.enabled              = true;
 
 	for ( size_t root_i = 0; root_i < root.aObjects.count; root_i++ )
 	{
