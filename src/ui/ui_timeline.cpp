@@ -384,6 +384,15 @@ void timeline_draw()
 					ImGui::PushStyleColor( ImGuiCol_Tab, style.Colors[ ImGuiCol_TabSelected ] );
 				}
 
+				bool group_invalid = ( group.presets.empty() || group.sources.empty() );
+
+				if ( group_invalid )
+				{
+					ImGui::PushStyleColor( ImGuiCol_Tab, COLOR_BTN_RED );
+					ImGui::PushStyleColor( ImGuiCol_TabHovered, COLOR_BTN_RED_HOVER );
+					ImGui::PushStyleColor( ImGuiCol_TabSelected, COLOR_BTN_RED_ACTIVE );
+				}
+
 				ImGui::PushID( group_i + 1 );
 
 				// if ( ImGui::TabItemButton( title, selected_tab ? ImGuiTabItemFlags_SetSelected : 0 ) )
@@ -397,14 +406,14 @@ void timeline_draw()
 
 				ImGui::PopID();
 
+				if ( group_invalid )
+				{
+					ImGui::PopStyleColor( 3 );
+				}
+
 				if ( selected_tab )
 				{
 					ImGui::PopStyleColor();
-				}
-
-				if ( group.presets.empty() )
-				{
-					ImGui::PopStyleColor( 3 );
 				}
 			}
 

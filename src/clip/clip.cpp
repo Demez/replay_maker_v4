@@ -369,11 +369,10 @@ std::string clip_group_get_name( clip_group_t& group )
 	else
 	{
 		strcat( title, "[NO PRESETS]" );
-
-		ImGui::PushStyleColor( ImGuiCol_Tab, COLOR_BTN_RED );
-		ImGui::PushStyleColor( ImGuiCol_TabHovered, COLOR_BTN_RED_HOVER );
-		ImGui::PushStyleColor( ImGuiCol_TabSelected, COLOR_BTN_RED_ACTIVE );
 	}
+
+	if ( group.sources.empty() )
+		strcat( title, " [NO SOURCES]" );
 
 	return title;
 }
