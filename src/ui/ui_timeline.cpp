@@ -1062,7 +1062,7 @@ void timeline_draw()
 			area_percents.push_back( last_percent );
 			last_percent += percent_of_area;
 
-			bool mouse_hovered_area = mouse_hovering_area( vid_area_min, vid_area_max );
+			bool mouse_hovered_video_area = mouse_hovering_area( vid_area_min, vid_area_max );
 
 			if ( video_i < group->sources.size() )
 			{
@@ -1267,9 +1267,9 @@ void timeline_draw()
 					{
 						seek_time_override = true;
 						new_time_pos       = snap_to_time_range == 1 ? time_range.start : time_range.end;
-						new_seek_percent   = new_time_pos / duration.duration;
+						new_seek_percent   = CLAMP( new_time_pos / duration.duration, 0.f, 1.f );
 
-						if ( mouse_hovered_area && clip_data::get_current_group_source() != video_i )
+						if ( mouse_hovered_video_area && clip_data::get_current_group_source() != video_i )
 						{
 							change_to_source_i = video_i;
 						}
@@ -1403,9 +1403,9 @@ void timeline_draw()
 							{
 								seek_time_override = true;
 								new_time_pos     = section_resize_left ? time_range.start : time_range.end;
-								new_seek_percent = new_time_pos / duration.duration;
+								new_seek_percent = CLAMP( new_time_pos / duration.duration, 0.f, 1.f );
 
-								if ( mouse_hovered_area && clip_data::get_current_group_source() != video_i )
+								if ( mouse_hovered_video_area && clip_data::get_current_group_source() != video_i )
 								{
 									change_to_source_i = video_i;
 								}
@@ -1415,7 +1415,7 @@ void timeline_draw()
 						if ( section_resize )
 						{
 							seek_time_override = true;
-							new_seek_percent   = mouse_pos_local.x / seek_area;
+							new_seek_percent   = CLAMP( mouse_pos_local.x / seek_area, 0.f, 1.f );
 							new_time_pos       = duration.duration * new_seek_percent;
 
 							// get earliest start time and latest end time for other sections around this one
@@ -1468,9 +1468,10 @@ void timeline_draw()
 
 			// if ( clip_data::current_group_source == source_use_i )
 			{
-				if ( mouse_hovered && capture_inputs && !section_resize && !seek_time_override && !ignore_seek_drag )
+				// if ( mouse_hovered && capture_inputs && !section_resize && !seek_time_override && !ignore_seek_drag )
+				if ( capture_inputs && !section_resize && !seek_time_override && !ignore_seek_drag )
 				{
-					if ( mouse_hovered_area && io.MouseClicked[ 0 ] )
+					if ( mouse_hovered_video_area && io.MouseClicked[ 0 ] )
 					{
 						seek_drag = true;
 
@@ -1488,14 +1489,15 @@ void timeline_draw()
 						ensure_seek_drag_time_set = true;
 					}
 
-					if ( seek_drag && mouse_hovered_area )
+					// if ( seek_drag && mouse_hovered_video_area )
+					if ( seek_drag )
 					{
-						if ( mouse_hovered_area && clip_data::get_current_group_source() != video_i )
+						if ( mouse_hovered_video_area && clip_data::get_current_group_source() != video_i )
 						{
 							change_to_source_i = video_i;
 						}
 
-						new_seek_percent  = mouse_pos_local.x / seek_area;
+						new_seek_percent  = CLAMP( mouse_pos_local.x / seek_area, 0.f, 1.f );
 						new_time_pos      = section_resize ? section_resize_seek_time : duration.duration * new_seek_percent;
 
 						bool mouse_moving = app::mouse_delta[ 0 ] != 0 || app::mouse_delta[ 1 ] != 0;
