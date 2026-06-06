@@ -105,6 +105,8 @@ struct mpv_data_t
 	s64                 dwidth            = 0;
 	s64                 dheight           = 0;
 
+	double              volume            = 0.0;
+	char*               audio_track       = nullptr;
 	char*               audio_track_title = nullptr;
 };
 
@@ -144,6 +146,9 @@ enum e_mpv_cmd
 	e_mpv_cmd_invalid,
 	e_mpv_cmd_loadfile,
 	e_mpv_cmd_seek,
+
+	e_mpv_cmd_audio_track,
+	e_mpv_cmd_audio_title,
 
 	e_mpv_cmd_count,
 };

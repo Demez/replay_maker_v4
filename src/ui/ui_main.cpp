@@ -281,28 +281,26 @@ void draw_replay_edit_creation_info()
 
 void draw_playback_controls( int size[ 2 ] )
 {
-	// is there a video playing?
+	ImGuiStyle& style            = ImGui::GetStyle();
+	ImVec2      region_avail     = ImGui::GetContentRegionAvail();
 
-	// HACK
-	// if ( mpv_get_current_video() && g_video_media_info.track_count == 0 )
-	// {
-	// 	printf( "NO MEDIA INFO!\n" );
-	// 	get_media_info();
-	// }
+	double      time_pos         = 0;
+	double      duration         = 0;
+	s32         paused           = 0;
 
-	ImGuiStyle& style        = ImGui::GetStyle();
-	ImVec2      region_avail = ImGui::GetContentRegionAvail();
-
-	// time-pos
-	double      time_pos     = 0;
-	double      duration     = 0;
-	s32         paused       = 0;
+	double      volume           = 0;
+	char*       audio_track      = 0;
+	char*       audio_track_name = 0;
 
 	if ( get_mpv_data() )
 	{
-		time_pos = get_mpv_data()->time_pos;
-		duration = get_mpv_data()->duration;
-		paused   = get_mpv_data()->pause;
+		time_pos         = get_mpv_data()->time_pos;
+		duration         = get_mpv_data()->duration;
+		paused           = get_mpv_data()->pause;
+
+		volume           = get_mpv_data()->volume;
+		audio_track      = get_mpv_data()->audio_track;
+		audio_track_name = get_mpv_data()->audio_track_title;
 	}
 
 	// seek bar
@@ -318,16 +316,17 @@ void draw_playback_controls( int size[ 2 ] )
 	// draw audio track name
 	// audio track test
 	//char* audio_track       = 0;
-	char*     audio_track          = 0;
 	// mpv_error audio_ret         = (mpv_error)p_mpv_get_property( g_mpv, "audio", MPV_FORMAT_NONE, &audio_track );
 	//mpv_error audio_ret            = (mpv_error)p_mpv_get_property( get_mpv(), "audio", MPV_FORMAT_STRING, &audio_track );
+	// mpv_error audio_ret         = (mpv_error)p_mpv_get_property( g_mpv, "track-list/audio/id", MPV_FORMAT_STRING, &audio_track );
 	// mpv_error audio_ret         = (mpv_error)p_mpv_get_property( g_mpv, "track-list/audio/id", MPV_FORMAT_STRING, &audio_track );
 
 	char      track_name_buf[ 32 ] = { 0 };
 	// snprintf( track_name_buf, 32, "track-list/%s/title", audio_track );
 
-	char*     audio_track_name     = 0;
 	//audio_ret                      = (mpv_error)p_mpv_get_property( get_mpv(), "current-tracks/audio/title", MPV_FORMAT_STRING, &audio_track_name );
+	//p_mpv_get_property_async( get_mpv(), e_mpv_cmd_audio_track, "audio", MPV_FORMAT_STRING );
+	p_mpv_get_property_async( get_mpv(), e_mpv_cmd_audio_title, "current-tracks/audio/title", MPV_FORMAT_STRING );
 
 	//ImGui::PushStyleVarX( ImGuiStyleVar_ItemSpacing, 0.f );
 
@@ -615,9 +614,6 @@ void draw_playback_controls( int size[ 2 ] )
 	}
 
 	ImGui::EndDisabled();
-
-	double volume = 0;
-	//p_mpv_get_property( get_mpv(), "volume", MPV_FORMAT_DOUBLE, &volume );
 
 	ImGui::SameLine();
 	ImGui::SetNextItemWidth( 130.f );

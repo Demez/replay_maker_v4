@@ -405,6 +405,11 @@ bool start_mpv( mpv_data_t& mpv )
 	observe_ret     = p_mpv_observe_property( mpv.mpv, 0, "dwidth", MPV_FORMAT_INT64 );
 	observe_ret     = p_mpv_observe_property( mpv.mpv, 0, "dheight", MPV_FORMAT_INT64 );
 
+	observe_ret     = p_mpv_observe_property( mpv.mpv, 0, "volume", MPV_FORMAT_DOUBLE );
+
+	observe_ret     = p_mpv_observe_property( mpv.mpv, 0, "audio", MPV_FORMAT_STRING );
+	//observe_ret     = p_mpv_observe_property( mpv.mpv, 0, "current-tracks/audio/title", MPV_FORMAT_STRING );
+
 	if ( g_mpv_exts.empty() )
 	{
 		// Load supported extensions
@@ -687,11 +692,45 @@ void mpv_update_handle_event( mpv_data_t& data, mpv_event* mpv_event )
 			{
 				data.dheight = get_mpv_value< s64 >( property->data, 0 );
 			}
+			else if ( strcmp( "volume", property->name ) == 0 )
+			{
+				data.volume = get_mpv_value< double >( property->data, 0 );
+			}
+			else if ( strcmp( "audio", property->name ) == 0 )
+			{
+				if ( data.audio_track )
+					p_mpv_free( data.audio_track );
+
+				data.audio_track = get_mpv_value< char* >( property->data, nullptr );
+			}
+			else if ( strcmp( "current-tracks/audio/title", property->name ) == 0 )
+			{
+				if ( data.audio_track_title )
+					p_mpv_free( data.audio_track_title );
+
+				data.audio_track_title = get_mpv_value< char* >( property->data, nullptr );
+			}
 		}
 	}
 
 	else if ( mpv_event->event_id == MPV_EVENT_GET_PROPERTY_REPLY )
 	{
+		struct mpv_event_property* property = (struct mpv_event_property*)mpv_event->data;
+
+		if ( property->name )
+		{
+			//if ( strcmp( "audio", property->name ) == 0 )
+			//{
+			//	data.audio_track = get_mpv_value< char* >( property->data, nullptr );
+			//}
+			if ( strcmp( "current-tracks/audio/title", property->name ) == 0 )
+			{
+				if ( data.audio_track_title )
+					p_mpv_free( data.audio_track_title );
+
+				data.audio_track_title = get_mpv_value< char* >( property->data, nullptr );
+			}
+		}
 	}
 
 	else if ( mpv_event->event_id == MPV_EVENT_PLAYBACK_RESTART )
