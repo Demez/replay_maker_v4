@@ -176,6 +176,8 @@ void mpv_draw_frame()
 	// mpv_handle*         mpv = get_mpv();
 	// mpv_render_context* gl  = get_mpv_gl();
 
+	u64 _time = sys_get_time_ms();
+
 	mpv_data_t* mpv_data = get_mpv_data();
 
 	if ( !mpv_data )
@@ -186,8 +188,11 @@ void mpv_draw_frame()
 
 	s64    video_width = 0, video_height = 0;
 
-	p_mpv_get_property( mpv, "dwidth", MPV_FORMAT_INT64, &video_width );
-	p_mpv_get_property( mpv, "dheight", MPV_FORMAT_INT64, &video_height );
+	video_width  = mpv_data->dwidth;
+	video_height = mpv_data->dheight;
+
+	// p_mpv_get_property( mpv, "dwidth", MPV_FORMAT_INT64, &video_width );
+	// p_mpv_get_property( mpv, "dheight", MPV_FORMAT_INT64, &video_height );
 
 	s64   window_scale;
 	//	p_mpv_get_property( g_mpv, "current-window-scale", MPV_FORMAT_INT64, &window_scale );
@@ -272,6 +277,11 @@ void mpv_draw_frame()
 
 	//glDisable( GL_SCISSOR_TEST );
 	glDisable( GL_TEXTURE_2D );
+
+	//u64 _end_time = sys_get_time_ms();
+	//
+	//if ( _end_time > _time )
+	//	printf( "MPV DRAW TIME - %u\n", _end_time - _time );
 }
 
 
@@ -341,6 +351,8 @@ bool start_mpv( mpv_data_t& mpv )
 	// https://github.com/celluloid-player/celluloid/pull/982
 	p_mpv_set_option_string( mpv.mpv, "video-timing-offset", "0" );
 
+	//p_mpv_set_option_string( mpv.mpv, "hr-seek", "no" );
+
 	// Start Paused
 	p_mpv_set_option_string( mpv.mpv, "pause", "" );
 
@@ -377,6 +389,13 @@ bool start_mpv( mpv_data_t& mpv )
 	mpv_create_texture();
 
 	p_mpv_set_property_string( mpv.mpv, "keep-open", "always" );
+
+	int observe_ret = p_mpv_observe_property( mpv.mpv, 0, "time-pos", MPV_FORMAT_DOUBLE );
+	observe_ret     = p_mpv_observe_property( mpv.mpv, 0, "duration", MPV_FORMAT_DOUBLE );
+	observe_ret     = p_mpv_observe_property( mpv.mpv, 0, "pause", MPV_FORMAT_FLAG );
+
+	observe_ret     = p_mpv_observe_property( mpv.mpv, 0, "dwidth", MPV_FORMAT_INT64 );
+	observe_ret     = p_mpv_observe_property( mpv.mpv, 0, "dheight", MPV_FORMAT_INT64 );
 
 	if ( g_mpv_exts.empty() )
 	{
@@ -581,6 +600,92 @@ void remove_mpv_extra_video()
 
 
 // ----------------------------------------------------
+
+
+template< typename T >
+T get_mpv_value( void* data, T fallback )
+{
+	if ( data == nullptr )
+		return fallback;
+	else
+		return *(T*)data;
+}
+
+
+void mpv_update( mpv_data_t& data )
+{
+	if ( !data.mpv )
+		return;
+
+	mpv_event* mpv_event = p_mpv_wait_event( data.mpv, 0 );
+
+	while ( mpv_event && mpv_event->event_id != MPV_EVENT_NONE )
+	{
+		if ( mpv_event->event_id == MPV_EVENT_NONE )
+			break;
+
+		else if ( mpv_event->event_id == MPV_EVENT_PROPERTY_CHANGE )
+		{
+			struct mpv_event_property* property = (struct mpv_event_property*)mpv_event->data;
+
+			if ( property->name )
+			{
+				if ( strcmp( "time-pos", property->name ) == 0 )
+				{
+					// what the fuck is this?
+					// if ( property->data == nullptr )
+					// 	data.time_pos = 0.0;
+					// else
+					// 	data.time_pos = *(double*)property->data;
+					data.time_pos = get_mpv_value( property->data, 0.0 );
+				}
+				else if ( strcmp( "duration", property->name ) == 0 )
+				{
+					data.duration = get_mpv_value( property->data, 0.0 );
+				}
+				else if ( strcmp( "pause", property->name ) == 0 )
+				{
+					data.pause = get_mpv_value< s32 >( property->data, 0 );
+				}
+				else if ( strcmp( "dwidth", property->name ) == 0 )
+				{
+					data.dwidth = get_mpv_value< s64 >( property->data, 0 );
+				}
+				else if ( strcmp( "dheight", property->name ) == 0 )
+				{
+					data.dheight = get_mpv_value< s64 >( property->data, 0 );
+				}
+			}
+		}
+
+		else if ( mpv_event->event_id == MPV_EVENT_GET_PROPERTY_REPLY )
+		{
+		}
+
+		else if ( mpv_event->event_id == MPV_EVENT_COMMAND_REPLY )
+		{
+			struct mpv_event_command* cmd_reply = (struct mpv_event_command*)mpv_event->data;
+
+			if ( data.seek_queued && mpv_event->reply_userdata == 1 )
+			{
+				printf( "FINISH SEEK - %u\n", sys_get_time_ms(), data.seek_queued_time );
+				data.seek_queued = false;
+			}
+		}
+
+		mpv_event = p_mpv_wait_event( data.mpv, 0 );
+	}
+}
+
+
+void mpv_update()
+{
+	for ( u32 i = 0; i < get_mpv_count(); i++ )
+		mpv_update( g_mpv[ i ] );
+
+	if ( g_mpv_extra_vid_on )
+		mpv_update( g_mpv_extra_vid );
+}
 
 
 void mpv_window_resize()

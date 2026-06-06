@@ -166,10 +166,6 @@ void replay_editor_set_group( u32 output_i, u32 group_i, u32 group_src_i )
 
 	g_focus_replay_maker                       = true;
 
-	// check current mpv instance for playback state
-	s32 paused                  = 0;
-	p_mpv_get_property( get_mpv(), "pause", MPV_FORMAT_FLAG, &paused );
-
 	// load all mpv instances
 	set_mpv_count( clip.source_count );
 
@@ -193,7 +189,7 @@ void replay_editor_set_group( u32 output_i, u32 group_i, u32 group_src_i )
 				const char* cmd[]   = { "set", "pause", "yes", NULL };
 				int         cmd_ret = p_mpv_command_async( mpv->mpv, 0, cmd );
 			}
-			else if ( !paused )
+			else if ( !mpv->pause )
 			{
 				const char* cmd[]   = { "set", "pause", "no", NULL };
 				int         cmd_ret = p_mpv_command_async( mpv->mpv, 0, cmd );

@@ -196,10 +196,8 @@ void draw_replay_edit_creation_info()
 				group.presets.push_back( default_encode_preset );
 
 				// Copy seek time and pause
-				double time_pos = 0;
-				s32    paused   = 0;
-				p_mpv_get_property( mpv->mpv, "time-pos", MPV_FORMAT_DOUBLE, &time_pos );
-				p_mpv_get_property( mpv->mpv, "pause", MPV_FORMAT_FLAG, &paused );
+				double time_pos = mpv->time_pos;
+				s32    paused   = mpv->pause;
 
 				clip_group_add_source( clip, new_group, mpv->current_video );
 				replay_editor_set_group( clip_data::clip_count - 1, new_group, 0 );
@@ -298,13 +296,14 @@ void draw_playback_controls( int size[ 2 ] )
 	// time-pos
 	double      time_pos     = 0;
 	double      duration     = 0;
-	p_mpv_get_property( get_mpv(), "time-pos", MPV_FORMAT_DOUBLE, &time_pos );
-	p_mpv_get_property( get_mpv(), "duration", MPV_FORMAT_DOUBLE, &duration );
+	s32         paused       = 0;
 
-	// volume
-
-	s32 paused = 0;
-	p_mpv_get_property( get_mpv(), "pause", MPV_FORMAT_FLAG, &paused );
+	if ( get_mpv_data() )
+	{
+		time_pos = get_mpv_data()->time_pos;
+		duration = get_mpv_data()->duration;
+		paused   = get_mpv_data()->pause;
+	}
 
 	// seek bar
 
@@ -321,14 +320,14 @@ void draw_playback_controls( int size[ 2 ] )
 	//char* audio_track       = 0;
 	char*     audio_track          = 0;
 	// mpv_error audio_ret         = (mpv_error)p_mpv_get_property( g_mpv, "audio", MPV_FORMAT_NONE, &audio_track );
-	mpv_error audio_ret            = (mpv_error)p_mpv_get_property( get_mpv(), "audio", MPV_FORMAT_STRING, &audio_track );
+	//mpv_error audio_ret            = (mpv_error)p_mpv_get_property( get_mpv(), "audio", MPV_FORMAT_STRING, &audio_track );
 	// mpv_error audio_ret         = (mpv_error)p_mpv_get_property( g_mpv, "track-list/audio/id", MPV_FORMAT_STRING, &audio_track );
 
 	char      track_name_buf[ 32 ] = { 0 };
 	// snprintf( track_name_buf, 32, "track-list/%s/title", audio_track );
 
 	char*     audio_track_name     = 0;
-	audio_ret                      = (mpv_error)p_mpv_get_property( get_mpv(), "current-tracks/audio/title", MPV_FORMAT_STRING, &audio_track_name );
+	//audio_ret                      = (mpv_error)p_mpv_get_property( get_mpv(), "current-tracks/audio/title", MPV_FORMAT_STRING, &audio_track_name );
 
 	//ImGui::PushStyleVarX( ImGuiStyleVar_ItemSpacing, 0.f );
 
@@ -624,7 +623,7 @@ void draw_playback_controls( int size[ 2 ] )
 	ImGui::EndDisabled();
 
 	double volume = 0;
-	p_mpv_get_property( get_mpv(), "volume", MPV_FORMAT_DOUBLE, &volume );
+	//p_mpv_get_property( get_mpv(), "volume", MPV_FORMAT_DOUBLE, &volume );
 
 	ImGui::SameLine();
 	ImGui::SetNextItemWidth( 130.f );
@@ -668,7 +667,7 @@ void draw_imgui_window( int window_size[ 2 ] )
 			ImGui::SetNextWindowSize( { (float)element_size[ 0 ], (float)element_size[ 1 ] } );
 			ImGui::SetNextWindowPos( { float( window_size[ 0 ] - app::mpv_size[ 0 ] ), (float)app::mpv_size[ 1 ] } );
 
-			if ( !ImGui::Begin( "##Playback Controls", 0, ImGuiWindowFlags_NoNav | ImGuiWindowFlags_NoDecoration ) )
+			if ( !ImGui::Begin( "##Playback Controls", 0, ImGuiWindowFlags_NoNav | ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoScrollWithMouse ) )
 			// if ( !ImGui::Begin( "##Playback Controls", 0, ImGuiWindowFlags_NoNav | ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoCollapse ) )
 			{
 				ImGui::End();

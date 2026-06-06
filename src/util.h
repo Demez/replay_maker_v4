@@ -207,6 +207,11 @@ bool array_append_err( T*& data, u32 count, const char* msg )
 
 
 // --------------------------------------------------------------------------------------------------------
+
+double         scale_point_from_origin( double origin, double point, double factor );
+
+
+// --------------------------------------------------------------------------------------------------------
 // system functions
 
 

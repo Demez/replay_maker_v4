@@ -26,6 +26,13 @@
 #endif
 
 
+// New Position = Scale Origin + ( Scale Point - Scale Origin ) * Scale Factor
+double scale_point_from_origin( double origin, double point, double factor )
+{
+	return origin + ( point - origin ) * factor;
+}
+
+
 #ifdef _WIN32
 // Find the first occurrence of find in s while ignoring case
 char* strcasestr( const char* s, const char* find )

@@ -62,6 +62,14 @@ struct clip_time_range_t
 };
 
 
+enum e_clip_source_state
+{
+	e_clip_source_state_unloaded,
+	e_clip_source_state_loading,
+	e_clip_source_state_loaded,
+};
+
+
 struct clip_source_t
 {
 	char*                  path;
@@ -74,6 +82,9 @@ struct clip_source_t
 
 	video_metadata_t       metadata;
 	bool                   file_missing;
+
+	// TODO: load videos in background, along with making other mpv operations like seeking async
+	e_clip_source_state    load_state;
 };
 
 

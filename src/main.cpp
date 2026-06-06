@@ -44,6 +44,8 @@ namespace app
 	// Mouse
 	ivec2       mouse_pos           = { 0, 0 };
 	ivec2       mouse_delta         = { 0, 0 };
+	ImVec2      mouse_scroll        = { 0, 0 };
+	ivec2       mouse_scroll_int    = { 0, 0 };
 
 	float       frame_time          = 0.f;
 	float       save_timer          = -1.f;
@@ -533,8 +535,14 @@ void main_loop()
 
 	while ( app::running )
 	{
-		app::mouse_delta[ 0 ] = 0;
-		app::mouse_delta[ 1 ] = 0;
+		app::mouse_scroll.x        = 0;
+		app::mouse_scroll.y        = 0;
+
+		app::mouse_scroll_int[ 0 ] = 0;
+		app::mouse_scroll_int[ 1 ] = 0;
+
+		app::mouse_delta[ 0 ]      = 0;
+		app::mouse_delta[ 1 ]      = 0;
 
 		// Handle Events
 		SDL_Event event;
@@ -562,6 +570,14 @@ void main_loop()
 
 				case SDL_EVENT_WINDOW_DISPLAY_SCALE_CHANGED:
 					update_dpi();
+					break;
+
+				case SDL_EVENT_MOUSE_WHEEL:
+					app::mouse_scroll.x += event.wheel.x;
+					app::mouse_scroll.y += event.wheel.y;
+					app::mouse_scroll_int[ 0 ] += event.wheel.integer_x;
+					app::mouse_scroll_int[ 1 ] += event.wheel.integer_y;
+					//timeline_handle_scroll();
 					break;
 
 				case SDL_EVENT_MOUSE_MOTION:
@@ -608,13 +624,11 @@ void main_loop()
 		if ( !app::running )
 			break;
 
-		// called so mpv doesn't get flooded with too many events, and becomes unresponsive
-		mpv_event* mpv_event = p_mpv_wait_event( get_mpv(), 0 );
+		//u64         _time   = sys_get_time_ms();
 
-		while ( mpv_event && mpv_event->event_id != MPV_EVENT_NONE )
-		{
-			mpv_event = p_mpv_wait_event( get_mpv(), 0 );
-		}
+		mpv_update();
+
+		//printf( "MPV TIME - %d\n", sys_get_time_ms() - _time );
 
 		// is the window minimized
 		if ( SDL_GetWindowFlags( app::window ) & SDL_WINDOW_MINIMIZED )

@@ -93,6 +93,18 @@ struct mpv_data_t
 	s64                 track_count       = 0;
 	s64                 track_count_video = 0;
 	s64                 track_count_audio = 0;
+
+	bool                seek_queued       = false;
+	u64                 seek_queued_time  = 0;
+
+	double              time_pos          = 0;
+	double              duration          = 0;
+	s32                 pause             = 0;
+
+	s64                 dwidth            = 0;
+	s64                 dheight           = 0;
+
+	char*               audio_track_title = nullptr;
 };
 
 
@@ -138,6 +150,8 @@ u32                                get_mpv_index();
 u32                                get_mpv_count();
 void                               set_mpv_index( u32 index );
 void                               set_mpv_count( u32 count );
+
+void                               mpv_update();
 
 // adds the extra video index if loaded
 u32                                get_mpv_count_plus();
@@ -248,6 +262,8 @@ namespace app
 	// Mouse
 	extern ivec2       mouse_pos;
 	extern ivec2       mouse_delta;
+	extern ImVec2      mouse_scroll;
+	extern ivec2       mouse_scroll_int;
 
 	extern float       frame_time;
 	extern float       save_timer;
@@ -259,6 +275,18 @@ namespace app
 	extern bool        in_draw;
 	extern bool        pause_window_events;
 	extern bool        sidebar;
+}
+
+
+// Timeline
+namespace timeline
+{
+	extern double zoom;
+	extern int    zoom_step;
+	extern bool   do_scroll;
+
+	extern float  scroll_x;
+	extern float  scroll_max_x;
 }
 
 
@@ -278,6 +306,7 @@ constexpr u8                       MAX_RECENT_OPEN = 8;
 
 void          timeline_reset();
 void          timeline_draw();
+void          timeline_handle_scroll();
 
 void          timeline_seek( float seconds );
 void          timeline_advance( bool prev = false );

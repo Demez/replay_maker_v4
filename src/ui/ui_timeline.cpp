@@ -4,6 +4,18 @@
 #include "imgui_internal.h"
 
 
+// Timeline
+namespace timeline
+{
+	double zoom         = 1.0;
+	int    zoom_step    = 0;
+	bool   do_scroll    = false;
+
+	float  scroll_x     = 0.f;
+	float  scroll_max_x = 0.f;
+}
+
+
 constexpr int               TIMELINE_HEIGHT      = 40;
 constexpr int               TIMELINE_BORDER_SIZE = 1;
 constexpr int               SECTION_TITLEBAR_HEIGHT = 16;
@@ -56,11 +68,34 @@ void timeline_set_seek_time_fast( float seconds )
 
 void timeline_set_seek_time( float seconds )
 {
+	mpv_data_t* mpv = get_mpv_data();
+
+	if ( !mpv )
+		return;
+
+	// wait for current seek to finish
+	if ( mpv->seek_queued )
+	{
+		printf( "CANT SEEK YET\n" );
+		return;
+	}
+
+	mpv->seek_queued      = true;
+	mpv->seek_queued_time = sys_get_time_ms();
+
 	char time_pos_str[ 16 ];
 	gcvt( seconds, 4, time_pos_str );
 
+	u64         _time = sys_get_time_ms();
+
+	//const char* cmd[] = { "seek", time_pos_str, "absolute", "keyframes", NULL };
 	const char* cmd[]   = { "seek", time_pos_str, "absolute", NULL };
-	int         cmd_ret = p_mpv_command_async( get_mpv(), 0, cmd );
+	int         cmd_ret   = p_mpv_command_async( mpv->mpv, 1, cmd );
+
+	u64         _end_time = sys_get_time_ms();
+
+	if ( _end_time > _time )
+		printf( "MPV SEEK QUEUED TIME - %u\n", _end_time - _time );
 }
 
 
@@ -313,6 +348,67 @@ void draw_time_range_move_button()
 #endif
 
 
+void timeline_handle_scroll( ImVec2 base_timeline_pos )
+{
+	const bool show_timeline = get_mpv_index() != EXTRA_VID_ID;
+
+	if ( !show_timeline )
+		return;
+
+	if ( app::mouse_scroll_int[ 1 ] == 0 )
+		return;
+
+	u32 zoom_step = timeline::zoom_step;
+
+	if ( ( app::mouse_scroll_int[ 1 ] < 0 && timeline::zoom_step > 0 ) || app::mouse_scroll_int[ 1 ] > 0 )
+	{
+		timeline::zoom_step += app::mouse_scroll_int[ 1 ];
+		timeline::zoom_step = CLAMP( timeline::zoom_step, 0, 20 );
+	}
+
+	double new_zoom = 1.0;
+
+	if ( timeline::zoom_step > 0 )
+	{
+		for ( int step = 0; step < timeline::zoom_step; step++ )
+		{
+			new_zoom *= 1.0 + 0.2;
+		}
+	}
+
+	//new_zoom            = CLAMP( new_zoom, 1.0, 5.0 );
+	double factor       = new_zoom / timeline::zoom;
+
+	// get base timeline pos, and apply scroll offset to it
+	ImVec2 base_screen_pos = ImGui::GetCursorScreenPos();
+	base_screen_pos.x -= timeline::scroll_x;
+
+	ImVec2 timeline_content_size = g_timeline_size;
+	timeline_content_size.x *= new_zoom;
+
+	float scroll_size = MAX( 0.0f, timeline_content_size.x - g_timeline_size.x );
+
+	float snap_offset   = 70;
+
+	// put mouse in local space
+	float mouse_x = app::mouse_pos[ 0 ] - base_screen_pos.x;
+
+	// scale by top left of zoomed in content size
+	float new_x_pos     = scale_point_from_origin( mouse_x, 0, factor );
+
+	// snap to edges
+	if ( mouse_x < (snap_offset/2) )
+		timeline::scroll_x = 0;
+	else if ( mouse_x > ( g_timeline_size.x * timeline::zoom ) - (snap_offset/2) )
+		timeline::scroll_x = scroll_size;
+	else
+		timeline::scroll_x -= new_x_pos;
+
+	timeline::zoom      = new_zoom;
+	timeline::do_scroll = true;
+}
+
+
 void timeline_draw()
 {
 	p_mpv_set_option_string( get_mpv(), "start", "0%" );
@@ -337,10 +433,40 @@ void timeline_draw()
 		update_time_next_draw = false;
 	}
 
-	u32          change_to_source_i = UINT32_MAX;
+	u32    change_to_source_i = UINT32_MAX;
 
-	s32          paused             = 0;
-	p_mpv_get_property( get_mpv(), "pause", MPV_FORMAT_FLAG, &paused );
+	//u64    _time2              = sys_get_time_ms();
+
+	// MPV SLOWDOWN ?
+	//s32          paused             = 0;
+	//p_mpv_get_property( get_mpv(), "pause", MPV_FORMAT_FLAG, &paused );
+
+	//u64 _end_time2 = sys_get_time_ms();
+
+	//if ( _end_time2 > _time2 )
+	//	printf( "MPV PAUSED - %u\n", _end_time2 - _time2 );
+
+	//u64    _time    = sys_get_time_ms();
+
+	// MPV SLOWDOWN - try observe property instead?
+	// or use get_property_async?
+	s32    paused             = 0;
+	double time_pos           = 0;
+	double duration           = 0;
+
+	if ( get_mpv_data() )
+	{
+		time_pos = get_mpv_data()->time_pos;
+		duration = get_mpv_data()->duration;
+		paused   = get_mpv_data()->pause;
+	}
+
+	//p_mpv_get_property( get_mpv(), "time-pos", MPV_FORMAT_DOUBLE, &time_pos );
+
+	//u64 _end_time = sys_get_time_ms();
+
+	//if ( _end_time > _time )
+	//	printf( "MPV TIME POS - %u\n", _end_time - _time );
 
 	std::vector< duration_t > durations;
 
@@ -639,9 +765,6 @@ void timeline_draw()
 
 		if ( ImGui::IsKeyPressed( ImGuiKey_A, false ) )
 		{
-			double time_pos = 0;
-			p_mpv_get_property( get_mpv(), "time-pos", MPV_FORMAT_DOUBLE, &time_pos );
-
 			// search for the first notable time to snap to
 			float closest_time = 0.f;
 
@@ -686,9 +809,6 @@ void timeline_draw()
 
 		if ( ImGui::IsKeyPressed( ImGuiKey_D, false ) )
 		{
-			double time_pos = 0;
-			p_mpv_get_property( get_mpv(), "time-pos", MPV_FORMAT_DOUBLE, &time_pos );
-
 			// search for the first notable time to snap to
 			float closest_time = durations[ focused_source ].duration;
 
@@ -736,16 +856,26 @@ void timeline_draw()
 	// ------------------------------------------------------------------------------------------
 	// Positioning and Sizing Setup
 
-	ImVec2 window_pos   = ImGui::GetWindowPos();
-	ImVec2 cursor_pos   = ImGui::GetCursorPos();
-	ImVec2 region_avail = ImGui::GetContentRegionAvail();
+	ImVec2 window_pos              = ImGui::GetWindowPos();
+	ImVec2 cursor_pos              = ImGui::GetCursorPos();
+	ImVec2 region_avail            = ImGui::GetContentRegionAvail();
 
-	g_timeline_size.x   = region_avail.x;
+	g_timeline_size.x              = region_avail.x;
 	// g_timeline_size.y        = region_avail.y - cursor_pos.y;
-	g_timeline_size.y   = region_avail.y - ( text_height + style.FramePadding.y * 2 + style.ItemSpacing.y );
+	g_timeline_size.y              = region_avail.y - ( text_height + style.FramePadding.y * 2 + style.ItemSpacing.y );
 
-	ImVec2 window_cursor_pos( window_pos.x + cursor_pos.x, window_pos.y + cursor_pos.y );
-	ImVec2 timeline_size = ImVec2( window_cursor_pos.x + g_timeline_size.x, window_cursor_pos.y + g_timeline_size.y );
+	//static float timeline_scroll_x = 0.f;
+
+ 	ImVec2 base_timeline_pos       = ImVec2( window_pos.x + cursor_pos.x, window_pos.y + cursor_pos.y );
+	if ( mouse_hovering_area( base_timeline_pos, { base_timeline_pos.x + g_timeline_size.x, base_timeline_pos.y + g_timeline_size.y } ) )
+		timeline_handle_scroll( base_timeline_pos );
+
+	ImVec2 timeline_content_size = g_timeline_size;
+	timeline_content_size.x *= timeline::zoom;
+	timeline_content_size.y -= style.ScrollbarSize;
+
+	ImVec2 window_cursor_pos( ( window_pos.x + cursor_pos.x ) - timeline::scroll_x, window_pos.y + cursor_pos.y );
+	ImVec2 timeline_size = ImVec2( window_cursor_pos.x + timeline_content_size.x, window_cursor_pos.y + timeline_content_size.y );
 
 	ImVec2 window_area_min( window_cursor_pos.x + TIMELINE_BORDER_SIZE, window_cursor_pos.y + TIMELINE_BORDER_SIZE );
 	ImVec2 window_area_max( timeline_size.x - TIMELINE_BORDER_SIZE, timeline_size.y - TIMELINE_BORDER_SIZE );
@@ -754,6 +884,20 @@ void timeline_draw()
 
 	// is mouse within the frame here
 	bool   mouse_hovered = mouse_hovering_area( window_area_min, window_area_max );
+
+	ImGui::SetNextWindowContentSize( timeline_content_size );
+
+	if ( timeline::do_scroll )
+		ImGui::SetNextWindowScroll( { timeline::scroll_x, 0 } );
+
+	// ZOOMING !!!
+	if ( !ImGui::BeginChild( "##timeline_area", g_timeline_size, ImGuiChildFlags_None, ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoScrollWithMouse | ImGuiWindowFlags_HorizontalScrollbar | ImGuiWindowFlags_AlwaysHorizontalScrollbar ) )
+	{
+		ImGui::EndChild();
+		return;
+	}
+
+	ImGui::SetScrollY( 0 );
 
 	// ------------------------------------------------------------------------------------------
 	// Draw Background
@@ -899,9 +1043,6 @@ void timeline_draw()
 	}
 
 	// draw_list->AddText( window_cursor_pos, ImColor( 0, 255, 0 ), "TEST" );
-
-	double time_pos = 0;
-	p_mpv_get_property( get_mpv(), "time-pos", MPV_FORMAT_DOUBLE, &time_pos );
 
 	// int          seek_pos_start = window_cursor_pos.x + TIMELINE_BORDER_SIZE;
 	// int          seek_pos_end   = timeline_size.x - TIMELINE_BORDER_SIZE;
@@ -1117,6 +1258,10 @@ void timeline_draw()
 
 					// ------------------------------------------------------------------------------------------
 					// check cursor snapping above time range start
+
+					// TODO: separate this, build the boundaries for each time range in an earlier for loop
+					// then make grab boundaries for each boundary
+					// then, you can limit the size of these boundaries 
 
 					int   snap_to_time_range = 0;
 					float section_snap_size  = section_snap_size_base;
@@ -1405,8 +1550,8 @@ void timeline_draw()
 
 						if ( mouse_moving || io.MouseClicked[ 0 ] )
 						{
-							if ( mouse_moving )
-								printf( "MOUSE MOVE\n" );
+							//if ( mouse_moving )
+							//	printf( "MOUSE MOVE\n" );
 
 							// ui actually feels worse with this lol
 							// timeline_set_seek_time_fast( new_time_pos );
@@ -1452,6 +1597,14 @@ void timeline_draw()
 		}
 	}
 
+	if ( !timeline::do_scroll )
+		timeline::scroll_x = ImGui::GetScrollX();
+
+	timeline::do_scroll    = false;
+	timeline::scroll_max_x = ImGui::GetScrollMaxX();
+
+	ImGui::EndChild();
+
 	shift_time_range_hovered_prev = shift_time_range_hovered;
 	just_selected_section         = false;
 
@@ -1468,7 +1621,7 @@ void timeline_draw()
 	// Set new cursor pos for normal imgui widget drawing
 
 	// ImGui::SetCursorPos( ImVec2( cursor_pos.x, cursor_pos.y + g_timeline_size.y + ( style.ItemSpacing.y * 1.5 ) ) );
-	ImGui::SetCursorPos( ImVec2( cursor_pos.x, cursor_pos.y + g_timeline_size.y + style.ItemSpacing.y ) );
+	//ImGui::SetCursorPos( ImVec2( cursor_pos.x, cursor_pos.y + g_timeline_size.y + style.ItemSpacing.y ) );
 
 	if ( !seek_drag && was_playing && paused && group && group->sources.size() )
 	{
