@@ -166,7 +166,7 @@ char* sys_get_error()
 	const wchar_t* error = sys_get_error_w();
 
 	if ( !error )
-		return "";
+		return nullptr;
 
 	return sys_to_utf8( error );
 }

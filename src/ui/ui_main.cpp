@@ -326,7 +326,7 @@ void draw_playback_controls( int size[ 2 ] )
 
 	//audio_ret                      = (mpv_error)p_mpv_get_property( get_mpv(), "current-tracks/audio/title", MPV_FORMAT_STRING, &audio_track_name );
 	//p_mpv_get_property_async( get_mpv(), e_mpv_cmd_audio_track, "audio", MPV_FORMAT_STRING );
-	p_mpv_get_property_async( get_mpv(), e_mpv_cmd_audio_title, "current-tracks/audio/title", MPV_FORMAT_STRING );
+	//p_mpv_get_property_async( get_mpv(), e_mpv_cmd_audio_title, "current-tracks/audio/title", MPV_FORMAT_STRING );
 
 	//ImGui::PushStyleVarX( ImGuiStyleVar_ItemSpacing, 0.f );
 

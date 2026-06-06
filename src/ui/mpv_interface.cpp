@@ -406,7 +406,7 @@ bool start_mpv( mpv_data_t& mpv )
 	observe_ret     = p_mpv_observe_property( mpv.mpv, e_mpv_cmd_observe, "volume", MPV_FORMAT_DOUBLE );
 
 	observe_ret     = p_mpv_observe_property( mpv.mpv, e_mpv_cmd_observe, "audio", MPV_FORMAT_STRING );
-	//observe_ret     = p_mpv_observe_property( mpv.mpv, e_mpv_cmd_observe, "current-tracks/audio/title", MPV_FORMAT_STRING );
+	observe_ret     = p_mpv_observe_property( mpv.mpv, e_mpv_cmd_observe, "current-tracks/audio/title", MPV_FORMAT_STRING );
 
 	if ( g_mpv_exts.empty() )
 	{
@@ -651,6 +651,27 @@ T get_mpv_value( void* data, T fallback )
 }
 
 
+char* get_mpv_string( char*& old, mpv_event_property* property, char* fallback )
+{
+	if ( old )
+		free( old );
+
+	old = nullptr;
+
+	if ( property->format != MPV_FORMAT_STRING )
+		return fallback;
+	
+	if ( property->data == nullptr )
+		return fallback;
+
+	// do you not free async string returns? can't find info on it in documentation
+	// this crashes the program if i do this, either on first call, or a little later
+	// p_mpv_free( temp_str );
+
+	return util_strdup( *(char**)property->data );
+}
+
+
 void get_media_info( mpv_data_t& mpv )
 {
 	if ( !mpv.current_video )
@@ -731,33 +752,11 @@ void mpv_update( mpv_data_t& data )
 				}
 				else if ( strcmp( "audio", property->name ) == 0 )
 				{
-					if ( data.audio_track )
-						free( data.audio_track );
-
-					data.audio_track = nullptr;
-
-					// format can be NONE if it has an error
-					if ( property->format == MPV_FORMAT_STRING && property->data != nullptr )
-					{
-						char* temp_str = *(char**)property->data;
-						data.audio_track = util_strdup( temp_str );
-
-						// do you not free async string returns? can't find info on it in documentation
-						// p_mpv_free( temp_str );
-					}
-
-					//char* temp_str = get_mpv_value< char* >( property->data, nullptr );
-					//data.audio_track = util_strdup( temp_str );
-					//p_mpv_free( temp_str );
-
-					printf( "AUDIO TRACK: %s\n", data.audio_track );
+					data.audio_track = get_mpv_string( data.audio_track, property, nullptr );
 				}
 				else if ( strcmp( "current-tracks/audio/title", property->name ) == 0 )
 				{
-					//if ( data.audio_track_title )
-					//	p_mpv_free( data.audio_track_title );
-
-					//data.audio_track_title = get_mpv_value< char* >( property->data, nullptr );
+					data.audio_track_title = get_mpv_string( data.audio_track_title, property, nullptr );
 				}
 			}
 		}
