@@ -68,34 +68,7 @@ void timeline_set_seek_time_fast( float seconds )
 
 void timeline_set_seek_time( float seconds )
 {
-	mpv_data_t* mpv = get_mpv_data();
-
-	if ( !mpv )
-		return;
-
-	// wait for current seek to finish
-	if ( mpv->seek_queued )
-	{
-		printf( "CANT SEEK YET\n" );
-		return;
-	}
-
-	mpv->seek_queued      = true;
-	mpv->seek_queued_time = sys_get_time_ms();
-
-	char time_pos_str[ 16 ];
-	gcvt( seconds, 4, time_pos_str );
-
-	u64         _time = sys_get_time_ms();
-
-	//const char* cmd[] = { "seek", time_pos_str, "absolute", "keyframes", NULL };
-	const char* cmd[]   = { "seek", time_pos_str, "absolute", NULL };
-	int         cmd_ret   = p_mpv_command_async( mpv->mpv, 1, cmd );
-
-	u64         _end_time = sys_get_time_ms();
-
-	if ( _end_time > _time )
-		printf( "MPV SEEK QUEUED TIME - %u\n", _end_time - _time );
+	mpv_cmd_seek( seconds );
 }
 
 
@@ -261,7 +234,7 @@ void delete_current_video( clip_group_t* group )
 	{
 		replay_editor_set_group( clip_data::current_clip_index, clip_data::current_group, 0 );
 		clip_data::current_source        = UINT32_MAX;
-		clip_data::current_group_source = UINT32_MAX;
+		//clip_data::current_group_source = UINT32_MAX;
 	}
 }
 
@@ -411,7 +384,7 @@ void timeline_handle_scroll( ImVec2 base_timeline_pos )
 
 void timeline_draw()
 {
-	p_mpv_set_option_string( get_mpv(), "start", "0%" );
+	//p_mpv_set_option_string( get_mpv(), "start", "0%" );
 
 	ImGuiIO&     io                 = ImGui::GetIO();
 	ImGuiStyle&  style              = ImGui::GetStyle();
@@ -435,59 +408,30 @@ void timeline_draw()
 
 	u32    change_to_source_i = UINT32_MAX;
 
-	//u64    _time2              = sys_get_time_ms();
-
-	// MPV SLOWDOWN ?
-	//s32          paused             = 0;
-	//p_mpv_get_property( get_mpv(), "pause", MPV_FORMAT_FLAG, &paused );
-
-	//u64 _end_time2 = sys_get_time_ms();
-
-	//if ( _end_time2 > _time2 )
-	//	printf( "MPV PAUSED - %u\n", _end_time2 - _time2 );
-
-	//u64    _time    = sys_get_time_ms();
-
-	// MPV SLOWDOWN - try observe property instead?
-	// or use get_property_async?
 	s32    paused             = 0;
 	double time_pos           = 0;
-	double duration           = 0;
 
 	if ( get_mpv_data() )
 	{
 		time_pos = get_mpv_data()->time_pos;
-		duration = get_mpv_data()->duration;
 		paused   = get_mpv_data()->pause;
 	}
 
-	//p_mpv_get_property( get_mpv(), "time-pos", MPV_FORMAT_DOUBLE, &time_pos );
-
-	//u64 _end_time = sys_get_time_ms();
-
-	//if ( _end_time > _time )
-	//	printf( "MPV TIME POS - %u\n", _end_time - _time );
-
 	std::vector< duration_t > durations;
-
-	// TODO: make sure no inputs get captured if focused in a drop down or typing in a text box
-
-	bool                      capture_inputs         = !io.WantTextInput;
-
-	// test WantCaptureMouseUnlessPopupClose?
 
 	// ------------------------------------------------------------------------------------------
 
-	clip_group_t*      group                  = clip_get_group( clip_data::current_clip, clip_data::current_group );
+	bool          video_path_matches = false;
 
-	bool                      video_path_matches     = false;
+	// test WantCaptureMouseUnlessPopupClose?
+	bool          capture_inputs     = !io.WantTextInput;
 
 	if ( clip_data::current_clip && clip_data::current_clip->source_count > 0 && clip_data::current_source != UINT32_MAX )
 	{
 		video_path_matches = ( mpv_get_current_video() ? strcmp( clip_data::current_clip->source[ clip_data::current_source ].path, mpv_get_current_video() ) == 0 : false );
 	}
 
-	bool                      draw_tabs_and_sections = clip_data::current_clip && clip_data::get_current_group_source() != UINT32_MAX && video_path_matches;
+	bool draw_tabs_and_sections = clip_data::current_clip && clip_data::get_current_group_source() != UINT32_MAX && video_path_matches;
 
 	// ------------------------------------------------------------------------------------------
 	// Draw tabs on top for which encode preset currently in use and current source video?
@@ -610,6 +554,8 @@ void timeline_draw()
 	}
 
 	// ------------------------------------------------------------------------------------------
+
+	clip_group_t* group = clip_get_group( clip_data::current_clip, clip_data::current_group );
 
 	{
 		// ImGui::BeginDisabled( !draw_tabs_and_sections );

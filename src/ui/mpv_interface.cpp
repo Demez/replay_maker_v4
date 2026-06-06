@@ -620,6 +620,108 @@ T get_mpv_value( void* data, T fallback )
 }
 
 
+void get_media_info( mpv_data_t& mpv )
+{
+	if ( !mpv.current_video )
+		return;
+
+	mpv.track_count       = 0;
+	mpv.track_count_audio = 0;
+	mpv.track_count_video = 0;
+
+	mpv_error ret          = (mpv_error)p_mpv_get_property( mpv.mpv, "track-list/count", MPV_FORMAT_INT64, &mpv.track_count );
+
+	for ( s32 i = 0; i < mpv.track_count; i++ )
+	{
+		char cmd[ 64 ] = { 0 };
+		snprintf( cmd, 64, "track-list/%d/type", i );
+
+		char* type = nullptr;
+		ret        = (mpv_error)p_mpv_get_property( mpv.mpv, cmd, MPV_FORMAT_STRING, &type );
+
+		if ( !type )
+			continue;
+
+		if ( strcmp( type, "video" ) == 0 )
+			mpv.track_count_video++;
+
+		else if ( strcmp( type, "audio" ) == 0 )
+			mpv.track_count_audio++;
+	}
+}
+
+
+void mpv_update_handle_event( mpv_data_t& data, mpv_event* mpv_event )
+{
+	if ( mpv_event->event_id == MPV_EVENT_NONE )
+		return;
+
+	else if ( mpv_event->event_id == MPV_EVENT_PROPERTY_CHANGE )
+	{
+		struct mpv_event_property* property = (struct mpv_event_property*)mpv_event->data;
+
+		if ( property->name )
+		{
+			if ( strcmp( "time-pos", property->name ) == 0 )
+			{
+				// what the fuck is this?
+				// if ( property->data == nullptr )
+				// 	data.time_pos = 0.0;
+				// else
+				// 	data.time_pos = *(double*)property->data;
+				data.time_pos = get_mpv_value( property->data, 0.0 );
+			}
+			else if ( strcmp( "duration", property->name ) == 0 )
+			{
+				data.duration = get_mpv_value( property->data, 0.0 );
+			}
+			else if ( strcmp( "pause", property->name ) == 0 )
+			{
+				data.pause = get_mpv_value< s32 >( property->data, 0 );
+			}
+			else if ( strcmp( "dwidth", property->name ) == 0 )
+			{
+				data.dwidth = get_mpv_value< s64 >( property->data, 0 );
+			}
+			else if ( strcmp( "dheight", property->name ) == 0 )
+			{
+				data.dheight = get_mpv_value< s64 >( property->data, 0 );
+			}
+		}
+	}
+
+	else if ( mpv_event->event_id == MPV_EVENT_GET_PROPERTY_REPLY )
+	{
+	}
+
+	else if ( mpv_event->event_id == MPV_EVENT_PLAYBACK_RESTART )
+	{
+		data.loaded_file = true;
+		get_media_info( data );
+	}
+
+	else if ( mpv_event->event_id == MPV_EVENT_COMMAND_REPLY )
+	{
+		struct mpv_event_command* cmd_reply = (struct mpv_event_command*)mpv_event->data;
+
+		if ( mpv_event->reply_userdata == e_mpv_cmd_loadfile )
+		{
+			if ( mpv_event->error != 0 )
+			{
+				free( data.current_video );
+				data.current_video = nullptr;
+				data.loaded_file   = false;
+			}
+		}
+		else if ( mpv_event->reply_userdata == e_mpv_cmd_seek )
+		{
+			//printf( "FINISH SEEK - %u\n", sys_get_time_ms(), data.seek_queued_time );
+			// if ( data.seek_queued )
+			data.seek_queued = false;
+		}
+	}
+}
+
 void mpv_update( mpv_data_t& data )
 {
 	if ( !data.mpv )
@@ -629,58 +731,7 @@ void mpv_update( mpv_data_t& data )
 
 	while ( mpv_event && mpv_event->event_id != MPV_EVENT_NONE )
 	{
-		if ( mpv_event->event_id == MPV_EVENT_NONE )
-			break;
-
-		else if ( mpv_event->event_id == MPV_EVENT_PROPERTY_CHANGE )
-		{
-			struct mpv_event_property* property = (struct mpv_event_property*)mpv_event->data;
-
-			if ( property->name )
-			{
-				if ( strcmp( "time-pos", property->name ) == 0 )
-				{
-					// what the fuck is this?
-					// if ( property->data == nullptr )
-					// 	data.time_pos = 0.0;
-					// else
-					// 	data.time_pos = *(double*)property->data;
-					data.time_pos = get_mpv_value( property->data, 0.0 );
-				}
-				else if ( strcmp( "duration", property->name ) == 0 )
-				{
-					data.duration = get_mpv_value( property->data, 0.0 );
-				}
-				else if ( strcmp( "pause", property->name ) == 0 )
-				{
-					data.pause = get_mpv_value< s32 >( property->data, 0 );
-				}
-				else if ( strcmp( "dwidth", property->name ) == 0 )
-				{
-					data.dwidth = get_mpv_value< s64 >( property->data, 0 );
-				}
-				else if ( strcmp( "dheight", property->name ) == 0 )
-				{
-					data.dheight = get_mpv_value< s64 >( property->data, 0 );
-				}
-			}
-		}
-
-		else if ( mpv_event->event_id == MPV_EVENT_GET_PROPERTY_REPLY )
-		{
-		}
-
-		else if ( mpv_event->event_id == MPV_EVENT_COMMAND_REPLY )
-		{
-			struct mpv_event_command* cmd_reply = (struct mpv_event_command*)mpv_event->data;
-
-			if ( data.seek_queued && mpv_event->reply_userdata == 1 )
-			{
-				printf( "FINISH SEEK - %u\n", sys_get_time_ms(), data.seek_queued_time );
-				data.seek_queued = false;
-			}
-		}
-
+		mpv_update_handle_event( data, mpv_event );
 		mpv_event = p_mpv_wait_event( data.mpv, 0 );
 	}
 }
@@ -699,42 +750,6 @@ void mpv_update()
 void mpv_window_resize()
 {
 	mpv_update_texture();
-}
-
-
-void get_media_info( u32 index )
-{
-	mpv_data_t* mpv = get_mpv_data( index );
-
-	if ( !mpv )
-		return;
-
-	if ( !mpv->current_video )
-		return;
-
-	mpv->track_count       = 0;
-	mpv->track_count_audio = 0;
-	mpv->track_count_video = 0;
-
-	mpv_error ret          = (mpv_error)p_mpv_get_property( mpv->mpv, "track-list/count", MPV_FORMAT_INT64, &mpv->track_count );
-
-	for ( s32 i = 0; i < mpv->track_count; i++ )
-	{
-		char cmd[ 64 ] = { 0 };
-		snprintf( cmd, 64, "track-list/%d/type", i );
-
-		char* type = nullptr;
-		ret        = (mpv_error)p_mpv_get_property( mpv->mpv, cmd, MPV_FORMAT_STRING, &type );
-
-		if ( !type )
-			continue;
-
-		if ( strcmp( type, "video" ) == 0 )
-			mpv->track_count_video++;
-
-		else if ( strcmp( type, "audio" ) == 0 )
-			mpv->track_count_audio++;
-	}
 }
 
 
@@ -782,48 +797,10 @@ void mpv_cmd_loadfile( const char* file, u32 index )
 	printf( "Loading Video: %s\n", file );
 
 	const char* cmd[]   = { "loadfile", file, NULL };
-	int         cmd_ret = p_mpv_command_async( mpv->mpv, NULL, cmd );
-
-	//g_mpv_video_ready   = false;
-
-	// mpv_event*  event   = p_mpv_wait_event( g_mpv, 0.1f );
-	// mpv_handle_wait_event( g_mpv, 0.1f );
+	int         cmd_ret = p_mpv_command_async( mpv->mpv, e_mpv_cmd_loadfile, cmd );
 
 	free( mpv->current_video );
-	mpv->current_video = nullptr;
-
-	mpv_event* event  = p_mpv_wait_event( mpv->mpv, -1 );
-
-	while ( event->event_id != MPV_EVENT_NONE )
-	{
-		if ( event->event_id == MPV_EVENT_LOG_MESSAGE )
-		{
-			struct mpv_event_log_message* msg = (struct mpv_event_log_message*)event->data;
-			printf( "[%s] %s: %s", msg->prefix, msg->level, msg->text );
-		}
-		else if ( event->event_id == MPV_EVENT_COMMAND_REPLY )
-		{
-			if ( event->error != 0 )
-			{
-				printf( "Failed to load video - %d\n", event->error );
-				return;
-			}
-		}
-		else if ( event->event_id == MPV_EVENT_PLAYBACK_RESTART )
-		{
-			// Video Loaded
-			break;
-		}
-
-		event = p_mpv_wait_event( mpv->mpv, -1 );
-	}
-
-	// Video Loaded
 	mpv->current_video = util_strdup( file );
-
-	get_media_info();
-	
-	printf( "Video Loaded\n" );
 }
 
 
@@ -849,21 +826,29 @@ void mpv_cmd_toggle_playback()
 }
 
 
-void mpv_cmd_seek_offset( double seconds )
+void mpv_cmd_seek( mpv_data_t* mpv, double seconds )
 {
-	double duration = 0;
-	double time_pos = 0;
-	p_mpv_get_property( get_mpv(), "duration", MPV_FORMAT_DOUBLE, &duration );
-	p_mpv_get_property( get_mpv(), "time-pos", MPV_FORMAT_DOUBLE, &time_pos );
+	if ( !mpv )
+		return;
 
-	double new_time = time_pos + seconds;
-	new_time        = std::max( 0.0, std::min( duration, new_time ) );
+	// wait for current seek to finish
+	if ( mpv->seek_queued )
+		return;
 
-	char time_pos_str[ 32 ];
-	gcvt( new_time, 4, time_pos_str );
+	mpv->seek_queued      = true;
+	mpv->seek_queued_time = sys_get_time_ms();
+
+	char time_pos_str[ 16 ];
+	gcvt( seconds, 4, time_pos_str );
 
 	const char* cmd[]   = { "seek", time_pos_str, "absolute", NULL };
-	int         cmd_ret = p_mpv_command_async( get_mpv(), 0, cmd );
+	int         cmd_ret   = p_mpv_command_async( mpv->mpv, e_mpv_cmd_seek, cmd );
+}
+
+
+void mpv_cmd_seek( double seconds )
+{
+	mpv_cmd_seek( get_mpv_data(), seconds );
 }
 
 

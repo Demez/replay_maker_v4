@@ -49,10 +49,10 @@ enum e_cmd : u8
 };
 
 
-enum e_mpv_cmd
+enum e_mpv_bind_cmd
 {
-	e_mpv_cmd_normal,
-	e_mpv_cmd_seek,
+	e_mpv_bind_cmd_normal,
+	e_mpv_bind_cmd_seek,
 };
 
 
@@ -88,6 +88,7 @@ struct mpv_data_t
 	mpv_render_context* gl                = nullptr;
 
 	char*               current_video     = nullptr;
+	bool                loaded_file       = false;
 
 	// metadata grabbed on video load from mpv
 	s64                 track_count       = 0;
@@ -138,6 +139,15 @@ bool                               mouse_hovering_area( ImVec2 min_size, ImVec2 
 // --------------------------------------------------------------------------------------------------------
 // MPV
 
+enum e_mpv_cmd
+{
+	e_mpv_cmd_invalid,
+	e_mpv_cmd_loadfile,
+	e_mpv_cmd_seek,
+
+	e_mpv_cmd_count,
+};
+
 bool                               load_mpv_dll();
 void                               unload_mpv_dll();
 
@@ -164,12 +174,13 @@ char*                              mpv_get_current_video();
 void                               mpv_draw_frame();
 void                               mpv_window_resize();
 
-void                               get_media_info( u32 index = UINT32_MAX );
-
 void                               mpv_cmd_loadfile( const char* file, u32 index = UINT32_MAX );
 void                               mpv_cmd_close_video( u32 index = UINT32_MAX );
 void                               mpv_cmd_toggle_playback();
 void                               mpv_cmd_seek_offset( double seconds );
+
+void                               mpv_cmd_seek( mpv_data_t* mpv, double seconds );
+void                               mpv_cmd_seek( double seconds );
 
 void                               mpv_cmd_hook_window( void* window );
 void                               mpv_cmd_hook_window_mpv();

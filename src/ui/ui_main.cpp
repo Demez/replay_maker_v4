@@ -453,13 +453,7 @@ void draw_playback_controls( int size[ 2 ] )
 			float time_pos_f = (float)time_pos;
 			if ( ImGui::SliderFloat( "##seek", &time_pos_f, 0.f, (float)duration ) )
 			{
-				// convert float to string in c
-				char time_pos_str[ 16 ];
-				gcvt( time_pos_f, 4, time_pos_str );
-
-				const char* cmd[]   = { "seek", time_pos_str, "absolute", NULL };
-				int         cmd_ret = p_mpv_command_async( get_mpv(), 0, cmd );
-				printf( "seek - %d\n", cmd_ret );
+				mpv_cmd_seek( time_pos_f );
 			}
 
 			ImGui::PopItemWidth();

@@ -50,7 +50,7 @@ struct key_cmd_t
 
 struct mpv_cmd_t
 {
-	e_mpv_cmd type;
+	e_mpv_bind_cmd type;
 
 	union
 	{
