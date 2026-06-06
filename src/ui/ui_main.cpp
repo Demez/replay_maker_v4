@@ -32,14 +32,14 @@ void move_divider( u32 index )
 	{
 		// vertical divider
 		//cursor_main.y -= g_grab_cursor_offset[ 1 ];
-		app::mpv_size[ 1 ] = CLAMP( app::mouse_pos[ 1 ], 0.f, float(height) );
+		app::mpv_size[ 1 ] = CLAMP( app::mouse_pos[ 1 ], 0, height );
 		ImGui::SetMouseCursor( ImGuiMouseCursor_ResizeNS );
 	}
 	else if ( index == 1 )
 	{
 		// horizontal divider
 		//cursor_main.x -= g_grab_cursor_offset[ 0 ];
-		app::mpv_size[ 0 ] = width - CLAMP( app::mouse_pos[ 0 ], 0.f, float(width) );
+		app::mpv_size[ 0 ] = width - CLAMP( app::mouse_pos[ 0 ], 0, width );
 		ImGui::SetMouseCursor( ImGuiMouseCursor_ResizeEW );
 	}
 

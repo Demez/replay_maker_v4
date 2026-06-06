@@ -1530,6 +1530,8 @@ void timeline_draw()
 							g_selected_section = UINT32_MAX;
 					}
 
+					// TODO: check if we just did a single click, no need to do another seek in that case
+					// or if we did a long click, but no mouse movement, no seek would be needed after that
 					if ( seek_drag && !io.MouseDown[ 0 ] )
 					{
 						// timeline_set_seek_time( new_time_pos );
@@ -1559,23 +1561,16 @@ void timeline_draw()
 							new_time_pos      = section_resize ? section_resize_seek_time : duration.duration * new_seek_percent;
 
 							// bool mouse_moving = app::mouse_delta[ 0 ] != 0 || app::mouse_delta[ 1 ] != 0;
-							const float mouse_threshold = 1.0;
-							bool        mouse_moving    = fabs( app::mouse_delta[ 0 ] ) > mouse_threshold || fabs( app::mouse_delta[ 1 ] ) > mouse_threshold;
+							const int mouse_threshold = 1;
+							bool      mouse_moving    = abs( app::mouse_delta[ 0 ] ) > mouse_threshold || abs( app::mouse_delta[ 1 ] ) > mouse_threshold;
 
 							//printf( "MOUSE X SPEED: %.6f\n", app::mouse_delta[ 0 ] );
 
-							if ( mouse_moving || io.MouseClicked[ 0 ] )
+							if ( mouse_moving )
 							{
 								seek_keyframes = mouse_moving && !delayed_seek_drag_disable;
-
-								//if ( mouse_moving )
-								//	printf( "MOUSE MOVE\n" );
-
-								// ui actually feels worse with this lol
-								// timeline_set_seek_time_fast( new_time_pos );
-								// timeline_set_seek_time( new_time_pos );
 							}
-							else if ( last_seeked_keyframes )
+							else if ( last_seeked_keyframes || io.MouseClicked[ 0 ] )
 							{
 								// do an exact seek on mouse stop
 								seek_time_override = true;
@@ -1693,17 +1688,12 @@ void timeline_draw()
 
 		if ( mouse_moving || io.MouseClicked[ 0 ] || seek_time_override )
 		{
-			// ui actually feels worse with this lol
-			// timeline_set_seek_time_fast( new_time_pos );
-			// bool keyframes   = mouse_moving && io.MouseDown[ 0 ] && seek_drag;
-			bool keyframes   = seek_keyframes;
+			//if ( seek_keyframes )
+			//	printf( "SEEK KEYFRAMES\n" );
+			//else
+			//	printf( "SEEK EXACT\n" );
 
-			if ( keyframes )
-				printf( "SEEK KEYFRAMES\n" );
-			else
-				printf( "SEEK EXACT\n" );
-
-			was_time_pos_set = mpv_cmd_seek( new_time_pos, keyframes );
+			was_time_pos_set = mpv_cmd_seek( new_time_pos, seek_keyframes );
 
 			// just in case? haven't hit this condition yet
 			if ( ensure_seek_drag_time_set && !was_time_pos_set )

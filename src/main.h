@@ -281,8 +281,8 @@ namespace app
 	extern ivec2       window_size;
 
 	// Mouse
-	extern ImVec2      mouse_pos;
-	extern ImVec2      mouse_delta;
+	extern ivec2       mouse_pos;
+	extern ivec2       mouse_delta;
 	extern ImVec2      mouse_scroll;
 	extern ivec2       mouse_scroll_int;
 

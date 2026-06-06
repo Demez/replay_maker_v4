@@ -43,8 +43,8 @@ namespace app
 	ivec2       window_size         = { 0, 0 };
 
 	// Mouse
-	ImVec2      mouse_pos           = { 0, 0 };
-	ImVec2      mouse_delta         = { 0, 0 };
+	ivec2       mouse_pos           = { 0, 0 };
+	ivec2       mouse_delta         = { 0, 0 };
 	ImVec2      mouse_scroll        = { 0, 0 };
 	ivec2       mouse_scroll_int    = { 0, 0 };
 
@@ -610,6 +610,8 @@ void main_loop()
 					break;
 
 				case SDL_EVENT_MOUSE_MOTION:
+					// I know these are floats, but they don't make use of any floating point precision in this app
+					// I think it only goes down to that range in relative mouse mode, so they are just ints stored in floats
 					app::mouse_pos[ 0 ] = event.motion.x;
 					app::mouse_pos[ 1 ] = event.motion.y;
 					app::mouse_delta[ 0 ] += event.motion.xrel;
