@@ -815,148 +815,150 @@ clip_loop_continue:
 
 	ImGui::SetNextWindowSizeConstraints( { -1, ImGui::GetFrameHeightWithSpacing() }, { -1, ImGui::GetFrameHeightWithSpacing() * 8.f } );
 
-	if ( ImGui::BeginChild( "source_list", {}, ImGuiChildFlags_Borders | ImGuiChildFlags_AutoResizeY ) )
+	u32 delete_source = UINT32_MAX;
+
+	if ( ImGui::BeginChild( "source_list", {}, ImGuiChildFlags_Borders | ImGuiChildFlags_AutoResizeY ) && clip_data::current_clip )
 	{
-		if ( clip_data::current_clip )
+		for ( u32 source_i = 0; source_i < clip_data::current_clip->source_count; source_i++ )
 		{
-			for ( u32 source_i = 0; source_i < clip_data::current_clip->source_count; source_i++ )
+			clip_source_t& source               = clip_data::current_clip->source[ source_i ];
+
+			// Check if this source is used in the current group
+			bool           source_used_in_group = false;
+
+			if ( clip_data::current_group != UINT32_MAX && clip_data::current_group < clip_data::current_clip->groups.size() )
 			{
-				clip_source_t& source               = clip_data::current_clip->source[ source_i ];
+				clip_group_t& group = clip_data::current_clip->groups[ clip_data::current_group ];
 
-				// Check if this source is used in the current group
-				bool           source_used_in_group = false;
-
-				if ( clip_data::current_group != UINT32_MAX && clip_data::current_group < clip_data::current_clip->groups.size() )
+				for ( u32 source_use_i = 0; source_use_i < group.sources.size(); source_use_i++ )
 				{
-					clip_group_t& group = clip_data::current_clip->groups[ clip_data::current_group ];
+					clip_source_usage_t& source_use = group.sources[ source_use_i ];
 
-					for ( u32 source_use_i = 0; source_use_i < group.sources.size(); source_use_i++ )
-					{
-						clip_source_usage_t& source_use = group.sources[ source_use_i ];
+					if ( source_i != source_use.source_index )
+						continue;
 
-						if ( source_i != source_use.source_index )
-							continue;
-
-						source_used_in_group = true;
-						break;
-					}
+					source_used_in_group = true;
+					break;
 				}
+			}
 
-				bool missing = source.file_missing;
+			bool missing = source.file_missing;
 
+			if ( missing )
+			{
+				ImGui::PushStyleColor( ImGuiCol_FrameBg, COLOR_RED_FRAME );
+				ImGui::PushStyleColor( ImGuiCol_Button, COLOR_BTN_RED );
+				ImGui::PushStyleColor( ImGuiCol_ButtonHovered, COLOR_BTN_RED_HOVER );
+				ImGui::PushStyleColor( ImGuiCol_ButtonActive, COLOR_BTN_RED_ACTIVE );
+			}
+
+			if ( ImGui::BeginChild( source_i + 1, {}, ImGuiChildFlags_Borders | ImGuiChildFlags_AutoResizeY | ImGuiChildFlags_FrameStyle ) )
+			{
 				if ( missing )
 				{
-					ImGui::PushStyleColor( ImGuiCol_FrameBg, COLOR_RED_FRAME );
-					ImGui::PushStyleColor( ImGuiCol_Button, COLOR_BTN_RED );
-					ImGui::PushStyleColor( ImGuiCol_ButtonHovered, COLOR_BTN_RED_HOVER );
-					ImGui::PushStyleColor( ImGuiCol_ButtonActive, COLOR_BTN_RED_ACTIVE );
+					ImGui::Text( "MISSING - %s", source.path );
 				}
-
-				if ( ImGui::BeginChild( source_i + 1, {}, ImGuiChildFlags_Borders | ImGuiChildFlags_AutoResizeY | ImGuiChildFlags_FrameStyle ) )
+				else
 				{
-					if ( missing )
-					{
-						ImGui::Text( "MISSING - %s", source.path );
-					}
-					else
-					{
-						ImGui::TextUnformatted( source.path );
-					}
-
-					ImGui::Separator();
-
-					ImGui::BeginDisabled( missing );
-
-					if ( ImGui::Button( "Add to Current Group" ) )
-					{
-						u32 i = clip_group_add_source( clip_data::current_clip, clip_data::current_group, source.path );
-						replay_editor_set_group( clip_data::current_clip_index, clip_data::current_group, i );
-					}
-
-					ImGui::SameLine();
-
-					if ( ImGui::Button( "Preview Video" ) )
-					{
-						// Set to MPV Loose video
-						replay_editor_load_loose_video( source.path );
-					}
-
-					ImGui::EndDisabled();
-
-					ImGui::SameLine();
-
-					// moves the file to a separate location, might default to a specific move folder in the settings somewhere
-					if ( ImGui::Button( "Replace File" ) )
-					{
-						on_file_dialog_open();
-
-						char*                 cwd      = sys_get_cwd();
-						nfdu8char_t*          out_path = nullptr;
-
-						char*                 exts     = p_mpv_get_property_string( get_mpv(), "video-exts" );
-						nfdu8filteritem_t     filter   = { "MPV Supported Videos", exts };
-
-						nfdopendialogu8args_t args     = { 0 };
-
-						args.filterList                = &filter;
-						args.filterCount               = 1;
-						//args.defaultPath               = cwd;
-
-						nfdresult_t result             = NFD_OpenDialogU8_With( &out_path, &args );
-
-						if ( result == NFD_OKAY )
-						{
-							source.path     = util_strdup_r( source.path, out_path );
-
-							if ( source.filename )
-								free( source.filename );
-
-							source.filename = fs_get_filename( source.path );
-
-							clip_get_video_metadata( source );
-							clip_check_video( *clip_data::current_clip );
-
-							// replay_editor_current_set_group( clip_data::current_group, clip_data::get_current_group_source() );
-
-							NFD_FreePathU8( out_path );
-
-							mpv_cmd_loadfile( source.path );
-						}
-						else if ( result == NFD_ERROR )
-						{
-							printf( "NativeFileDialog Error: %s\n", NFD_GetError() );
-						}
-
-						free( cwd );
-
-						on_file_dialog_exit();
-					}
-
-					ImGui::SameLine();
-
-					ImGui::BeginDisabled();
-
-					// moves the file to a separate location, might default to a specific move folder in the settings somewhere
-					if ( ImGui::Button( "Move File" ) )
-					{
-					}
-
-					ImGui::SameLine();
-
-					if ( ImGui::Button( "Remove" ) )
-					{
-						// clip_remove_source();
-					}
-
-					ImGui::EndDisabled();
+					ImGui::TextUnformatted( source.path );
 				}
 
-				ImGui::EndChild();
+				ImGui::Separator();
 
-				if ( missing )
+				ImGui::BeginDisabled( missing );
+
+				if ( ImGui::Button( "Add to Current Group" ) )
 				{
-					ImGui::PopStyleColor( 4 );
+					u32 i = clip_group_add_source( clip_data::current_clip, clip_data::current_group, source.path );
+					replay_editor_set_group( clip_data::current_clip_index, clip_data::current_group, i );
 				}
+
+				ImGui::SameLine();
+
+				if ( ImGui::Button( "Preview Video" ) )
+				{
+					// Set to MPV Loose video
+					replay_editor_load_loose_video( source.path );
+				}
+
+				ImGui::EndDisabled();
+
+				ImGui::SameLine();
+
+				// moves the file to a separate location, might default to a specific move folder in the settings somewhere
+				if ( ImGui::Button( "Replace File" ) )
+				{
+					on_file_dialog_open();
+
+					char*                 cwd      = sys_get_cwd();
+					nfdu8char_t*          out_path = nullptr;
+
+					char*                 exts     = p_mpv_get_property_string( get_mpv(), "video-exts" );
+					nfdu8filteritem_t     filter   = { "MPV Supported Videos", exts };
+
+					nfdopendialogu8args_t args     = { 0 };
+
+					args.filterList                = &filter;
+					args.filterCount               = 1;
+					//args.defaultPath               = cwd;
+
+					nfdresult_t result             = NFD_OpenDialogU8_With( &out_path, &args );
+
+					if ( result == NFD_OKAY )
+					{
+						source.path     = util_strdup_r( source.path, out_path );
+
+						if ( source.filename )
+							free( source.filename );
+
+						source.filename = fs_get_filename( source.path );
+
+						clip_get_video_metadata( source );
+						clip_check_video( *clip_data::current_clip );
+
+						// replay_editor_current_set_group( clip_data::current_group, clip_data::get_current_group_source() );
+
+						NFD_FreePathU8( out_path );
+
+						mpv_cmd_loadfile( source.path );
+					}
+					else if ( result == NFD_ERROR )
+					{
+						printf( "NativeFileDialog Error: %s\n", NFD_GetError() );
+					}
+
+					free( cwd );
+
+					on_file_dialog_exit();
+				}
+
+				ImGui::SameLine();
+
+				ImGui::BeginDisabled();
+
+				// moves the file to a separate location, might default to a specific move folder in the settings somewhere
+				if ( ImGui::Button( "Move File" ) )
+				{
+				}
+
+				ImGui::SameLine();
+
+				ImGui::EndDisabled();
+				ImGui::BeginDisabled( missing );
+
+				if ( ImGui::Button( "Remove" ) )
+				{
+					delete_source = source_i;
+				}
+
+				ImGui::EndDisabled();
+			}
+
+			ImGui::EndChild();
+
+			if ( missing )
+			{
+				ImGui::PopStyleColor( 4 );
 			}
 		}
 	}
@@ -1054,5 +1056,24 @@ clip_loop_continue:
 	clip_reorder_drag::just_selected = false;
 
 	ImGui::EndDisabled();
+
+	if ( delete_source != UINT32_MAX )
+	{
+		//clip_source_usage_t source_usage     = clip_data::current_clip->groups[ clip_data::current_group ].sources[ clip_data::get_current_group_source() ];
+		//u32                 current_source_i = clip_data::current_source;
+
+		clip_remove_source( clip_data::current_clip, delete_source );
+
+		if ( clip_data::current_source == delete_source && clip_data::current_source > 0 )
+			clip_data::current_source--;
+
+		//clip_group_t* group = clip_get_group( clip_data::clip, clip_data::current_group );
+		//
+		//if ( clip_data::get_current_group_source() == current_source_i )
+		//{
+		//}
+
+		replay_editor_current_set_group( clip_data::current_group, clip_data::get_current_group_source() );
+	}
 }
 

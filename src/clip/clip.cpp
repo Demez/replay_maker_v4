@@ -329,23 +329,45 @@ u32 clip_add_source( clip_t* clip, const char* path )
 }
 
 
-void clip_remove_source( clip_t* clip, u32 input_i )
+void clip_remove_source( clip_t* clip, u32 source_i )
 {
 	if ( !clip )
 		return;
 
-	if ( input_i > clip->source_count )
+	if ( source_i > clip->source_count )
 	{
 		log_printf( "invalid source index\n" );
 		return;
 	}
 
-	clip_source_t& source = clip->source[ input_i ];
+	// Remove usages from groups
+	for ( u32 g = 0; clip_group_t& group : clip->groups )
+	{
+		for ( u32 i = 0; i < group.sources.size(); )
+		{
+			clip_source_usage_t& source_use = group.sources[ i ];
+
+			if ( source_use.source_index == source_i )
+			{
+				clip_group_remove_source( clip, g, i );
+				continue;
+			}
+
+			if ( source_use.source_index > source_i )
+				source_use.source_index--;
+
+			i++;
+		}
+
+		g++;
+	}
+
+	clip_source_t& source = clip->source[ source_i ];
 
 	free( source.path );
 	free( source.filename );
 
-	util_array_remove_element( clip->source, clip->source_count, input_i );
+	util_array_remove_element( clip->source, clip->source_count, source_i );
 }
 
 
@@ -416,6 +438,24 @@ void clip_group_remove_source( clip_t* clip, u32 group_index, u32 group_src_i )
 		return;
 
 	group.sources.remove( group_src_i );
+
+	if ( clip == clip_data::current_clip )
+	{
+		if ( clip_data::current_group_source[ group_index ] > 0 && clip_data::current_group_source[ group_index ] == group.sources.size() )
+			clip_data::current_group_source[ group_index ]--;
+
+		if ( group.sources.size() )
+		{
+			// clip_data::current_source = group->sources[ clip_data::current_group_source ].source_index;
+			//replay_editor_set_group( clip_data::current_clip_index, clip_data::current_group, clip_data::get_current_group_source() );
+		}
+		else
+		{
+			//replay_editor_set_group( clip_data::current_clip_index, clip_data::current_group, 0 );
+			clip_data::current_source       = UINT32_MAX;
+			//clip_data::current_group_source = UINT32_MAX;
+		}
+	}
 
 	clip_check_video( *clip );
 }
