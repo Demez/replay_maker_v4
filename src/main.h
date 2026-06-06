@@ -144,6 +144,8 @@ bool                               mouse_hovering_area( ImVec2 min_size, ImVec2 
 enum e_mpv_cmd
 {
 	e_mpv_cmd_invalid,
+	e_mpv_cmd_observe,
+
 	e_mpv_cmd_loadfile,
 	e_mpv_cmd_seek,
 
@@ -184,8 +186,8 @@ void                               mpv_cmd_close_video( u32 index = UINT32_MAX )
 void                               mpv_cmd_toggle_playback();
 void                               mpv_cmd_seek_offset( double seconds );
 
-void                               mpv_cmd_seek( mpv_data_t* mpv, double seconds );
-void                               mpv_cmd_seek( double seconds );
+bool                               mpv_cmd_seek( mpv_data_t* mpv, double seconds );
+bool                               mpv_cmd_seek( double seconds );
 
 void                               mpv_cmd_hook_window( void* window );
 void                               mpv_cmd_hook_window_mpv();

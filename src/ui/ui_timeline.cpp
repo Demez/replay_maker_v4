@@ -394,6 +394,7 @@ void timeline_draw()
 	u32          focused_source     = 0;
 	float        duration_total     = 0.f;
 	static float new_time_pos       = 0.f;
+	static bool  was_time_pos_set   = false;
 	static bool  update_time_next_draw = false;
 
 	static bool  stay_paused        = false;
@@ -1015,7 +1016,10 @@ void timeline_draw()
 	static bool       just_selected_section         = false;
 
 	static bool       seek_drag                     = false;
+	static bool       ensure_seek_drag_time_set     = false;
 	static float      new_seek_percent              = 0.f;
+
+	ensure_seek_drag_time_set = false;
 
 	bool              seek_time_override            = false;
 	bool              ignore_seek_drag              = false;
@@ -1480,6 +1484,8 @@ void timeline_draw()
 						seek_drag        = false;
 						new_seek_percent = 0.f;
 						new_time_pos     = 0.f;
+
+						ensure_seek_drag_time_set = true;
 					}
 
 					if ( seek_drag && mouse_hovered_area )
@@ -1617,7 +1623,11 @@ void timeline_draw()
 		{
 			// ui actually feels worse with this lol
 			// timeline_set_seek_time_fast( new_time_pos );
-			timeline_set_seek_time( new_time_pos );
+			was_time_pos_set = mpv_cmd_seek( new_time_pos );
+
+			// just in case? haven't hit this condition yet
+			if ( ensure_seek_drag_time_set && !was_time_pos_set )
+				update_time_next_draw = true;
 		}
 	}
 

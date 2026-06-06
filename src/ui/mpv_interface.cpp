@@ -359,8 +359,6 @@ bool start_mpv( mpv_data_t& mpv )
 	// https://github.com/celluloid-player/celluloid/pull/982
 	p_mpv_set_option_string( mpv.mpv, "video-timing-offset", "0" );
 
-	//p_mpv_set_option_string( mpv.mpv, "hr-seek", "no" );
-
 	// Start Paused
 	p_mpv_set_option_string( mpv.mpv, "pause", "" );
 
@@ -398,17 +396,17 @@ bool start_mpv( mpv_data_t& mpv )
 
 	p_mpv_set_property_string( mpv.mpv, "keep-open", "always" );
 
-	int observe_ret = p_mpv_observe_property( mpv.mpv, 0, "time-pos", MPV_FORMAT_DOUBLE );
-	observe_ret     = p_mpv_observe_property( mpv.mpv, 0, "duration", MPV_FORMAT_DOUBLE );
-	observe_ret     = p_mpv_observe_property( mpv.mpv, 0, "pause", MPV_FORMAT_FLAG );
+	int observe_ret = p_mpv_observe_property( mpv.mpv, e_mpv_cmd_observe, "time-pos", MPV_FORMAT_DOUBLE );
+	observe_ret     = p_mpv_observe_property( mpv.mpv, e_mpv_cmd_observe, "duration", MPV_FORMAT_DOUBLE );
+	observe_ret     = p_mpv_observe_property( mpv.mpv, e_mpv_cmd_observe, "pause", MPV_FORMAT_FLAG );
 
-	observe_ret     = p_mpv_observe_property( mpv.mpv, 0, "dwidth", MPV_FORMAT_INT64 );
-	observe_ret     = p_mpv_observe_property( mpv.mpv, 0, "dheight", MPV_FORMAT_INT64 );
+	observe_ret     = p_mpv_observe_property( mpv.mpv, e_mpv_cmd_observe, "dwidth", MPV_FORMAT_INT64 );
+	observe_ret     = p_mpv_observe_property( mpv.mpv, e_mpv_cmd_observe, "dheight", MPV_FORMAT_INT64 );
 
-	observe_ret     = p_mpv_observe_property( mpv.mpv, 0, "volume", MPV_FORMAT_DOUBLE );
+	observe_ret     = p_mpv_observe_property( mpv.mpv, e_mpv_cmd_observe, "volume", MPV_FORMAT_DOUBLE );
 
-	observe_ret     = p_mpv_observe_property( mpv.mpv, 0, "audio", MPV_FORMAT_STRING );
-	//observe_ret     = p_mpv_observe_property( mpv.mpv, 0, "current-tracks/audio/title", MPV_FORMAT_STRING );
+	observe_ret     = p_mpv_observe_property( mpv.mpv, e_mpv_cmd_observe, "audio", MPV_FORMAT_STRING );
+	//observe_ret     = p_mpv_observe_property( mpv.mpv, e_mpv_cmd_observe, "current-tracks/audio/title", MPV_FORMAT_STRING );
 
 	if ( g_mpv_exts.empty() )
 	{
@@ -439,14 +437,42 @@ bool start_mpv( mpv_data_t& mpv )
 }
 
 
+void mpv_update( mpv_data_t& data );
+
+
+void close_mpv( mpv_data_t& mpv )
+{
+	free( mpv.current_video );
+	mpv.current_video = nullptr;
+
+	if ( mpv.mpv )
+	{
+		mpv_update( mpv );
+
+		//p_mpv_unobserve_property( mpv.mpv, e_mpv_cmd_observe );
+
+		//p_mpv_free( mpv.audio_track );
+		//p_mpv_free( mpv.audio_track_title );
+	}
+
+	// crash ??? what am i missing
+	// p_mpv_destroy( mpv.mpv );
+}
+
+
 void stop_mpv()
 {
 	for ( mpv_data_t& mpv : g_mpv )
 	{
-		p_mpv_free( mpv.mpv );
+		close_mpv( mpv );
 	}
 
 	g_mpv.clear();
+
+	if ( g_mpv_extra_vid_on )
+		close_mpv( g_mpv_extra_vid );
+
+	g_mpv_extra_vid_on = false;
 }
 
 
@@ -604,7 +630,7 @@ void remove_mpv_extra_video()
 {
 	if ( g_mpv_extra_vid_on )
 	{
-		p_mpv_free( g_mpv_extra_vid.mpv );
+		close_mpv( g_mpv_extra_vid );
 		memset( &g_mpv_extra_vid, 0, sizeof( mpv_data_t ) );
 	}
 
@@ -656,111 +682,6 @@ void get_media_info( mpv_data_t& mpv )
 }
 
 
-void mpv_update_handle_event( mpv_data_t& data, mpv_event* mpv_event )
-{
-	if ( mpv_event->event_id == MPV_EVENT_NONE )
-		return;
-
-	else if ( mpv_event->event_id == MPV_EVENT_PROPERTY_CHANGE )
-	{
-		struct mpv_event_property* property = (struct mpv_event_property*)mpv_event->data;
-
-		if ( property->name )
-		{
-			if ( strcmp( "time-pos", property->name ) == 0 )
-			{
-				// what the fuck is this?
-				// if ( property->data == nullptr )
-				// 	data.time_pos = 0.0;
-				// else
-				// 	data.time_pos = *(double*)property->data;
-				data.time_pos = get_mpv_value( property->data, 0.0 );
-			}
-			else if ( strcmp( "duration", property->name ) == 0 )
-			{
-				data.duration = get_mpv_value( property->data, 0.0 );
-			}
-			else if ( strcmp( "pause", property->name ) == 0 )
-			{
-				data.pause = get_mpv_value< s32 >( property->data, 0 );
-			}
-			else if ( strcmp( "dwidth", property->name ) == 0 )
-			{
-				data.dwidth = get_mpv_value< s64 >( property->data, 0 );
-			}
-			else if ( strcmp( "dheight", property->name ) == 0 )
-			{
-				data.dheight = get_mpv_value< s64 >( property->data, 0 );
-			}
-			else if ( strcmp( "volume", property->name ) == 0 )
-			{
-				data.volume = get_mpv_value< double >( property->data, 0 );
-			}
-			else if ( strcmp( "audio", property->name ) == 0 )
-			{
-				if ( data.audio_track )
-					p_mpv_free( data.audio_track );
-
-				data.audio_track = get_mpv_value< char* >( property->data, nullptr );
-			}
-			else if ( strcmp( "current-tracks/audio/title", property->name ) == 0 )
-			{
-				if ( data.audio_track_title )
-					p_mpv_free( data.audio_track_title );
-
-				data.audio_track_title = get_mpv_value< char* >( property->data, nullptr );
-			}
-		}
-	}
-
-	else if ( mpv_event->event_id == MPV_EVENT_GET_PROPERTY_REPLY )
-	{
-		struct mpv_event_property* property = (struct mpv_event_property*)mpv_event->data;
-
-		if ( property->name )
-		{
-			//if ( strcmp( "audio", property->name ) == 0 )
-			//{
-			//	data.audio_track = get_mpv_value< char* >( property->data, nullptr );
-			//}
-			if ( strcmp( "current-tracks/audio/title", property->name ) == 0 )
-			{
-				if ( data.audio_track_title )
-					p_mpv_free( data.audio_track_title );
-
-				data.audio_track_title = get_mpv_value< char* >( property->data, nullptr );
-			}
-		}
-	}
-
-	else if ( mpv_event->event_id == MPV_EVENT_PLAYBACK_RESTART )
-	{
-		data.loaded_file = true;
-		get_media_info( data );
-	}
-
-	else if ( mpv_event->event_id == MPV_EVENT_COMMAND_REPLY )
-	{
-		struct mpv_event_command* cmd_reply = (struct mpv_event_command*)mpv_event->data;
-
-		if ( mpv_event->reply_userdata == e_mpv_cmd_loadfile )
-		{
-			if ( mpv_event->error != 0 )
-			{
-				free( data.current_video );
-				data.current_video = nullptr;
-				data.loaded_file   = false;
-			}
-		}
-		else if ( mpv_event->reply_userdata == e_mpv_cmd_seek )
-		{
-			//printf( "FINISH SEEK - %u\n", sys_get_time_ms(), data.seek_queued_time );
-			// if ( data.seek_queued )
-			data.seek_queued = false;
-		}
-	}
-}
-
 void mpv_update( mpv_data_t& data )
 {
 	if ( !data.mpv )
@@ -770,7 +691,121 @@ void mpv_update( mpv_data_t& data )
 
 	while ( mpv_event && mpv_event->event_id != MPV_EVENT_NONE )
 	{
-		mpv_update_handle_event( data, mpv_event );
+		if ( mpv_event->event_id == MPV_EVENT_NONE )
+			return;
+
+		if ( mpv_event->event_id == MPV_EVENT_PROPERTY_CHANGE )
+		{
+			struct mpv_event_property* property = (struct mpv_event_property*)mpv_event->data;
+
+			if ( property->name )
+			{
+				if ( strcmp( "time-pos", property->name ) == 0 )
+				{
+					// what the fuck is this?
+					// if ( property->data == nullptr )
+					// 	data.time_pos = 0.0;
+					// else
+					// 	data.time_pos = *(double*)property->data;
+					data.time_pos = get_mpv_value( property->data, 0.0 );
+				}
+				else if ( strcmp( "duration", property->name ) == 0 )
+				{
+					data.duration = get_mpv_value( property->data, 0.0 );
+				}
+				else if ( strcmp( "pause", property->name ) == 0 )
+				{
+					data.pause = get_mpv_value< s32 >( property->data, 0 );
+				}
+				else if ( strcmp( "dwidth", property->name ) == 0 )
+				{
+					data.dwidth = get_mpv_value< s64 >( property->data, 0 );
+				}
+				else if ( strcmp( "dheight", property->name ) == 0 )
+				{
+					data.dheight = get_mpv_value< s64 >( property->data, 0 );
+				}
+				else if ( strcmp( "volume", property->name ) == 0 )
+				{
+					data.volume = get_mpv_value< double >( property->data, 0 );
+				}
+				else if ( strcmp( "audio", property->name ) == 0 )
+				{
+					if ( data.audio_track )
+						free( data.audio_track );
+
+					data.audio_track = nullptr;
+
+					// format can be NONE if it has an error
+					if ( property->format == MPV_FORMAT_STRING && property->data != nullptr )
+					{
+						char* temp_str = *(char**)property->data;
+						data.audio_track = util_strdup( temp_str );
+
+						// do you not free async string returns? can't find info on it in documentation
+						// p_mpv_free( temp_str );
+					}
+
+					//char* temp_str = get_mpv_value< char* >( property->data, nullptr );
+					//data.audio_track = util_strdup( temp_str );
+					//p_mpv_free( temp_str );
+
+					printf( "AUDIO TRACK: %s\n", data.audio_track );
+				}
+				else if ( strcmp( "current-tracks/audio/title", property->name ) == 0 )
+				{
+					//if ( data.audio_track_title )
+					//	p_mpv_free( data.audio_track_title );
+
+					//data.audio_track_title = get_mpv_value< char* >( property->data, nullptr );
+				}
+			}
+		}
+		else if ( mpv_event->event_id == MPV_EVENT_GET_PROPERTY_REPLY )
+		{
+			struct mpv_event_property* property = (struct mpv_event_property*)mpv_event->data;
+
+			if ( property->name )
+			{
+				//if ( strcmp( "audio", property->name ) == 0 )
+				//{
+				//	data.audio_track = get_mpv_value< char* >( property->data, nullptr );
+				//}
+				if ( strcmp( "current-tracks/audio/title", property->name ) == 0 )
+				{
+					//if ( data.audio_track_title )
+					//	p_mpv_free( data.audio_track_title );
+
+					//data.audio_track_title = get_mpv_value< char* >( property->data, nullptr );
+				}
+			}
+		}
+		else if ( mpv_event->event_id == MPV_EVENT_PLAYBACK_RESTART )
+		{
+			data.loaded_file = true;
+			get_media_info( data );
+		}
+		else if ( mpv_event->event_id == MPV_EVENT_COMMAND_REPLY )
+		{
+			struct mpv_event_command* cmd_reply = (struct mpv_event_command*)mpv_event->data;
+
+			if ( mpv_event->reply_userdata == e_mpv_cmd_loadfile )
+			{
+				if ( mpv_event->error != 0 )
+				{
+					free( data.current_video );
+					data.current_video = nullptr;
+					data.loaded_file   = false;
+				}
+			}
+			else if ( mpv_event->reply_userdata == e_mpv_cmd_seek )
+			{
+				//printf( "FINISH SEEK - %u\n", sys_get_time_ms(), data.seek_queued_time );
+				// if ( data.seek_queued )
+				data.seek_queued = false;
+			}
+		}
+
 		mpv_event = p_mpv_wait_event( data.mpv, 0 );
 	}
 }
@@ -865,14 +900,14 @@ void mpv_cmd_toggle_playback()
 }
 
 
-void mpv_cmd_seek( mpv_data_t* mpv, double seconds )
+bool mpv_cmd_seek( mpv_data_t* mpv, double seconds )
 {
 	if ( !mpv )
-		return;
+		return false;
 
 	// wait for current seek to finish
 	if ( mpv->seek_queued )
-		return;
+		return false;
 
 	mpv->seek_queued      = true;
 	mpv->seek_queued_time = sys_get_time_ms();
@@ -882,12 +917,14 @@ void mpv_cmd_seek( mpv_data_t* mpv, double seconds )
 
 	const char* cmd[]   = { "seek", time_pos_str, "absolute", NULL };
 	int         cmd_ret   = p_mpv_command_async( mpv->mpv, e_mpv_cmd_seek, cmd );
+
+	return true;
 }
 
 
-void mpv_cmd_seek( double seconds )
+bool mpv_cmd_seek( double seconds )
 {
-	mpv_cmd_seek( get_mpv_data(), seconds );
+	return mpv_cmd_seek( get_mpv_data(), seconds );
 }
 
 
