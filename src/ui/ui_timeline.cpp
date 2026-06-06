@@ -916,19 +916,22 @@ void timeline_draw()
 	// ------------------------------------------------------------------------------------------
 	// Draw sections
 
-	static bool       section_resize           = false;
-	static u32        section_resize_source    = 0;
-	static bool       section_resize_left      = false;
-	static u32        section_resize_index     = 0;
-	static float      section_resize_seek_time = 0.f;
+	static bool       section_resize                = false;
+	static bool       section_resize_mouse_wait     = false;
+	static u32        section_resize_source         = 0;
+	static bool       section_resize_left           = false;
+	static u32        section_resize_index          = 0;
+	static float      section_resize_seek_time      = 0.f;
 
-	static bool       just_selected_section    = false;
+	const float       section_snap_size_base        = 4 * app::dpi;
 
-	static bool       seek_drag                = false;
-	static float      new_seek_percent         = 0.f;
+	static bool       just_selected_section         = false;
 
-	bool              seek_time_override       = false;
-	bool              ignore_seek_drag         = false;
+	static bool       seek_drag                     = false;
+	static float      new_seek_percent              = 0.f;
+
+	bool              seek_time_override            = false;
+	bool              ignore_seek_drag              = false;
 
 	// shift time range params
 	static u32        shift_time_range_hovered_prev = UINT32_MAX;
@@ -1115,21 +1118,54 @@ void timeline_draw()
 					// ------------------------------------------------------------------------------------------
 					// check cursor snapping above time range start
 
-					int snap_to_time_range = 0;
+					int   snap_to_time_range = 0;
+					float section_snap_size  = section_snap_size_base;
 
-					const float snap_size          = 4 * app::dpi;
-
-					if ( mouse_hovered && mouse_in_rect( ImVec2( section_pos_left - snap_size, window_area_min.y ), ImVec2( section_pos_left + snap_size, height_min ) ) )
+					// if the section is too small, shrink the snap size
+					if ( section_snap_size * 2 > ( section_pos_right - section_pos_left ) )
 					{
-						//ImGui::SetMouseCursor( ImGuiMouseCursor_Hand );
-						snap_to_time_range = 1;
+						section_snap_size = ( section_pos_right - section_pos_left ) * 0.5;
 					}
 
-					// check snap to end time
-					if ( mouse_hovered && mouse_in_rect( ImVec2( section_pos_right - snap_size, window_area_min.y ), ImVec2( section_pos_right + snap_size, height_min ) ) )
+					// clamp to timeline area
+					// float section_pos_snap_start_l  = std::max( section_pos_left - section_snap_size, window_area_min.x );
+					float section_pos_snap_start_l  = section_pos_left;
+					float section_pos_snap_start_r  = std::min( section_pos_left + section_snap_size, window_area_max.x );
+					// float section_pos_snap_start_r  = CLAMP( section_pos_left + section_snap_size, float(section_pos_right), window_area_max.x );
+
+					float section_pos_snap_end_l    = std::max( section_pos_right - section_snap_size, window_area_min.x );
+					//float section_pos_snap_end_l    = section_pos_right - section_snap_size;
+					//float section_pos_snap_end_r    = std::max( section_pos_right + section_snap_size, window_area_max.x );
+					float section_pos_snap_end_r    = section_pos_right;
+
+					if ( mouse_hovered )
 					{
-						//ImGui::SetMouseCursor( ImGuiMouseCursor_Hand );
-						snap_to_time_range = 2;
+						if ( mouse_in_rect( ImVec2( section_pos_snap_start_l, window_area_min.y ), ImVec2( section_pos_snap_start_r, height_min ) ) )
+						{
+							ImGui::SetMouseCursor( ImGuiMouseCursor_Hand );
+							snap_to_time_range = 1;
+						}
+
+						// check to the left of the section in the timeline
+						//else if( mouse_in_rect( ImVec2( section_pos_left - section_snap_size, height_min ), ImVec2( section_pos_left, window_area_max.y ) ) )
+						//{
+						//	//ImGui::SetMouseCursor( ImGuiMouseCursor_Hand );
+						//	snap_to_time_range = 1;
+						//}
+
+						// check snap to end time
+						else if ( mouse_in_rect( ImVec2( section_pos_snap_end_l, window_area_min.y ), ImVec2( section_pos_snap_end_r, height_min ) ) )
+						{
+							ImGui::SetMouseCursor( ImGuiMouseCursor_Hand );
+							snap_to_time_range = 2;
+						}
+
+						// check to the right of the section in the timeline
+						//else if ( mouse_in_rect( ImVec2( section_pos_right, height_min ), ImVec2( section_pos_right + section_snap_size, window_area_max.y ) ) )
+						//{
+						//	//ImGui::SetMouseCursor( ImGuiMouseCursor_Hand );
+						//	snap_to_time_range = 2;
+						//}
 					}
 
 					if ( snap_to_time_range > 0 && io.MouseClicked[ 0 ] )
@@ -1145,7 +1181,7 @@ void timeline_draw()
 					}
 
 					// check if we want to select this one
-					if ( mouse_hovered && io.MouseClicked[ 0 ] && mouse_in_rect( ImVec2( section_pos_left, height_min ), ImVec2( section_pos_right, window_area_max.y ) ) )
+					if ( mouse_hovered && io.MouseClicked[ 0 ] && mouse_in_rect( ImVec2( section_pos_snap_start_l, height_min ), ImVec2( section_pos_snap_end_r, window_area_max.y ) ) )
 					{
 						g_selected_section    = time_i;
 						just_selected_section = true;
@@ -1154,39 +1190,39 @@ void timeline_draw()
 					// ------------------------------------------------------------------------------------------
 					// Section Resize Start
 
-					if ( !section_resize )
+					if ( mouse_hovered && !section_resize && !seek_time_override )
 					{
 						// if ( !io.MouseClicked[ 0 ] )
 						// 	continue;
 
 						// check left side for hit detection
-						if ( mouse_in_rect( ImVec2( section_pos_left, height_min ), ImVec2( section_pos_left + 4, window_area_max.y ) ) )
+						if ( mouse_in_rect( ImVec2( section_pos_snap_start_l, height_min ), ImVec2( section_pos_snap_start_r, window_area_max.y ) ) )
 						{
 							ImGui::SetMouseCursor( ImGuiMouseCursor_ResizeEW );
 
 							if ( io.MouseClicked[ 0 ] )
 							{
 								//seek_time_override       = true;
-								section_resize           = true;
-								section_resize_left      = true;
-								section_resize_index     = time_i;
-								section_resize_source    = video_i;
-								section_resize_seek_time = 0.f;
+								section_resize_mouse_wait = true;
+								section_resize_left       = true;
+								section_resize_index      = time_i;
+								section_resize_source     = video_i;
+								section_resize_seek_time  = 0.f;
 							}
 						}
 
 						// check right side for hit detection
-						else if ( mouse_in_rect( ImVec2( section_pos_right - 4, height_min ), ImVec2( section_pos_right, window_area_max.y ) ) )
+						else if ( mouse_in_rect( ImVec2( section_pos_snap_end_l, height_min ), ImVec2( section_pos_snap_end_r, window_area_max.y ) ) )
 						{
 							ImGui::SetMouseCursor( ImGuiMouseCursor_ResizeEW );
 
 							if ( io.MouseClicked[ 0 ] )
 							{
 								//seek_time_override       = true;
-								section_resize           = true;
-								section_resize_source    = video_i;
-								section_resize_index     = time_i;
-								section_resize_seek_time = 0.f;
+								section_resize_mouse_wait = true;
+								section_resize_source     = video_i;
+								section_resize_index      = time_i;
+								section_resize_seek_time  = 0.f;
 							}
 						}
 					}
@@ -1238,7 +1274,7 @@ void timeline_draw()
 				// ------------------------------------------------------------------------------------------
 				// Process section resizing
 
-				if ( section_resize && section_resize_source == video_i )
+				if ( !seek_time_override && ( section_resize || section_resize_mouse_wait ) && section_resize_source == video_i )
 				{
 					static float min_start_time = 0.f;
 					static float max_end_time   = duration.duration;
@@ -1248,61 +1284,85 @@ void timeline_draw()
 
 					if ( !io.MouseDown[ 0 ] )
 					{
-						section_resize           = false;
-						section_resize_left      = false;
+						section_resize            = false;
+						section_resize_mouse_wait = false;
+						section_resize_left       = false;
 
-						min_start_time           = 0.f;
-						max_end_time             = duration.duration;
-						calc_times               = true;
-						section_resize_seek_time = 0.f;
+						min_start_time            = 0.f;
+						max_end_time              = duration.duration;
+						calc_times                = true;
+						section_resize_seek_time  = 0.f;
 					}
 					else
 					{
-						seek_time_override            = true;
-						new_seek_percent              = mouse_pos_local.x / seek_area;
-						new_time_pos                  = duration.duration * new_seek_percent;
-
 						clip_time_range_t& time_range = source_use.time_range[ section_resize_index ];
 
-						// get earliest start time and latest end time for other sections around this one
-						if ( calc_times )
+						if ( section_resize_mouse_wait )
 						{
-							calc_times = false;
-
-							for ( u32 time_i = 0; time_i < source_use.time_range.size(); time_i++ )
+							if ( !just_selected_section && app::mouse_delta[ 0 ] != 0 )
 							{
-								if ( time_i == section_resize_index )
-									continue;
+								section_resize            = true;
+								section_resize_mouse_wait = false;
+							}
+							else if ( just_selected_section )
+							{
+								seek_time_override = true;
+								new_time_pos     = section_resize_left ? time_range.start : time_range.end;
+								new_seek_percent = new_time_pos / duration.duration;
 
-								clip_time_range_t& scan_time = source_use.time_range[ time_i ];
-
-								if ( scan_time.end <= time_range.start )
-									min_start_time = std::max( scan_time.end, min_start_time );
-
-								if ( scan_time.start >= time_range.end )
-									max_end_time = std::min( scan_time.start, max_end_time );
+								if ( mouse_hovered_area && clip_data::get_current_group_source() != video_i )
+								{
+									change_to_source_i = video_i;
+								}
 							}
 						}
 
-						constexpr double SEEK_POS_SNAP = 0.5;
+						if ( section_resize )
+						{
+							seek_time_override = true;
+							new_seek_percent   = mouse_pos_local.x / seek_area;
+							new_time_pos       = duration.duration * new_seek_percent;
 
-						// check if close enough to seek time to snap to
-						if ( MAX( 0, time_pos - SEEK_POS_SNAP ) <= new_time_pos && new_time_pos <= MIN( duration.duration, time_pos + SEEK_POS_SNAP ) )
-						{
-							new_time_pos = time_pos;
-						}
+							// get earliest start time and latest end time for other sections around this one
+							if ( calc_times )
+							{
+								calc_times = false;
 
-						if ( section_resize_left )
-						{
-							// time_range.start         = std::clamp( std::min( new_time_pos, time_range.end - 0.1f ), min_start_time, time_range.end );
-							time_range.start         = std::max( std::min( new_time_pos, time_range.end - 0.1f ), min_start_time );
-							section_resize_seek_time = time_range.start;
-						}
-						else
-						{
-							// time_range.end           = std::clamp( std::max( new_time_pos, time_range.start + 0.1f ), time_range.start, max_end_time );
-							time_range.end           = std::min( std::max( new_time_pos, time_range.start + 0.1f ), max_end_time );
-							section_resize_seek_time = time_range.end;
+								for ( u32 time_i = 0; time_i < source_use.time_range.size(); time_i++ )
+								{
+									if ( time_i == section_resize_index )
+										continue;
+
+									clip_time_range_t& scan_time = source_use.time_range[ time_i ];
+
+									if ( scan_time.end <= time_range.start )
+										min_start_time = std::max( scan_time.end, min_start_time );
+
+									if ( scan_time.start >= time_range.end )
+										max_end_time = std::min( scan_time.start, max_end_time );
+								}
+							}
+
+							constexpr double SEEK_POS_SNAP = 0.5;
+
+							// check if close enough to seek time to snap to
+							if ( MAX( 0, time_pos - SEEK_POS_SNAP ) <= new_time_pos && new_time_pos <= MIN( duration.duration, time_pos + SEEK_POS_SNAP ) )
+							{
+								new_time_pos = time_pos;
+							}
+
+							if ( section_resize_left )
+							{
+								// time_range.start         = std::clamp( std::min( new_time_pos, time_range.end - 0.1f ), min_start_time, time_range.end );
+								time_range.start         = std::max( std::min( new_time_pos, time_range.end - 0.1f ), min_start_time );
+								section_resize_seek_time = time_range.start;
+							}
+							else
+							{
+								// time_range.end           = std::clamp( std::max( new_time_pos, time_range.start + 0.1f ), time_range.start, max_end_time );
+								time_range.end           = std::min( std::max( new_time_pos, time_range.start + 0.1f ), max_end_time );
+								section_resize_seek_time = time_range.end;
+							}
 						}
 					}
 				}
