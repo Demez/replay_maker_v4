@@ -216,10 +216,15 @@ double         scale_point_from_origin( double origin, double point, double fact
 
 
 // library loading
+#if _WIN32
 module_t    sys_load_library( const wchar_t* path );
+#else
+module_t    sys_load_library( const char* path );
+#endif
+
 void        sys_close_library( module_t mod );
 void*       sys_load_func( module_t mod, const char* path );
-const char* sys_get_error();
+char*       sys_get_error();
 const wchar_t* sys_get_error_w();
 void        sys_print_last_error();
 
@@ -242,10 +247,10 @@ char*       sys_to_utf8( const wchar_t* spStr, int sSize );
 char*       sys_to_utf8( const wchar_t* spStr );
 
 // get folder exe is stored in
-const char* sys_get_exe_folder( size_t* len = nullptr );
+char*       sys_get_exe_folder( size_t* len = nullptr );
 
 // get the full path of the exe
-const char* sys_get_exe_path( size_t* len = nullptr );
+char*       sys_get_exe_path( size_t* len = nullptr );
 
 // get current working directory
 char*       sys_get_cwd();
@@ -257,7 +262,7 @@ bool        sys_recycle_file( const char* path );
 // hack for above
 void        sys_set_main_hwnd( void* hwnd );
 
-bool        sys_get_file_times( const char* path, u64* creation, u64* access, u64* write );
+bool        sys_get_file_times_and_size( const char* path, u64* creation, u64* access, u64* write, u64* size );
 bool        sys_set_file_times( const char* path, u64* creation, u64* access, u64* write );
 bool        sys_copy_file_times( const char* src_path, const char* out_path, bool creation, bool access, bool write );
 

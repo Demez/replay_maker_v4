@@ -19,6 +19,7 @@
 #include "nfd.h"
 
 #include <time.h>
+#include <thread>
 
 
 namespace font
@@ -590,7 +591,7 @@ void main_loop()
 #if !_WIN32
 				case SDL_EVENT_WINDOW_RESIZED:
 					int width, height;
-					SDL_GetWindowSize( app::window_sdl, &width, &height );
+					SDL_GetWindowSize( app::window, &width, &height );
 					io.DisplaySize.x = width;
 					io.DisplaySize.y = height;
 
@@ -787,6 +788,10 @@ auto main( int argc, char* argv[] ) -> int
 	size_t      exe_dir_len = 0;
 	const char* exe_dir     = sys_get_exe_folder( &exe_dir_len );
 
+	#if __unix__
+	font::size = 14;
+	#endif
+
 #if _WIN32 && 1
 	{
 		const char* font_path = "C:\\Windows\\Fonts\\segoeui.ttf";
@@ -922,4 +927,5 @@ auto main( int argc, char* argv[] ) -> int
 
 	return 0;
 }
+
 

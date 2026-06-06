@@ -1,9 +1,9 @@
 #include "util.h"
 
+#include <ctype.h>
+#include <math.h>
 #include <sys/stat.h>
 #include <time.h>
-#include <math.h>
-#include <ctype.h>
 
 #ifdef _WIN32
   #include <direct.h>
@@ -20,9 +20,14 @@
   #include <unistd.h>
   #include <dirent.h>
   #include <string.h>
+  #include <fcntl.h>
+  #include <stdio.h>
+
+  // for EACCES and others ???
+  #include <asm-generic/errno-base.h>
 
 // windows-specific mkdir() is used
-  #define mkdir( f ) mkdir( f, 666 )
+  #define mkdir( f ) mkdir( f, S_IRWXU | S_IRGRP | S_IXGRP | S_IROTH | S_IXOTH )
 #endif
 
 
@@ -479,7 +484,7 @@ bool fs_save_file( const char* path, const char* data, size_t size )
 	// copy file creation date
 	u64 create_date = 0;
 
-	if ( old_save_exists && sys_get_file_times( bak_path, &create_date, nullptr, nullptr ) )
+	if ( old_save_exists && sys_get_file_times_and_size( bak_path, &create_date, nullptr, nullptr, nullptr ) )
 	{
 		sys_set_file_times( path, &create_date, nullptr, nullptr );
 	}

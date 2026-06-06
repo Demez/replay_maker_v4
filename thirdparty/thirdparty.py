@@ -287,7 +287,7 @@ def compile_nativefiledialog():
     set_project("Native File Dialog")
     os.chdir("nativefiledialog")
 
-    if not syscmd(f"cmake -B build .", "Failed to run cmake"):
+    if not syscmd(f"cmake -B build . -DNFD_PORTAL=ON", "Failed to run cmake"):
         return
 
     print("Building nativefiledialog - RelWithDebInfo\n")
@@ -345,12 +345,6 @@ FILE_LIST = {
             "name": "nativefiledialog",
             "func": compile_nativefiledialog,
         },
-        {
-            "url":  "https://github.com/shinchiro/mpv-winbuild-cmake/releases/download/20251017/mpv-dev-x86_64-v3-20251017-git-233e896.7z",
-            "file": "mpv-dev-x86_64-v3-20251017-git-233e896.7z",
-            "name": "mpv",
-            "user_extract": True,
-        },
     ],
 
     # Windows Only
@@ -367,6 +361,12 @@ FILE_LIST = {
             "url":  "https://github.com/libsdl-org/SDL/releases/download/release-3.2.24/SDL3-devel-3.2.24-VC.zip",
             "name": "SDL3",
             "file": "SDL3-3.2.24.zip",
+        },
+        {
+            "url":  "https://github.com/shinchiro/mpv-winbuild-cmake/releases/download/20251017/mpv-dev-x86_64-v3-20251017-git-233e896.7z",
+            "file": "mpv-dev-x86_64-v3-20251017-git-233e896.7z",
+            "name": "mpv",
+            "user_extract": True,
         },
     ],
 

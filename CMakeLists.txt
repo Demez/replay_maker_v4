@@ -139,6 +139,8 @@ if ( MSVC )
 	configure_file( "thirdparty/mpv/libmpv-2.dll" "${PROJ_OUT}/libmpv-2.dll" COPYONLY )
 	
 else()  # linux
+	# link_libraries( gtk-3 )
+	link_libraries( dbus-1 )
 endif()
 
 
@@ -200,6 +202,11 @@ if ( WIN32 )
 		src/sys_win32.cpp
 	)
 else()
+	set(
+		SRC_FILES
+		${SRC_FILES}
+		src/sys_linux.cpp
+	)
 endif()
 
 

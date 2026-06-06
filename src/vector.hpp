@@ -5,6 +5,10 @@
 #include <utility>
 #include <algorithm>
 
+#ifdef __unix__
+#include <typeinfo>
+#endif
+
 
 template< typename T >
 struct ChVector

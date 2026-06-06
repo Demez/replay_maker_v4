@@ -69,7 +69,7 @@ bool get_video_metadata( const char* path, video_metadata_t& metadata )
 	// build command line
 	char cmd[ 512 ] = { 0 };
 	// strcat( cmd, "ffprobe.exe -threads 6 -v error -show_streams -select_streams v:0 -show_format -of default=noprint_wrappers=1 \"" );
-	strcat( cmd, "ffprobe.exe -threads 6 -v error -select_streams v:0 -show_entries stream=width,height,r_frame_rate:format=bit_rate,duration,height,r_frame_rate -of default=noprint_wrappers=1 \"" );
+	strcat( cmd, "ffprobe -threads 6 -v error -select_streams v:0 -show_entries stream=width,height,r_frame_rate:format=bit_rate,duration,height,r_frame_rate -of default=noprint_wrappers=1 \"" );
 	strcat( cmd, path );
 	strcat( cmd, "\"" );
 
@@ -142,7 +142,7 @@ float get_video_bitrate( const char* path )
 {
 	// build command line
 	char cmd[ 512 ] = { 0 };
-	strcat( cmd, "ffprobe.exe -threads 6 -v error -select_streams v:0 -show_entries format=bit_rate -of default=noprint_wrappers=1:nokey=1 \"" );
+	strcat( cmd, "ffprobe -threads 6 -v error -select_streams v:0 -show_entries format=bit_rate -of default=noprint_wrappers=1:nokey=1 \"" );
 	strcat( cmd, path );
 	strcat( cmd, "\"" );
 

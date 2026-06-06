@@ -77,22 +77,30 @@ FUNC_PTR( mpv_render_context_report_swap );
 FUNC_PTR( mpv_render_context_free );
 
 
-#define LOAD_FUNC( func )                                            \
-	p_##func = (func##_t)sys_load_func( g_mpv_module, #func );       \
-	if ( p_##func == nullptr )                                       \
-	{                                                                \
-		wprintf( L"sys_load_func failed: %s\n", sys_get_error_w() ); \
-		return false;                                                \
+#define LOAD_FUNC( func )                                      \
+	p_##func = (func##_t)sys_load_func( g_mpv_module, #func ); \
+	if ( p_##func == nullptr )                                 \
+	{                                                          \
+		char* sys_error = sys_get_error();                     \
+		printf( "sys_load_func failed: %s\n", sys_error );     \
+		free( sys_error );                                     \
+		return false;                                          \
 	}
 
 
 bool load_mpv_dll()
 {
+	#if _WIN32
 	g_mpv_module = sys_load_library( L"libmpv-2.dll" );
+	#else
+	g_mpv_module = sys_load_library( "libmpv.so" );
+	#endif
 
 	if ( g_mpv_module == nullptr )
 	{
-		wprintf( L"sys_load_library failed: %s\n", sys_get_error_w() );
+		char* sys_error = sys_get_error();
+		printf( "Failed to load MPV: %s\n", sys_error );
+		free( sys_error );
 		return false;
 	}
 
@@ -326,7 +334,7 @@ void mpv_create_texture()
 
 static void* mpv_get_proc( void* ctx, const char* name )
 {
-	return SDL_GL_GetProcAddress( name );
+	return ( void* )( SDL_GL_GetProcAddress( name ) );
 }
 
 

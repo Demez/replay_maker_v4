@@ -161,7 +161,7 @@ const wchar_t* sys_get_error_w()
 }
 
 
-const char* sys_get_error()
+char* sys_get_error()
 {
 	const wchar_t* error = sys_get_error_w();
 
@@ -292,7 +292,7 @@ char* sys_to_utf8( const wchar_t* spStr, int sSize )
 }
 
 
-const char* sys_get_exe_path( size_t* len )
+char* sys_get_exe_path( size_t* len )
 {
 	if ( len )
 		*len = g_exe_path_len;
@@ -301,7 +301,7 @@ const char* sys_get_exe_path( size_t* len )
 }
 
 
-const char* sys_get_exe_folder( size_t* len )
+char* sys_get_exe_folder( size_t* len )
 {
 	if ( len )
 		*len = g_exe_folder_len;
@@ -410,7 +410,7 @@ static FILETIME file_time_from_unix( u64 time )
 }
 
 
-bool sys_get_file_times( const char* path, u64* creation, u64* access, u64* write )
+bool sys_get_file_times_and_size( const char* path, u64* creation, u64* access, u64* write, u64* size )
 {
 	wchar_t* path_w = sys_to_wchar_extended( path );
 
@@ -882,7 +882,7 @@ int sys_init()
 	if ( OleInitialize( NULL ) != S_OK )
 	{
 		printf( "Plat_Init(): Failed to Initialize Ole\n" );
-		return false;
+		return 1;
 	}
 
 	QueryPerformanceFrequency( &g_win_perf_freq );

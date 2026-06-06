@@ -452,7 +452,7 @@ void add_metadata_cmd( clip_t& clip, char* ffmpeg_cmd, bool add_markers, u32 pre
 	strftime( str_time_encode, 26, "%Y-%m-%d %H-%M-%S", tm_info );
 
 	u64 creation = 0, modified = 0;
-	sys_get_file_times( time_file_path, &creation, nullptr, &modified );
+	sys_get_file_times_and_size( time_file_path, &creation, nullptr, &modified, nullptr );
 
 	time_t time_creation = (time_t)creation;
 	time_t time_modified = (time_t)modified;
