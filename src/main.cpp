@@ -43,8 +43,8 @@ namespace app
 	ivec2       window_size         = { 0, 0 };
 
 	// Mouse
-	ivec2       mouse_pos           = { 0, 0 };
-	ivec2       mouse_delta         = { 0, 0 };
+	ImVec2      mouse_pos           = { 0, 0 };
+	ImVec2      mouse_delta         = { 0, 0 };
 	ImVec2      mouse_scroll        = { 0, 0 };
 	ivec2       mouse_scroll_int    = { 0, 0 };
 
@@ -84,6 +84,34 @@ bool point_in_rect( ImVec2 point, ImVec2 min_size, ImVec2 max_size )
 bool mouse_in_rect( ImVec2 min_size, ImVec2 max_size )
 {
 	return point_in_rect( ImVec2( app::mouse_pos[ 0 ], app::mouse_pos[ 1 ] ), min_size, max_size );
+}
+
+
+bool mouse_hovering_popup()
+{
+	if ( ImGui::IsPopupOpen( "", ImGuiPopupFlags_AnyPopupId | ImGuiPopupFlags_AnyPopupLevel ) )
+	{
+		bool          hovered_popup = false;
+		ImGuiContext* context       = ImGui::GetCurrentContext();
+
+		if ( context )
+		{
+			// Check popups to see if mouse is hovering over any of them
+			for ( int i = 0; i < context->OpenPopupStack.Size; i++ )
+			{
+				ImGuiPopupData& data   = context->OpenPopupStack[ i ];
+				ImGuiWindow*    window = data.Window;
+
+				if ( !window )
+					continue;
+
+				if ( mouse_in_rect( window->Pos, { window->Pos.x + window->Size.x, window->Pos.y + window->Size.y } ) )
+					return true;
+			}
+		}
+	}
+
+	return false;
 }
 
 

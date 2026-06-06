@@ -11,6 +11,8 @@ namespace timeline
 	int    zoom_step    = 0;
 	bool   do_scroll    = false;
 
+	bool   in_seek      = false;
+
 	float  scroll_x     = 0.f;
 	float  scroll_max_x = 0.f;
 }
@@ -104,14 +106,16 @@ void timeline_advance( bool prev )
 }
 
 
-void timeline_seek( float seconds )
+void timeline_seek( float seconds, bool key_down )
 {
-	double duration = 0;
-	double time_pos = 0;
-	p_mpv_get_property( get_mpv(), "time-pos", MPV_FORMAT_DOUBLE, &time_pos );
-	p_mpv_get_property( get_mpv(), "duration", MPV_FORMAT_DOUBLE, &duration );
+	mpv_data_t* mpv = get_mpv_data();
 
-	float new_time_pos = time_pos + seconds;
+	if ( !mpv )
+		return;
+
+	bool  keyframes    = key_down;
+
+	float new_time_pos = mpv->time_pos + seconds;
 
 	if ( new_time_pos < 0 )
 	{
@@ -121,14 +125,21 @@ void timeline_seek( float seconds )
 			clip_data::current_group_source[ clip_data::current_group ]--;
 			replay_editor_set_group( clip_data::current_clip_index, clip_data::current_group, clip_data::current_group_source[ clip_data::current_group ] );
 
-			double duration = 0;
-			p_mpv_get_property( get_mpv(), "duration", MPV_FORMAT_DOUBLE, &duration );
+			mpv_data_t* mpv_new = get_mpv_data();
 
-			new_time_pos = duration + new_time_pos;
-			timeline_set_seek_time_fast( new_time_pos );
+			if ( mpv_new )
+			{
+				new_time_pos        = mpv_new->duration + new_time_pos;
+				mpv_cmd_seek( new_time_pos, keyframes );
+			}
+		}
+		else
+		{
+			// snap to start
+			mpv_cmd_seek( 0 );
 		}
 	}
-	else if ( new_time_pos > duration )
+	else if ( new_time_pos > mpv->duration )
 	{
 		// try to change to the next video
 		clip_group_t* group = clip_get_group( clip_data::current_clip, clip_data::current_group );
@@ -138,13 +149,23 @@ void timeline_seek( float seconds )
 			clip_data::current_group_source[ clip_data::current_group ]++;
 			replay_editor_set_group( clip_data::current_clip_index, clip_data::current_group, clip_data::current_group_source[ clip_data::current_group ] );
 
-			new_time_pos = ( duration - time_pos ) - seconds;
-			timeline_set_seek_time_fast( abs( new_time_pos ) );
+			//mpv_data_t* mpv_new = get_mpv_data();
+
+			//if ( mpv_new )
+			{
+				new_time_pos = ( mpv->duration - mpv->time_pos ) - seconds;
+				mpv_cmd_seek( abs( new_time_pos ), keyframes );
+			}
+		}
+		else
+		{
+			// snap to end
+			mpv_cmd_seek( mpv->duration );
 		}
 	}
 	else
 	{
-		timeline_set_seek_time_fast( new_time_pos );
+		mpv_cmd_seek( new_time_pos, keyframes );
 	}
 }
 
@@ -830,7 +851,8 @@ void timeline_draw()
 	ImVec2 mouse_pos     = ImGui::GetMousePos();
 
 	// is mouse within the frame here
-	bool   mouse_hovered = mouse_hovering_area( window_area_min, window_area_max );
+	bool   mouse_hovered_popup = mouse_hovering_popup();
+	bool   mouse_hovered       = !mouse_hovered_popup && mouse_in_rect( window_area_min, window_area_max );
 
 	ImGui::SetNextWindowContentSize( timeline_content_size );
 
@@ -1016,8 +1038,13 @@ void timeline_draw()
 	static bool       just_selected_section         = false;
 
 	static bool       seek_drag                     = false;
+	static bool       seek_drag_play_state          = false;
+	static bool       delayed_seek_drag_disable     = false;
 	static bool       ensure_seek_drag_time_set     = false;
 	static float      new_seek_percent              = 0.f;
+
+	bool              seek_keyframes                = false;
+	static bool       last_seeked_keyframes         = false;
 
 	ensure_seek_drag_time_set = false;
 
@@ -1030,6 +1057,24 @@ void timeline_draw()
 	bool              shift_time_range              = false;
 	bool              shift_time_range_dir          = false;
 	u32               shift_time_range_vid          = 0;
+
+	// This is used so we can scroll to the exact frame on mouse release during fast mouse movement
+	// we won't be on a keyframe instead of where the mouse was last held down
+	if ( delayed_seek_drag_disable )
+	{
+		seek_drag           = false;
+		timeline::in_seek   = false;
+
+		const char* cmd[]   = { "set", "pause", seek_drag_play_state ? "yes" : "no", NULL };
+		p_mpv_command_async( get_mpv(), 0, cmd );
+
+		seek_drag_play_state      = false;
+
+		new_seek_percent = 0.f;
+		new_time_pos     = 0.f;
+
+		delayed_seek_drag_disable = false;
+	}
 
 	ChVector< float > area_percents;
 
@@ -1062,7 +1107,7 @@ void timeline_draw()
 			area_percents.push_back( last_percent );
 			last_percent += percent_of_area;
 
-			bool mouse_hovered_video_area = mouse_hovering_area( vid_area_min, vid_area_max );
+			bool mouse_hovered_video_area = !mouse_hovered_popup && mouse_in_rect( vid_area_min, vid_area_max );
 
 			if ( video_i < group->sources.size() )
 			{
@@ -1473,7 +1518,13 @@ void timeline_draw()
 				{
 					if ( mouse_hovered_video_area && io.MouseClicked[ 0 ] )
 					{
-						seek_drag = true;
+						seek_drag            = true;
+						seek_drag_play_state = paused;
+
+						timeline::in_seek    = true;
+
+						const char* cmd[]    = { "set", "pause", "yes", NULL };
+						p_mpv_command_async( get_mpv(), 0, cmd );
 
 						if ( !just_selected_section )
 							g_selected_section = UINT32_MAX;
@@ -1482,34 +1533,53 @@ void timeline_draw()
 					if ( seek_drag && !io.MouseDown[ 0 ] )
 					{
 						// timeline_set_seek_time( new_time_pos );
-						seek_drag        = false;
-						new_seek_percent = 0.f;
-						new_time_pos     = 0.f;
+						delayed_seek_drag_disable = true;
+						//seek_time_override        = true;
+						//new_seek_percent = 0.f;
+						//new_time_pos     = 0.f;
 
-						ensure_seek_drag_time_set = true;
+						//ensure_seek_drag_time_set = true;
 					}
 
 					// if ( seek_drag && mouse_hovered_video_area )
 					if ( seek_drag )
 					{
-						if ( mouse_hovered_video_area && clip_data::get_current_group_source() != video_i )
+						bool mouse_x_hovered_video_area = app::mouse_pos[ 0 ] >= vid_area_min[ 0 ] && app::mouse_pos[ 0 ] <= vid_area_max[ 0 ];
+
+						// only calculate the new time in the video source we are hovered over
+						if ( mouse_x_hovered_video_area )
 						{
-							change_to_source_i = video_i;
-						}
+							// if this is a different source, change current group source
+							if ( clip_data::get_current_group_source() != video_i )
+							{
+								change_to_source_i = video_i;
+							}
 
-						new_seek_percent  = CLAMP( mouse_pos_local.x / seek_area, 0.f, 1.f );
-						new_time_pos      = section_resize ? section_resize_seek_time : duration.duration * new_seek_percent;
+							new_seek_percent  = CLAMP( mouse_pos_local.x / seek_area, 0.f, 1.f );
+							new_time_pos      = section_resize ? section_resize_seek_time : duration.duration * new_seek_percent;
 
-						bool mouse_moving = app::mouse_delta[ 0 ] != 0 || app::mouse_delta[ 1 ] != 0;
+							// bool mouse_moving = app::mouse_delta[ 0 ] != 0 || app::mouse_delta[ 1 ] != 0;
+							const float mouse_threshold = 1.0;
+							bool        mouse_moving    = fabs( app::mouse_delta[ 0 ] ) > mouse_threshold || fabs( app::mouse_delta[ 1 ] ) > mouse_threshold;
 
-						if ( mouse_moving || io.MouseClicked[ 0 ] )
-						{
-							//if ( mouse_moving )
-							//	printf( "MOUSE MOVE\n" );
+							//printf( "MOUSE X SPEED: %.6f\n", app::mouse_delta[ 0 ] );
 
-							// ui actually feels worse with this lol
-							// timeline_set_seek_time_fast( new_time_pos );
-							// timeline_set_seek_time( new_time_pos );
+							if ( mouse_moving || io.MouseClicked[ 0 ] )
+							{
+								seek_keyframes = mouse_moving && !delayed_seek_drag_disable;
+
+								//if ( mouse_moving )
+								//	printf( "MOUSE MOVE\n" );
+
+								// ui actually feels worse with this lol
+								// timeline_set_seek_time_fast( new_time_pos );
+								// timeline_set_seek_time( new_time_pos );
+							}
+							else if ( last_seeked_keyframes )
+							{
+								// do an exact seek on mouse stop
+								seek_time_override = true;
+							}
 						}
 					}
 				}
@@ -1625,7 +1695,15 @@ void timeline_draw()
 		{
 			// ui actually feels worse with this lol
 			// timeline_set_seek_time_fast( new_time_pos );
-			was_time_pos_set = mpv_cmd_seek( new_time_pos );
+			// bool keyframes   = mouse_moving && io.MouseDown[ 0 ] && seek_drag;
+			bool keyframes   = seek_keyframes;
+
+			if ( keyframes )
+				printf( "SEEK KEYFRAMES\n" );
+			else
+				printf( "SEEK EXACT\n" );
+
+			was_time_pos_set = mpv_cmd_seek( new_time_pos, keyframes );
 
 			// just in case? haven't hit this condition yet
 			if ( ensure_seek_drag_time_set && !was_time_pos_set )
@@ -1647,6 +1725,7 @@ void timeline_draw()
 		}
 	}
 
-	was_playing = !paused;
+	last_seeked_keyframes = seek_keyframes;
+	was_playing           = !paused;
 }
 

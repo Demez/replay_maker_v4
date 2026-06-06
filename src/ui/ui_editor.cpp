@@ -136,6 +136,9 @@ void replay_editor_set_group( u32 output_i, u32 group_i, u32 group_src_i )
 
 	clip_source_usage_t& source_use = group.sources[ group_src_i ];
 
+	bool                 swapping_group_or_output = clip_data::current_clip_index != output_i || clip_data::current_group != group_i;
+	bool                 pause_video              = clip_data::current_clip_index != output_i;
+
 	replay_editor_set_video( output_i, source_use.source_index );
 	///if ( !replay_editor_set_video( output_i, input_i ) )
 	//	return;
@@ -150,9 +153,7 @@ void replay_editor_set_group( u32 output_i, u32 group_i, u32 group_src_i )
 
 	clip_source_t& source                   = clip.source[ source_use.source_index ];
 
-	bool           swapping_group_or_output = clip_data::current_clip_index != output_i || clip_data::current_group != group_i;
 	// bool pause_video              = swapping_group_or_output;
-	bool           pause_video              = clip_data::current_clip_index != output_i;
 
 	pause_video |= mpv_get_current_video() && strcmp( mpv_get_current_video(), source.path ) != 0;
 
@@ -189,7 +190,8 @@ void replay_editor_set_group( u32 output_i, u32 group_i, u32 group_src_i )
 				const char* cmd[]   = { "set", "pause", "yes", NULL };
 				int         cmd_ret = p_mpv_command_async( mpv->mpv, 0, cmd );
 			}
-			else if ( !mpv->pause )
+			//else if ( !mpv->pause )
+			else if ( mpv->pause && !timeline::in_seek )
 			{
 				const char* cmd[]   = { "set", "pause", "no", NULL };
 				int         cmd_ret = p_mpv_command_async( mpv->mpv, 0, cmd );

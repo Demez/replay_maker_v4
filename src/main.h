@@ -90,7 +90,7 @@ struct mpv_data_t
 	char*               current_video     = nullptr;
 	bool                loaded_file       = false;
 
-	// metadata grabbed on video load from mpv
+	// metadata grabbed from mpv
 	s64                 track_count       = 0;
 	s64                 track_count_video = 0;
 	s64                 track_count_audio = 0;
@@ -136,6 +136,9 @@ bool                               point_in_rect( ImVec2 point, ImVec2 min_size,
 bool                               mouse_in_rect( ImVec2 min_size, ImVec2 max_size );
 
 // Checks for any popup menus drawing over the window
+bool                               mouse_hovering_popup();
+
+// Checks if the mouse is hovering the area, and checks for if it's hovering over any popups
 bool                               mouse_hovering_area( ImVec2 min_size, ImVec2 max_size );
 
 // --------------------------------------------------------------------------------------------------------
@@ -186,8 +189,8 @@ void                               mpv_cmd_close_video( u32 index = UINT32_MAX )
 void                               mpv_cmd_toggle_playback();
 void                               mpv_cmd_seek_offset( double seconds );
 
-bool                               mpv_cmd_seek( mpv_data_t* mpv, double seconds );
-bool                               mpv_cmd_seek( double seconds );
+bool                               mpv_cmd_seek( mpv_data_t* mpv, double seconds, bool keyframes = false );
+bool                               mpv_cmd_seek( double seconds, bool keyframes = false );
 
 void                               mpv_cmd_hook_window( void* window );
 void                               mpv_cmd_hook_window_mpv();
@@ -278,8 +281,8 @@ namespace app
 	extern ivec2       window_size;
 
 	// Mouse
-	extern ivec2       mouse_pos;
-	extern ivec2       mouse_delta;
+	extern ImVec2      mouse_pos;
+	extern ImVec2      mouse_delta;
 	extern ImVec2      mouse_scroll;
 	extern ivec2       mouse_scroll_int;
 
@@ -302,6 +305,8 @@ namespace timeline
 	extern double zoom;
 	extern int    zoom_step;
 	extern bool   do_scroll;
+
+	extern bool   in_seek;
 
 	extern float  scroll_x;
 	extern float  scroll_max_x;
@@ -326,7 +331,7 @@ void          timeline_reset();
 void          timeline_draw();
 void          timeline_handle_scroll();
 
-void          timeline_seek( float seconds );
+void          timeline_seek( float seconds, bool key_down );
 void          timeline_advance( bool prev = false );
 
 extern ImVec2 g_timeline_size;

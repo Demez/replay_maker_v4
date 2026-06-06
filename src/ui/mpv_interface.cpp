@@ -899,7 +899,7 @@ void mpv_cmd_toggle_playback()
 }
 
 
-bool mpv_cmd_seek( mpv_data_t* mpv, double seconds )
+bool mpv_cmd_seek( mpv_data_t* mpv, double seconds, bool keyframes )
 {
 	if ( !mpv )
 		return false;
@@ -914,16 +914,24 @@ bool mpv_cmd_seek( mpv_data_t* mpv, double seconds )
 	char time_pos_str[ 16 ];
 	gcvt( seconds, 4, time_pos_str );
 
-	const char* cmd[]   = { "seek", time_pos_str, "absolute", NULL };
-	int         cmd_ret   = p_mpv_command_async( mpv->mpv, e_mpv_cmd_seek, cmd );
+	if ( keyframes )
+	{
+		const char* cmd[] = { "seek", time_pos_str, "absolute", "keyframes", NULL };
+		int         cmd_ret = p_mpv_command_async( mpv->mpv, e_mpv_cmd_seek, cmd );
+	}
+	else
+	{
+		const char* cmd[]   = { "seek", time_pos_str, "absolute", NULL };
+		int         cmd_ret = p_mpv_command_async( mpv->mpv, e_mpv_cmd_seek, cmd );
+	}
 
 	return true;
 }
 
 
-bool mpv_cmd_seek( double seconds )
+bool mpv_cmd_seek( double seconds, bool keyframes )
 {
-	return mpv_cmd_seek( get_mpv_data(), seconds );
+	return mpv_cmd_seek( get_mpv_data(), seconds, keyframes );
 }
 
 
