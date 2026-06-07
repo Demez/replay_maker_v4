@@ -190,7 +190,7 @@ void util_format_time( char* buffer, size_t buffer_size, double time, bool short
 	if ( time > 60.0 )
 		need_min = true;
 
-	if ( time > 3660.0 )
+	if ( time > 3600.0 )
 		need_hour = true;
 
 	if ( shorten )
@@ -224,7 +224,7 @@ void util_format_time( char* buffer, size_t buffer_size, double time, bool short
 
 	// move it back to get rid of the 0 lol
 	memcpy( buffer + ( buf_len - 1 ), buffer + buf_len, buffer_size - buf_len );
-	buffer[ ( buffer_size - buf_len ) - 1 ] = '0';
+	buffer[ buffer_size - 1 ] = '0';
 }
 
 
