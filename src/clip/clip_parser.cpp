@@ -639,12 +639,12 @@ void clip_parse_video( json_object_t& root, u32 output_i )
 				if ( json_video.aType != e_json_type_string )
 				{
 					log_printf( log_error, "Expected string for source video path, got \"%s\"\n", json_type_to_str( json_video.aType ) );
+					continue;
 				}
-				else
-				{
-					clip.source[ video_i ].path     = strdup( json_video.aString.data );
-					clip.source[ video_i ].filename = fs_get_filename( json_video.aString.data );
-				}
+
+				clip.source[ video_i ].path         = util_strdup( json_video.aString.data );
+				clip.source[ video_i ].filename     = fs_get_filename( json_video.aString.data );
+				clip.source[ video_i ].file_missing = !fs_is_file( json_video.aString.data );
 
 				clip_get_video_metadata( clip.source[ video_i ] );
 			}
@@ -800,9 +800,6 @@ bool clip_parse_videos( const char* path )
 
 	clip_data::version = CLIP_VIDEO_FORMAT_VER;
 
-	// scan videos
-	clip_check_videos();
-
 	return true;
 
 fail:
@@ -827,7 +824,7 @@ void clip_get_video_metadata( clip_source_t& source )
 }
 
 
-void clip_check_video( clip_t& clip )
+void clip_check_video( clip_t& clip, bool check_filesystem )
 {
 	clip.state = e_clip_state_invalid;
 
@@ -849,7 +846,13 @@ void clip_check_video( clip_t& clip )
 	{
 		clip_source_t& source = clip.source[ source_i ];
 
-		source.file_missing   = !fs_is_file( source.path );
+		if ( check_filesystem )
+		{
+			source.file_missing = !fs_is_file( source.path );
+
+			if ( !source.file_missing && !source.metadata.valid )
+				clip_get_video_metadata( source );
+		}
 
 		// if ( source.file_missing || !fs_is_file( source.path ) )
 		if ( source.file_missing )
@@ -1024,8 +1027,12 @@ void clip_check_video( clip_t& clip )
 }
 
 
-void clip_check_videos()
+void clip_check_videos( bool check_filesystem )
 {
+	for ( u32 i = 0; i < clip_data::clip_count; i++ )
+	{
+		clip_check_video( clip_data::clip[ i ], check_filesystem );
+	}
 }
 
 

@@ -15,19 +15,19 @@ enum e_target_size_state
 
 
 // encoder output video
-struct enc_output_video_t
+struct enc_clip_t
 {
-	clip_t* clip;
+	clip_t*         clip  = nullptr;
+	bool            valid = false;
 
 	// presets this output video uses
-	u32*                 presets;
-	u32                  presets_count;
+	ChVector< u32 > presets;
 
 	// ffmpeg output
-	std::mutex           ffmpeg_output_lock;
-	char*                ffmpeg_output          = nullptr;
-	size_t               ffmpeg_output_capacity = 0;
-	size_t               ffmpeg_cursor_pos      = 0;
+	std::mutex      ffmpeg_output_lock;
+	char*           ffmpeg_output          = nullptr;
+	size_t          ffmpeg_output_capacity = 0;
+	size_t          ffmpeg_cursor_pos      = 0;
 
 	// markers for raw encodes here?
 };
@@ -36,7 +36,7 @@ struct enc_output_video_t
 struct video_segment_t
 {
 	char* path;
-	u32   source;
+	u32   source;  // refers to source in current group
 	u32   time;
 
 	float bitrate = 0.f;
@@ -44,13 +44,15 @@ struct video_segment_t
 
 
 // data used for processing a video
+// used per encode preset
 struct enc_video_data_t
 {
-	enc_output_video_t*  enc_output;
-	clip_t* clip;
+	enc_clip_t&      enc_clip;
+	clip_t&          clip;
+	clip_group_t&    group;
 
-	video_segment_t*     segment;
-	u32                  segment_count;
+	video_segment_t* segment;
+	u32              segment_count;
 };
 
 
@@ -60,7 +62,7 @@ struct encoder_t
 	std::string         temp_video_dir;
 	std::string         log_dir;
 
-	enc_output_video_t* output_videos  = nullptr;
+	//enc_clip_t*         output_videos  = nullptr;
 
 	// status info
 	u32                 encode_preset  = 0;
@@ -72,7 +74,7 @@ struct encoder_t
 extern char                g_output_dir[ 512 ];
 extern char                g_temp_video_dir[ 512 ];
 
-extern enc_output_video_t* g_output_videos;
+extern enc_clip_t*         g_encoder_clips;
 
 extern encoder_t           g_encoder_data;
 

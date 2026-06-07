@@ -914,7 +914,7 @@ clip_loop_continue:
 						source.filename = fs_get_filename( source.path );
 
 						clip_get_video_metadata( source );
-						clip_check_video( *clip_data::current_clip );
+						clip_check_video( *clip_data::current_clip, true );
 
 						// replay_editor_current_set_group( clip_data::current_group, clip_data::get_current_group_source() );
 

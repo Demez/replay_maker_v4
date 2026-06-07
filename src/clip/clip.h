@@ -31,11 +31,13 @@ enum e_clip_state
 {
 	e_clip_state_invalid,  // there is something wrong with the video in some way that prevents us from processing it
 	e_clip_state_valid,    // valid, in edit mode or waiting to encode
+
+	// encode states (move to different enum?)
 	e_clip_state_running,
 	e_clip_state_finished,
 	e_clip_state_already_finished,
 	e_clip_state_user_skipped,
-	e_clip_state_failed,
+	e_clip_state_failed,   // encode failed
 
 	e_clip_state_count,
 };
@@ -43,6 +45,8 @@ enum e_clip_state
 
 struct video_metadata_t
 {
+	bool  valid    = false;
+
 	int   width    = 0.f;
 	int   height   = 0.f;
 	float bitrate  = 0.f;
@@ -189,8 +193,10 @@ bool                  clip_parse_settings( const char* path );
 bool                  clip_parse_videos( const char* path );
 
 void                  clip_get_video_metadata( clip_source_t& source );
-void                  clip_check_video( clip_t& clip );
-void                  clip_check_videos();
+
+// if check_filesystem is true, we check the filesystem to make sure the video exists
+void                  clip_check_video( clip_t& clip, bool check_filesystem = false );
+void                  clip_check_videos( bool check_filesystem = false );
 
 void                  clip_save_settings( const char* path );
 bool                  clip_save_videos( const char* path );

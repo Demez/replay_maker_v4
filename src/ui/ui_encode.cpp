@@ -72,10 +72,10 @@ void encode_draw_sidebar()
 		{
 			for ( size_t vid_i = 0; vid_i < clip_data::clip_count; vid_i++ )
 			{
-				clip_t& clip     = clip_data::clip[ vid_i ];
-				enc_output_video_t&  enc_output = g_output_videos[ vid_i ];
+				clip_t&     clip       = clip_data::clip[ vid_i ];
+				enc_clip_t& enc_clip   = g_encoder_clips[ vid_i ];
 
-				u32 preset_idx = g_encoder_data.encode_preset;
+				u32         preset_idx = g_encoder_data.encode_preset;
 
 				if ( preset_select > -1 )
 					preset_idx = preset_select;
@@ -86,27 +86,56 @@ void encode_draw_sidebar()
 				float                 duration          = 0.f;
 				bool                  duration_invalid  = false;
 
-			//	for ( u32 in_i = 0; in_i < output.source_count; in_i++ )
-			//	{
-			//		clip_source_t& source = output.source[ in_i ];
-			//
-			//		if ( used_in_preset( source.encode_settings, preset_idx ) )
-			//		{
-			//			is_used_in_preset = true;
-			//		}
-			//		else
-			//		{
-			//			continue;
-			//		}
-			//
-			//		for ( u32 time_i = 0; time_i < source.time_range_count; time_i++ )
-			//		{
-			//			if ( !valid_time_range( source.time_range[ time_i ], source.metadata ) )
-			//				duration_invalid = true;
-			//
-			//			duration += source.time_range[ time_i ].end - source.time_range[ time_i ].start;
-			//		}
-			//	}
+				
+				// check if this video is used on this preset
+				for ( u32 i = 0; i < enc_clip.presets.size(); i++ )
+				{
+					if ( enc_clip.presets[ i ] != preset_idx )
+						continue;
+
+					is_used_in_preset = true;
+					break;
+				}
+
+				if ( !is_used_in_preset )
+					continue;
+
+				// get the current group we want
+				u32 group_i = 0;
+				for ( ; group_i < clip.groups.size(); group_i++ )
+				{
+					clip_group_t& _group = clip.groups[ group_i ];
+
+					for ( u32 i = 0; i < enc_clip.presets.size(); i++ )
+					{
+						if ( _group.presets[ i ] == preset_idx )
+							goto group_found;
+					}
+				}
+
+				if ( group_i == clip.groups.size() )
+				{
+					// how would we even get here
+					clip.state = e_clip_state_failed;
+					continue;
+				}
+
+group_found:
+				clip_group_t& group = clip.groups[ group_i ];
+
+				for ( u32 src_i = 0; src_i < group.sources.size(); src_i++ )
+				{
+					clip_source_usage_t& source_use = group.sources[ src_i ];
+					clip_source_t&       source     = clip.source[ source_use.source_index ];
+
+					for ( u32 time_i = 0; time_i < source_use.time_range.size(); time_i++ )
+					{
+						if ( !valid_time_range( source_use.time_range[ time_i ], source.metadata ) )
+							duration_invalid = true;
+			
+						duration += source_use.time_range[ time_i ].end - source_use.time_range[ time_i ].start;
+					}
+				}
 
 				if ( !is_used_in_preset )
 					continue;
@@ -224,11 +253,11 @@ void encode_draw_ffmpeg()
 		output_idx = output_select;
 
 	clip_t& clip     = clip_data::clip[ output_idx ];
-	enc_output_video_t&  enc_output = g_output_videos[ output_idx ];
+	enc_clip_t&  enc_clip = g_encoder_clips[ output_idx ];
 
-	enc_output.ffmpeg_output_lock.lock();
-	ImGui::TextUnformatted( enc_output.ffmpeg_output );
-	enc_output.ffmpeg_output_lock.unlock();
+	enc_clip.ffmpeg_output_lock.lock();
+	ImGui::TextUnformatted( enc_clip.ffmpeg_output );
+	enc_clip.ffmpeg_output_lock.unlock();
 
 	ImGui::PopFont();
 	ImGui::PopTextWrapPos();
@@ -261,7 +290,7 @@ void encode_draw_output_info()
 		preset_idx = preset_select;
 
 	clip_t&  clip     = clip_data::clip[ output_idx ];
-	enc_output_video_t&   enc_output = g_output_videos[ output_idx ];
+	enc_clip_t&   enc_clip = g_encoder_clips[ output_idx ];
 	clip_encode_preset_t& preset     = clip_data::preset[ preset_idx ];
 
 	std::string           filename   = get_video_output_name( clip, preset );

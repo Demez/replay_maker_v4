@@ -418,7 +418,7 @@ u32  clip_group_add_source( clip_t* clip, u32 group_index, const char* path )
 	clip_source_usage_t& source = group.sources.emplace_back();
 	source.source_index         = source_i;
 
-	clip_check_video( *clip );
+	clip_check_video( *clip, true );
 
 	return group.sources.size() - 1;
 }
@@ -457,7 +457,7 @@ void clip_group_remove_source( clip_t* clip, u32 group_index, u32 group_src_i )
 		}
 	}
 
-	clip_check_video( *clip );
+	clip_check_video( *clip, true );
 }
 
 

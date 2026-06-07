@@ -9,11 +9,12 @@
 char                g_output_dir[ 512 ];
 char                g_temp_video_dir[ 512 ];
 
-enc_output_video_t* g_output_videos  = nullptr;
+enc_clip_t*         g_encoder_clips   = nullptr;
 
-std::atomic< bool > g_encode_started = false;
-bool                g_encode_running = false;
-bool                g_encode_pause   = false;
+std::atomic< bool > g_encode_started  = false;
+bool                g_encode_running  = false;
+bool                g_encode_finished = false;
+bool                g_encode_pause    = false;
 
 encoder_t           g_encoder_data{};
 
@@ -25,11 +26,18 @@ static void         encode_worker()
 {
 	g_encode_running = true;
 	encode_videos();
+	g_encode_finished = true;
+	g_encode_running  = false;
+
+	printf( "ENCODE FINISHED\n" );
 }
 
 
 void encode_thread_start()
 {
+	if ( g_encode_finished )
+		encode_thread_stop();
+
 	if ( g_encode_thread )
 	{
 		log_printf( log_error, "Encode thread already started, user should not be able to reach this!\n" );
@@ -49,8 +57,9 @@ void encode_thread_start()
 
 void encode_thread_stop()
 {
-	g_encode_running = false;
-	g_encode_started = false;
+	g_encode_running  = false;
+	g_encode_started  = false;
+	g_encode_finished = false;
 
 	if ( g_encode_thread )
 	{
@@ -64,6 +73,9 @@ void encode_thread_stop()
 
 bool encode_check_state()
 {
+	//if ( g_encode_finished )
+	//	encode_thread_stop();
+
 	if ( !g_encode_running || !app::running )
 		return false;
 	
@@ -96,12 +108,76 @@ bool used_in_preset( clip_encode_settings_t& override, u32 preset_i )
 
 bool collect_video_info()
 {
-	return false;
+	if ( clip_data::prefix_count == 0 )
+		return false;
+
+	if ( clip_data::preset_count == 0 )
+		return false;
+
+	if ( clip_data::clip_count == 0 )
+		return false;
+
+	// build encoder clip data
+	g_encoder_clips = ch_calloc< enc_clip_t >( clip_data::clip_count );
+
+	if ( !g_encoder_clips )
+	{
+		log_printf( "failed to allocate memory for output videos\n" );
+		return false;
+	}
+	
+	for ( u32 clip_i = 0; clip_i < clip_data::clip_count; clip_i++ )
+	{
+		clip_t&     clip          = clip_data::clip[ clip_i ];
+		enc_clip_t& enc_clip      = g_encoder_clips[ clip_i ];
+		enc_clip.clip             = &clip;
+		g_encoder_data.scan_index = clip_i;
+
+		if ( !clip.enabled )
+			continue;
+
+		clip_check_video( clip, true );
+
+		// don't allow invalid videos at all
+		if ( clip.state == e_clip_state_invalid )
+			return false;
+
+		// make a quick list of all presets the clip uses
+		for ( u32 group_i = 0; group_i < clip.groups.size(); group_i++ )
+		{
+			clip_group_t& group = clip.groups[ group_i ];
+
+			for ( u32 preset_i = 0; preset_i < group.presets.size(); preset_i++ )
+			{
+				if ( group.presets[ preset_i ] > clip_data::preset_count )
+					continue;
+
+				bool preset_already_added = false;
+				for ( u32 search_i = 0; search_i < enc_clip.presets.size(); search_i++ )
+				{
+					if ( enc_clip.presets[ search_i ] == group.presets[ preset_i ] )
+					{
+						preset_already_added = true;
+						break;
+					}
+				}
+
+				if ( preset_already_added )
+					continue;
+
+				enc_clip.presets.push_back( group.presets[ preset_i ] );
+			}
+		}
+
+		enc_clip.valid = true;
+	}
+
+	return true;
 
 #if 0
-	g_output_videos = ch_calloc< enc_output_video_t >( clip_data::clip_count );
+	g_encoder_clips = ch_calloc< enc_clip_t >( clip_data::clip_count );
 
-	if ( !g_output_videos )
+	if ( !g_encoder_clips )
 	{
 		log_printf( "failed to allocate memory for output videos\n" );
 		return false;
@@ -126,8 +202,8 @@ bool collect_video_info()
 	for ( u32 out_i = 0; out_i < clip_data::clip_count; out_i++ )
 	{
 		clip_t& clip     = clip_data::clip[ out_i ];
-		enc_output_video_t&  enc_output = g_output_videos[ out_i ];
-		enc_output.clip               = &clip;
+		enc_clip_t&  enc_clip = g_encoder_clips[ out_i ];
+		enc_clip.clip               = &clip;
 		g_encoder_data.scan_index       = out_i;
 
 		log_printf( "%s%s\n", clip_data::prefix[ clip.prefix ].prefix, clip.name );
@@ -143,9 +219,9 @@ bool collect_video_info()
 			for ( u32 preset_i = 0; preset_i < source.encode_settings.presets_count; preset_i++ )
 			{
 				bool preset_already_added = false;
-				for ( u32 search_i = 0; search_i < enc_output.presets_count; search_i++ )
+				for ( u32 search_i = 0; search_i < enc_clip.presets_count; search_i++ )
 				{
-					if ( enc_output.presets[ search_i ] == source.encode_settings.presets[ preset_i ] )
+					if ( enc_clip.presets[ search_i ] == source.encode_settings.presets[ preset_i ] )
 					{
 						preset_already_added = true;
 						break;
@@ -156,7 +232,7 @@ bool collect_video_info()
 					continue;
 
 				// add it to this list
-				u32* new_data = ch_realloc< u32 >( enc_output.presets, enc_output.presets_count + 1 );
+				u32* new_data = ch_realloc< u32 >( enc_clip.presets, enc_clip.presets_count + 1 );
 
 				if ( !new_data )
 				{
@@ -164,16 +240,16 @@ bool collect_video_info()
 					return false;
 				}
 
-				enc_output.presets                               = new_data;
-				enc_output.presets[ enc_output.presets_count++ ] = source.encode_settings.presets[ preset_i ];
+				enc_clip.presets                               = new_data;
+				enc_clip.presets[ enc_clip.presets_count++ ] = source.encode_settings.presets[ preset_i ];
 			}
 		}
 
-		log_printf( "%d Encode Presets Used: ", enc_output.presets_count );
+		log_printf( "%d Encode Presets Used: ", enc_clip.presets_count );
 
-		for ( u32 preset_i = 0; preset_i < enc_output.presets_count; preset_i++ )
+		for ( u32 preset_i = 0; preset_i < enc_clip.presets_count; preset_i++ )
 		{
-			log_printf( "\"%s\" ", clip_data::preset[ enc_output.presets[ preset_i ] ].name );
+			log_printf( "\"%s\" ", clip_data::preset[ enc_clip.presets[ preset_i ] ].name );
 		}
 
 		log_printf( "\n" );
@@ -201,9 +277,9 @@ bool collect_video_info()
 		// ----------------------------------------------------------------------------------------
 		// print data for each encode preset
 
-		for ( u32 preset_i = 0; preset_i < enc_output.presets_count; preset_i++ )
+		for ( u32 preset_i = 0; preset_i < enc_clip.presets_count; preset_i++ )
 		{
-			clip_encode_preset_t& preset = clip_data::preset[ enc_output.presets[ preset_i ] ];
+			clip_encode_preset_t& preset = clip_data::preset[ enc_clip.presets[ preset_i ] ];
 			log_printf( "\nEncode Preset: %s\n", preset.name );
 
 			log_printf(

@@ -133,6 +133,7 @@ bool get_video_metadata( const char* path, video_metadata_t& metadata )
 	}
 
 	free( output.data );
+	metadata.valid = true;
 
 	return true;
 }
