@@ -165,20 +165,20 @@ void handle_keybinds()
 	}
 	else if ( ImGui::IsKeyPressed( ImGuiKey_LeftArrow, true ) )
 	{
-		timeline_seek( -5.0, true );
+		timeline_seek( -5.0, false );
 	}
 	else if ( ImGui::IsKeyPressed( ImGuiKey_RightArrow, true ) )
 	{
-		timeline_seek( 5.0, true );
-	}
-	else if ( ImGui::IsKeyReleased( ImGuiKey_LeftArrow ) )
-	{
-		timeline_seek( -5.0, false );
-	}
-	else if ( ImGui::IsKeyReleased( ImGuiKey_RightArrow ) )
-	{
 		timeline_seek( 5.0, false );
 	}
+	//else if ( ImGui::IsKeyReleased( ImGuiKey_LeftArrow ) )
+	//{
+	//	timeline_seek( -5.0, false );
+	//}
+	//else if ( ImGui::IsKeyReleased( ImGuiKey_RightArrow ) )
+	//{
+	//	timeline_seek( 5.0, false );
+	//}
 
 	// Video Cropping/Panning Adjustments
 
