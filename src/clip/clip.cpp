@@ -19,9 +19,9 @@ namespace clip_data
 	clip_prefix_t*        prefix               = nullptr;
 	u32                   prefix_count         = 0;
 
+	// Replay Editor info, store in a different namespace maybe?
 	clip_t*               current_clip         = nullptr;
 	u32                   current_clip_index   = UINT32_MAX;
-	// u32                   current_group_source = 0;
 
 	u32                   current_group        = 0;
 	ChVector< u32 >       current_group_source{};

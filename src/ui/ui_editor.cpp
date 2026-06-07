@@ -32,8 +32,12 @@ void                           draw_replay_list( int size[ 2 ] );
 
 void replay_editor_reset()
 {
-	clip_data::current_clip = nullptr;
-	clip_data::current_source  = 0;
+	clip_data::current_clip       = nullptr;
+	clip_data::current_clip_index = 0;
+	clip_data::current_source     = 0;
+	clip_data::current_group      = 0;
+	clip_data::current_group_source.clear();
+
 	memset( g_output_name_buf, 0, 512 * sizeof( char ) );
 
 	timeline_reset();
@@ -162,11 +166,16 @@ void replay_editor_set_group( u32 output_i, u32 group_i, u32 group_src_i )
 		return;
 	}
 
-	clip_source_t& source                   = clip.source[ source_use.source_index ];
+	clip_source_t& source = clip.source[ source_use.source_index ];
 
-	// bool pause_video              = swapping_group_or_output;
-
-	//pause_video |= mpv_get_current_video() && strcmp( mpv_get_current_video(), source.path ) != 0;
+	if ( current_video )
+	{
+		// if the video is the same, use the pause state from that video instead
+		// this can lead to inconsistent behavior, hmm
+		// maybe a better idea would be to check if the all sources between groups are the same, including count?
+		if ( current_video->current_video && strcmp( current_video->current_video, source.path ) == 0 )
+			pause_video = current_video->pause;
+	}
 
 	if ( g_mpv_extra_vid_on && clip_data::current_clip_index != output_i )
 	{
