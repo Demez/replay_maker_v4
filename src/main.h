@@ -299,17 +299,36 @@ namespace app
 }
 
 
+struct duration_t
+{
+	float duration   = 0.f;
+	float total_prev = 0.f;
+};
+
+
 // Timeline
 namespace timeline
 {
-	extern double zoom;
-	extern int    zoom_step;
-	extern bool   do_scroll;
+	extern ImVec2                 window_size;
+	extern ImVec2                 window_pos;
 
-	extern bool   in_seek;
+	extern double                 zoom;
+	extern int                    zoom_step;
+	extern bool                   do_scroll;
 
-	extern float  scroll_x;
-	extern float  scroll_max_x;
+	extern bool                   in_seek_drag;
+
+	extern float                  scroll_x;
+	extern float                  scroll_max_x;
+
+	extern u32                    selected_section;
+
+	extern bool                   marker_active[ 2 ];
+	extern float                  marker_times[ 2 ];
+	extern u32                    marker_source;
+
+	extern ChVector< duration_t > durations;
+	extern float                  duration_total;
 }
 
 

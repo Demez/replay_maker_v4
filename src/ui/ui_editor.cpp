@@ -137,7 +137,18 @@ void replay_editor_set_group( u32 output_i, u32 group_i, u32 group_src_i )
 	clip_source_usage_t& source_use = group.sources[ group_src_i ];
 
 	bool                 swapping_group_or_output = clip_data::current_clip_index != output_i || clip_data::current_group != group_i;
-	bool                 pause_video              = clip_data::current_clip_index != output_i;
+	//bool                 pause_video              = clip_data::current_clip_index != output_i;
+
+	// bool                 on_preview_video         = get_mpv_index() == EXTRA_VID_ID;
+	mpv_data_t*          current_video            = get_mpv_data();
+
+	bool                 pause_video              = swapping_group_or_output;
+
+	if ( current_video )
+	{
+		// is the current video we are playing back paused?
+		pause_video |= current_video->pause;
+	}
 
 	replay_editor_set_video( output_i, source_use.source_index );
 	///if ( !replay_editor_set_video( output_i, input_i ) )
@@ -155,7 +166,7 @@ void replay_editor_set_group( u32 output_i, u32 group_i, u32 group_src_i )
 
 	// bool pause_video              = swapping_group_or_output;
 
-	pause_video |= mpv_get_current_video() && strcmp( mpv_get_current_video(), source.path ) != 0;
+	//pause_video |= mpv_get_current_video() && strcmp( mpv_get_current_video(), source.path ) != 0;
 
 	if ( g_mpv_extra_vid_on && clip_data::current_clip_index != output_i )
 	{
@@ -185,13 +196,16 @@ void replay_editor_set_group( u32 output_i, u32 group_i, u32 group_src_i )
 		if ( mpv && mpv->mpv )
 		{
 			// if the video was playing, pause the other mpv clients and play the one we swapped to
+			// if ( i != source_use.source_index || pause_video || on_preview_video )
 			if ( i != source_use.source_index || pause_video )
+			// if ( pause_video )
 			{
 				const char* cmd[]   = { "set", "pause", "yes", NULL };
 				int         cmd_ret = p_mpv_command_async( mpv->mpv, 0, cmd );
 			}
 			//else if ( !mpv->pause )
-			else if ( mpv->pause && !timeline::in_seek )
+			//else if ( mpv->pause && !timeline::in_seek_drag )
+			else
 			{
 				const char* cmd[]   = { "set", "pause", "no", NULL };
 				int         cmd_ret = p_mpv_command_async( mpv->mpv, 0, cmd );
@@ -204,7 +218,7 @@ void replay_editor_set_group( u32 output_i, u32 group_i, u32 group_src_i )
 	{
 		mpv_data_t* mpv = get_mpv_data( EXTRA_VID_ID );
 
-		if ( mpv )
+		if ( mpv && pause_video )
 		{
 			const char* cmd[]   = { "set", "pause", "yes", NULL };
 			int         cmd_ret = p_mpv_command_async( mpv->mpv, 0, cmd );

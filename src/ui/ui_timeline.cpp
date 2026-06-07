@@ -7,14 +7,26 @@
 // Timeline
 namespace timeline
 {
-	double zoom         = 1.0;
-	int    zoom_step    = 0;
-	bool   do_scroll    = false;
+	ImVec2                 window_size{};
+	ImVec2                 window_pos{};
 
-	bool   in_seek      = false;
+	double                 zoom             = 1.0;
+	int                    zoom_step        = 0;
+	bool                   do_scroll        = false;
 
-	float  scroll_x     = 0.f;
-	float  scroll_max_x = 0.f;
+	bool                   in_seek_drag     = false;
+
+	float                  scroll_x         = 0.f;
+	float                  scroll_max_x     = 0.f;
+
+	u32                    selected_section = UINT32_MAX;
+
+	bool                   marker_active[ 2 ]{};
+	float                  marker_times[ 2 ]{};
+	u32                    marker_source = 0;
+
+	ChVector< duration_t > durations{};
+	float                  duration_total = 0.f;
 }
 
 
@@ -33,28 +45,7 @@ constexpr ImColor           TIMELINE_MARKER_COLOR_A( 11, 160, 255 );
 // constexpr ImColor           TIMELINE_MARKER_COLOR_B( 160, 0, 160 );
 constexpr ImColor           TIMELINE_MARKER_COLOR_B( 255, 150, 11 );
 
-ImVec2                      g_timeline_size;
-ImVec2                      g_timeline_pos;
-
-u32                         g_selected_section      = UINT32_MAX;
-
-bool                        g_timeline_marker_active[ 2 ]{};
-float                       g_timeline_marker_times[ 2 ]{};
-u32                         g_timeline_marker_source = 0;
-
 constexpr double            TIMELINE_SKIP_TIME = 0.15;
-
-
-struct duration_t
-{
-	float duration   = 0.f;
-	float total_prev = 0.f;
-};
-
-
-void timeline_set_video()
-{
-}
 
 
 void timeline_set_seek_time_fast( float seconds )
@@ -172,61 +163,107 @@ void timeline_seek( float seconds, bool key_down )
 
 void timeline_reset()
 {
-	g_selected_section            = UINT32_MAX;
-	g_timeline_marker_source      = UINT32_MAX;
+	timeline::selected_section   = UINT32_MAX;
+	timeline::marker_source      = UINT32_MAX;
 
 	// TODO: maybe later, have saved markers for each source video, so if your swapping back and forth to line something up, this can stay saved?
-	g_timeline_marker_active[ 0 ] = false;
-	g_timeline_marker_active[ 1 ] = false;
+	timeline::marker_active[ 0 ] = false;
+	timeline::marker_active[ 1 ] = false;
 
-	g_timeline_marker_times[ 0 ]  = 0.f;
-	g_timeline_marker_times[ 1 ]  = 0.f;
+	timeline::marker_times[ 0 ]  = 0.f;
+	timeline::marker_times[ 1 ]  = 0.f;
+
+	timeline::durations.clear();
+	timeline::duration_total = 0.f;
 }
 
 
-void timeline_marker_control( ImGuiIO& io, ImGuiKey key, int marker )
+void timeline_get_durations( clip_group_t* group )
 {
+	timeline::durations.clear();
+	timeline::duration_total = 0.f;
+
+	if ( !group )
+		return;
+
+	for ( clip_source_usage_t& source_use : group->sources )
+	{
+		clip_source_t& source = clip_data::current_clip->source[ source_use.source_index ];
+
+		if ( !source.file_missing )
+		{
+			// TODO: use mpv duration instead?
+			duration_t& duration = timeline::durations.emplace_back();
+			duration.duration    = source.metadata.duration;
+			duration.total_prev  = timeline::duration_total;
+			
+			timeline::duration_total += source.metadata.duration;
+		}
+		else
+		{
+			// find the last valid time range for now
+			float temp_duration = 0.f;
+
+			for ( u32 time_i = 0; time_i < source_use.time_range.size(); time_i++ )
+			{
+				temp_duration = std::max( temp_duration, source_use.time_range[ time_i ].end );
+			}
+
+			duration_t& duration = timeline::durations.emplace_back();
+			duration.duration    = temp_duration;
+			duration.total_prev  = timeline::duration_total;
+
+			timeline::duration_total += temp_duration;
+		}
+	}
+}
+
+
+void timeline_marker_control( ImGuiKey key, int marker )
+{
+	ImGuiIO& io = ImGui::GetIO();
+
 	if ( ImGui::IsKeyPressed( key, false ) )
 	{
 		// If shift key pressed, snap seek pos to this marker pos
 		if ( io.KeyShift )
 		{
-			if ( g_timeline_marker_active[ marker ] )
+			if ( timeline::marker_active[ marker ] )
 			{
-				timeline_set_seek_time( g_timeline_marker_times[ marker ] );
+				timeline_set_seek_time( timeline::marker_times[ marker ] );
 			}
 		}
 		else if ( io.KeyCtrl )
 		{
 			// delete marker
-			g_timeline_marker_active[ marker ] = false;
-			g_timeline_marker_times[ marker ]  = 0.f;
+			timeline::marker_active[ marker ] = false;
+			timeline::marker_times[ marker ]  = 0.f;
 		}
 		else
 		{
 			// set marker
-			if ( clip_data::get_current_group_source() != g_timeline_marker_source )
+			if ( clip_data::get_current_group_source() != timeline::marker_source )
 			{
 				// remove the other marker since it was
 				if ( marker == 1 )
 				{
-					g_timeline_marker_active[ 0 ] = false;
-					g_timeline_marker_times[ 0 ]  = 0.f;
+					timeline::marker_active[ 0 ] = false;
+					timeline::marker_times[ 0 ]  = 0.f;
 				}
 				else
 				{
-					g_timeline_marker_active[ 1 ] = false;
-					g_timeline_marker_times[ 1 ]  = 0.f;
+					timeline::marker_active[ 1 ] = false;
+					timeline::marker_times[ 1 ]  = 0.f;
 				}
 
-				g_timeline_marker_source = clip_data::get_current_group_source();
+				timeline::marker_source = clip_data::get_current_group_source();
 			}
 
 			double time_pos = 0;
 			p_mpv_get_property( get_mpv(), "time-pos", MPV_FORMAT_DOUBLE, &time_pos );
 
-			g_timeline_marker_active[ marker ] = true;
-			g_timeline_marker_times[ marker ]  = time_pos;
+			timeline::marker_active[ marker ] = true;
+			timeline::marker_times[ marker ]  = time_pos;
 		}
 	}
 }
@@ -254,8 +291,7 @@ void delete_current_video( clip_group_t* group )
 	else
 	{
 		replay_editor_set_group( clip_data::current_clip_index, clip_data::current_group, 0 );
-		clip_data::current_source        = UINT32_MAX;
-		//clip_data::current_group_source = UINT32_MAX;
+		clip_data::current_source = UINT32_MAX;
 	}
 }
 
@@ -342,6 +378,41 @@ void draw_time_range_move_button()
 #endif
 
 
+void timeline_marker_controls( clip_group_t* group )
+{
+	// Marker Controls
+	if ( timeline::durations.empty() )
+		return;
+
+	timeline_marker_control( ImGuiKey_Q, 0 );
+	timeline_marker_control( ImGuiKey_E, 1 );
+
+	// Create section from markers, both markers don't need to be active, it will default to the start or end of the video
+	if ( ImGui::IsKeyPressed( ImGuiKey_R, false ) )
+	{
+		float start_time = timeline::marker_active[ 0 ] ? timeline::marker_times[ 0 ] : 0.f;
+		float end_time   = timeline::marker_active[ 1 ] ? timeline::marker_times[ 1 ] : timeline::durations[ clip_data::get_current_group_source() ].duration;
+
+		// can't have this be inverted, flip if needed
+		if ( end_time < start_time )
+		{
+			float temp = end_time;
+			end_time   = start_time;
+			start_time = temp;
+		}
+
+		clip_group_add_time_range( clip_data::current_clip, *group, timeline::marker_source, start_time, end_time );
+
+		// reset markers
+		timeline::marker_active[ 0 ] = false;
+		timeline::marker_active[ 1 ] = false;
+
+		timeline::marker_times[ 0 ]  = 0.f;
+		timeline::marker_times[ 1 ]  = 0.f;
+	}
+}
+
+
 void timeline_handle_scroll( ImVec2 base_timeline_pos )
 {
 	const bool show_timeline = get_mpv_index() != EXTRA_VID_ID;
@@ -377,10 +448,10 @@ void timeline_handle_scroll( ImVec2 base_timeline_pos )
 	ImVec2 base_screen_pos = ImGui::GetCursorScreenPos();
 	base_screen_pos.x -= timeline::scroll_x;
 
-	ImVec2 timeline_content_size = g_timeline_size;
+	ImVec2 timeline_content_size = timeline::window_size;
 	timeline_content_size.x *= new_zoom;
 
-	float scroll_size = MAX( 0.0f, timeline_content_size.x - g_timeline_size.x );
+	float scroll_size = MAX( 0.0f, timeline_content_size.x - timeline::window_size.x );
 
 	float snap_offset   = 70;
 
@@ -393,7 +464,7 @@ void timeline_handle_scroll( ImVec2 base_timeline_pos )
 	// snap to edges
 	if ( mouse_x < (snap_offset/2) )
 		timeline::scroll_x = 0;
-	else if ( mouse_x > ( g_timeline_size.x * timeline::zoom ) - (snap_offset/2) )
+	else if ( mouse_x > ( timeline::window_size.x * timeline::zoom ) - (snap_offset/2) )
 		timeline::scroll_x = scroll_size;
 	else
 		timeline::scroll_x -= new_x_pos;
@@ -403,17 +474,180 @@ void timeline_handle_scroll( ImVec2 base_timeline_pos )
 }
 
 
+void timeline_draw_group_tabs()
+{
+	if ( ImGui::BeginTabBar( "##timeline_group_tabs" ) )
+	{
+		if ( !clip_data::current_clip )
+		{
+			ImGui::EndTabBar();
+			return;
+		}
+
+		ImGuiStyle& style = ImGui::GetStyle();
+
+		for ( u32 group_i = 0; group_i < clip_data::current_clip->groups.size(); group_i++ )
+		{
+			clip_group_t& group        = clip_data::current_clip->groups[ group_i ];
+
+			std::string   group_name   = clip_group_get_name( group );
+
+			bool          selected_tab = clip_data::current_group == group_i;
+
+			if ( selected_tab )
+			{
+				ImGui::PushStyleColor( ImGuiCol_Tab, style.Colors[ ImGuiCol_TabSelected ] );
+			}
+
+			bool group_invalid = ( group.presets.empty() || group.sources.empty() );
+
+			if ( group_invalid )
+			{
+				ImGui::PushStyleColor( ImGuiCol_Tab, COLOR_BTN_RED );
+				ImGui::PushStyleColor( ImGuiCol_TabHovered, COLOR_BTN_RED_HOVER );
+				ImGui::PushStyleColor( ImGuiCol_TabSelected, COLOR_BTN_RED_ACTIVE );
+			}
+
+			ImGui::PushID( group_i + 1 );
+
+			// if ( ImGui::TabItemButton( title, selected_tab ? ImGuiTabItemFlags_SetSelected : 0 ) )
+			if ( ImGui::TabItemButton( group_name.c_str() ) )
+			{
+				if ( clip_data::current_group != group_i )
+				{
+					replay_editor_set_group( clip_data::current_clip_index, group_i, clip_data::current_group_source[ group_i ] );
+				}
+			}
+
+			ImGui::PopID();
+
+			if ( group_invalid )
+			{
+				ImGui::PopStyleColor( 3 );
+			}
+
+			if ( selected_tab )
+			{
+				ImGui::PopStyleColor();
+			}
+		}
+
+#if 0
+		ImGui::PushStyleColor( ImGuiCol_Tab, COLOR_PURPLE );
+		ImGui::PushStyleColor( ImGuiCol_TabHovered, COLOR_PURPLE_HOVER );
+		ImGui::PushStyleColor( ImGuiCol_TabSelected, COLOR_PURPLE_ACTIVE );
+
+		if ( ImGui::TabItemButton( "New Group" ) )
+		{
+			u32 new_group = clip_data::current_clip->groups.size();
+			clip_data::current_clip->groups.emplace_back();
+
+			replay_editor_set_group( clip_data::current_clip_index, new_group, 0 );
+		}
+
+		ImGui::PopStyleColor( 3 );
+#endif
+
+		ImGui::SameLine();
+
+		//ImVec2 text_size = ImGui::CalcTextSize( "Create Group with Encode Preset" );
+
+		//ImGui::PushItemWidth( style.FramePadding.x * 2 + text_size.x + ImGui::GetFrameHeight() );
+
+		if ( ImGui::BeginCombo( "##New Group Preset", "Create Group with Encode Preset", ImGuiComboFlags_WidthFitPreview ) )
+		{
+			for ( u32 preset_i = 0; preset_i < clip_data::preset_count; preset_i++ )
+			{
+				clip_encode_preset_t& preset        = clip_data::preset[ preset_i ];
+				bool                  preset_in_use = false;
+
+				for ( u32 group_i = 0; group_i < clip_data::current_clip->groups.size(); group_i++ )
+				{
+					clip_group_t& group = clip_data::current_clip->groups[ group_i ];
+
+					for ( u32 group_preset_i = 0; group_preset_i < group.presets.size(); group_preset_i++ )
+					{
+						if ( group.presets[ group_preset_i ] != preset_i )
+							continue;
+
+						preset_in_use = true;
+						break;
+					}
+
+					if ( preset_in_use )
+						break;
+				}
+
+				if ( preset_in_use )
+					continue;
+
+				if ( ImGui::Selectable( preset.name ) )
+				{
+					u32           new_group = clip_data::current_clip->groups.size();
+					clip_group_t& group     = clip_data::current_clip->groups.emplace_back();
+
+					clip_group_add_preset( *clip_data::current_clip, group, preset_i );
+					replay_editor_set_group( clip_data::current_clip_index, new_group, 0 );
+				}
+			}
+
+			ImGui::EndCombo();
+		}
+
+		ImGui::EndTabBar();
+	}
+}
+
+
+void timeline_draw_group_buttons( clip_group_t* group )
+{
+	ImGui::BeginDisabled( !clip_data::current_clip );
+
+	ImGui::PushStyleColor( ImGuiCol_ButtonActive, COLOR_BTN_RED_ACTIVE );
+	ImGui::PushStyleColor( ImGuiCol_ButtonHovered, COLOR_BTN_RED_HOVER );
+	ImGui::PushStyleColor( ImGuiCol_Button, COLOR_BTN_RED );
+
+	ImGui::EndDisabled();
+
+	ImGui::BeginDisabled( !group );
+
+	if ( ImGui::Button( "Delete Current Group" ) )
+	{
+		clip_data::current_clip->groups.remove( clip_data::current_group );
+
+		if ( clip_data::current_group > 0 && clip_data::current_group == clip_data::current_clip->groups.size() )
+			clip_data::current_group--;
+
+		timeline_reset();
+
+		ImGui::EndDisabled();
+		ImGui::PopStyleColor( 3 );
+
+		return;
+	}
+
+	ImGui::EndDisabled();
+
+	ImGui::PopStyleColor( 3 );
+
+	if ( group )
+	{
+		ImGui::SameLine();
+		ImGui::SeparatorEx( ImGuiSeparatorFlags_Vertical );
+		ImGui::SameLine();
+
+		draw_preset_dropdown( *clip_data::current_clip, *group, true );
+	}
+}
+
+
 void timeline_draw()
 {
-	//p_mpv_set_option_string( get_mpv(), "start", "0%" );
-
 	ImGuiIO&     io                 = ImGui::GetIO();
 	ImGuiStyle&  style              = ImGui::GetStyle();
 
 	ImDrawList*  draw_list          = ImGui::GetWindowDrawList();
 
-	u32          focused_source     = 0;
-	float        duration_total     = 0.f;
 	static float new_time_pos       = 0.f;
 	static bool  was_time_pos_set   = false;
 	static bool  update_time_next_draw = false;
@@ -428,7 +662,19 @@ void timeline_draw()
 		update_time_next_draw = false;
 	}
 
-	u32    change_to_source_i = UINT32_MAX;
+	u32 change_to_source_i = UINT32_MAX;
+
+	// ------------------------------------------------------------------------------------------
+	// Draw tabs on top for which video group is currently in use
+
+	// can change current group
+	timeline_draw_group_tabs();
+
+	clip_group_t* group = clip_get_group( clip_data::current_clip, clip_data::current_group );
+
+	timeline_draw_group_buttons( group );
+
+	// ------------------------------------------------------------------------------------------
 
 	s32    paused             = 0;
 	double time_pos           = 0;
@@ -439,10 +685,6 @@ void timeline_draw()
 		paused   = get_mpv_data()->pause;
 	}
 
-	std::vector< duration_t > durations;
-
-	// ------------------------------------------------------------------------------------------
-
 	bool          video_path_matches = false;
 
 	// test WantCaptureMouseUnlessPopupClose?
@@ -450,284 +692,30 @@ void timeline_draw()
 
 	if ( clip_data::current_clip && clip_data::current_clip->source_count > 0 && clip_data::current_source != UINT32_MAX )
 	{
-		video_path_matches = ( mpv_get_current_video() ? strcmp( clip_data::current_clip->source[ clip_data::current_source ].path, mpv_get_current_video() ) == 0 : false );
+		if ( mpv_get_current_video() )
+			video_path_matches = strcmp( clip_data::current_clip->source[ clip_data::current_source ].path, mpv_get_current_video() ) == 0;
 	}
 
 	bool draw_tabs_and_sections = clip_data::current_clip && clip_data::get_current_group_source() != UINT32_MAX && video_path_matches;
 
 	// ------------------------------------------------------------------------------------------
-	// Draw tabs on top for which encode preset currently in use and current source video?
-	float text_height = ImGui::GetFontSize();
-
-	if ( ImGui::BeginTabBar( "##timeline_tabs" ) )
-	{
-		if ( clip_data::current_clip )
-		{
-			for ( u32 group_i = 0; group_i < clip_data::current_clip->groups.size(); group_i++ )
-			{
-				clip_group_t& group = clip_data::current_clip->groups[ group_i ];
-
-				std::string          group_name = clip_group_get_name( group );
-
-				bool selected_tab = clip_data::current_group == group_i;
-
-				if ( selected_tab )
-				{
-					ImGui::PushStyleColor( ImGuiCol_Tab, style.Colors[ ImGuiCol_TabSelected ] );
-				}
-
-				bool group_invalid = ( group.presets.empty() || group.sources.empty() );
-
-				if ( group_invalid )
-				{
-					ImGui::PushStyleColor( ImGuiCol_Tab, COLOR_BTN_RED );
-					ImGui::PushStyleColor( ImGuiCol_TabHovered, COLOR_BTN_RED_HOVER );
-					ImGui::PushStyleColor( ImGuiCol_TabSelected, COLOR_BTN_RED_ACTIVE );
-				}
-
-				ImGui::PushID( group_i + 1 );
-
-				// if ( ImGui::TabItemButton( title, selected_tab ? ImGuiTabItemFlags_SetSelected : 0 ) )
-				if ( ImGui::TabItemButton( group_name.c_str() ) )
-				{
-					if ( clip_data::current_group != group_i )
-					{
-						replay_editor_set_group( clip_data::current_clip_index, group_i, clip_data::current_group_source[ group_i ] );
-					}
-				}
-
-				ImGui::PopID();
-
-				if ( group_invalid )
-				{
-					ImGui::PopStyleColor( 3 );
-				}
-
-				if ( selected_tab )
-				{
-					ImGui::PopStyleColor();
-				}
-			}
-
-			#if 0
-			ImGui::PushStyleColor( ImGuiCol_Tab, COLOR_PURPLE );
-			ImGui::PushStyleColor( ImGuiCol_TabHovered, COLOR_PURPLE_HOVER );
-			ImGui::PushStyleColor( ImGuiCol_TabSelected, COLOR_PURPLE_ACTIVE );
-
-			if ( ImGui::TabItemButton( "New Group" ) )
-			{
-				u32 new_group = clip_data::current_clip->groups.size();
-				clip_data::current_clip->groups.emplace_back();
-
-				replay_editor_set_group( clip_data::current_clip_index, new_group, 0 );
-			}
-
-			ImGui::PopStyleColor( 3 );
-			#endif
-
-			ImGui::SameLine();
-
-			//ImVec2 text_size = ImGui::CalcTextSize( "Create Group with Encode Preset" );
-
-			//ImGui::PushItemWidth( style.FramePadding.x * 2 + text_size.x + ImGui::GetFrameHeight() );
-
-			if ( ImGui::BeginCombo( "##New Group Preset", "Create Group with Encode Preset", ImGuiComboFlags_WidthFitPreview ) )
-			{
-				for ( u32 preset_i = 0; preset_i < clip_data::preset_count; preset_i++ )
-				{
-					clip_encode_preset_t& preset        = clip_data::preset[ preset_i ];
-					bool                  preset_in_use = false;
-
-					for ( u32 group_i = 0; group_i < clip_data::current_clip->groups.size(); group_i++ )
-					{
-						clip_group_t& group = clip_data::current_clip->groups[ group_i ];
-
-						for ( u32 group_preset_i = 0; group_preset_i < group.presets.size(); group_preset_i++ )
-						{
-							if ( group.presets[ group_preset_i ] != preset_i )
-								continue;
-
-							preset_in_use = true;
-							break;
-						}
-
-						if ( preset_in_use )
-							break;
-					}
-
-					if ( preset_in_use )
-						continue;
-
-					if ( ImGui::Selectable( preset.name ) )
-					{
-						u32                  new_group = clip_data::current_clip->groups.size();
-						clip_group_t& group     = clip_data::current_clip->groups.emplace_back();
-
-						clip_group_add_preset( *clip_data::current_clip, group, preset_i );
-						replay_editor_set_group( clip_data::current_clip_index, new_group, 0 );
-					}
-				}
-
-				ImGui::EndCombo();
-			}
-		}
-
-		ImGui::EndTabBar();
-	}
-
-	// ------------------------------------------------------------------------------------------
-
-	clip_group_t* group = clip_get_group( clip_data::current_clip, clip_data::current_group );
-
-	{
-		// ImGui::BeginDisabled( !draw_tabs_and_sections );
-		// ImGui::SameLine();
-		ImGui::BeginDisabled( !clip_data::current_clip );
-
-		// if ( ImGui::Button( "Add Loaded Video" ) )
-		// {
-		// 	u32 i = clip_group_add_source( clip_data::current_clip, clip_data::current_group, mpv_get_current_video() );
-		// 	replay_editor_set_group( clip_data::current_clip_index, clip_data::current_group, i );
-		// }
-		// 
-		// ImGui::SameLine();
-
-		ImGui::PushStyleColor( ImGuiCol_ButtonActive, COLOR_BTN_RED_ACTIVE );
-		ImGui::PushStyleColor( ImGuiCol_ButtonHovered, COLOR_BTN_RED_HOVER );
-		ImGui::PushStyleColor( ImGuiCol_Button, COLOR_BTN_RED );
-
-		ImGui::EndDisabled();
-		// ImGui::BeginDisabled( !( clip_data::current_clip && clip_data::current_group_source != UINT32_MAX ) );
-		//ImGui::BeginDisabled( !clip_data::current_clip );
-		//
-		//if ( ImGui::Button( "Delete Video" ) )
-		//{
-		//	clip_group_remove_source( clip_data::current_clip, clip_data::current_group, clip_data::current_group_source );
-		//	clip_remove_entry( clip_data::current_clip_index );
-		//	timeline_reset();
-		//	replay_editor_reset();
-		//	mpv_cmd_close_video();
-		//
-		//	ImGui::EndDisabled();
-		//
-		//	ImGui::PopStyleColor( 3 );
-		//
-		//	return;
-		//}
-
-		//ImGui::SameLine();
-		//
-		//if ( ImGui::Button( "Delete Current Video" ) )
-		//{
-		//	delete_current_video( group );
-		//
-		//	ImGui::EndDisabled();
-		//	ImGui::PopStyleColor( 3 );
-		//
-		//	return;
-		//}
-
-		//ImGui::EndDisabled();
-		//
-		//ImGui::SameLine();
-
-		ImGui::BeginDisabled( !group );
-
-		if ( ImGui::Button( "Delete Current Group" ) )
-		{
-			clip_data::current_clip->groups.remove( clip_data::current_group );
-
-			if ( clip_data::current_group > 0 && clip_data::current_group == clip_data::current_clip->groups.size() )
-				clip_data::current_group--;
-
-			timeline_reset();
-
-			ImGui::EndDisabled();
-
-			ImGui::PopStyleColor( 3 );
-
-			return;
-		}
-
-		ImGui::EndDisabled();
-
-		ImGui::PopStyleColor( 3 );
-
-		if ( group )
-		{
-			ImGui::SameLine();
-			ImGui::SeparatorEx( ImGuiSeparatorFlags_Vertical );
-			ImGui::SameLine();
-
-			draw_preset_dropdown( *clip_data::current_clip, *group, true );
-		}
-	}
-
-	// ------------------------------------------------------------------------------------------
 	// Marker controls for creating new sections (Q and W, E to create as a section and clear markers)
 
+	// Store timeline::durations for all videos
 	if ( group )
 	{
-		for ( clip_source_usage_t& source_use : group->sources )
-		{
-			clip_source_t& source = clip_data::current_clip->source[ source_use.source_index ];
+		// called every frame currently since the file could be replaced
+		// could add callback checks for that, but it's not really needed, this is cheap enough anyway to call per frame
+		timeline_get_durations( group );
 
-			if ( !source.file_missing )
-			{
-				durations.emplace_back( source.metadata.duration, duration_total );
-				duration_total += source.metadata.duration;
-			}
-			else
-			{
-				// find the last valid time range for now
-				float temp_duration = 0.f;
-
-				for ( u32 time_i = 0; time_i < source_use.time_range.size(); time_i++ )
-				{
-					temp_duration = std::max( temp_duration, source_use.time_range[ time_i ].end );
-				}
-
-				durations.emplace_back( temp_duration, duration_total );
-				duration_total += temp_duration;
-			}
-		}
-	}
-
-	// Marker Controls
-	if ( durations.size() && capture_inputs )
-	{
-		timeline_marker_control( io, ImGuiKey_Q, 0 );
-		timeline_marker_control( io, ImGuiKey_E, 1 );
-
-		// Create section from markers, both markers don't need to be active, it will default to the start or end of the video
-		if ( ImGui::IsKeyPressed( ImGuiKey_R, false ) )
-		{
-			float start_time = g_timeline_marker_active[ 0 ] ? g_timeline_marker_times[ 0 ] : 0.f;
-			float end_time   = g_timeline_marker_active[ 1 ] ? g_timeline_marker_times[ 1 ] : durations[ focused_source ].duration;
-
-			// can't have this be inverted, flip if needed
-			if ( end_time < start_time )
-			{
-				float temp = end_time;
-				end_time   = start_time;
-				start_time = temp;
-			}
-
-			clip_group_add_time_range( clip_data::current_clip, *group, g_timeline_marker_source, start_time, end_time );
-
-			// reset markers
-			g_timeline_marker_active[ 0 ] = false;
-			g_timeline_marker_active[ 1 ] = false;
-
-			g_timeline_marker_times[ 0 ]  = 0.f;
-			g_timeline_marker_times[ 1 ]  = 0.f;
-		}
+		if ( capture_inputs )
+			timeline_marker_controls( group );
 	}
 
 	// ------------------------------------------------------------------------------------------
 	// Use [ and ] keys to jump to start and end points of each section and start/end of video
 
-	if ( durations.size() && draw_tabs_and_sections && capture_inputs && group )
+	if ( timeline::durations.size() && draw_tabs_and_sections && capture_inputs && group )
 	{
 		clip_source_usage_t& source = group->sources[ clip_data::get_current_group_source() ];
 
@@ -739,7 +727,7 @@ void timeline_draw()
 			if ( time_pos < TIMELINE_SKIP_TIME && clip_data::get_current_group_source() > 0 )
 			{
 				clip_source_usage_t& prev_source = group->sources[ clip_data::get_current_group_source() - 1 ];
-				float                duration    = durations[ clip_data::get_current_group_source() - 1 ].duration;
+				float                duration    = timeline::durations[ clip_data::get_current_group_source() - 1 ].duration;
 
 				for ( u32 time_i = 0; time_i < prev_source.time_range.size(); time_i++ )
 				{
@@ -778,12 +766,13 @@ void timeline_draw()
 		if ( ImGui::IsKeyPressed( ImGuiKey_D, false ) )
 		{
 			// search for the first notable time to snap to
-			float closest_time = durations[ focused_source ].duration;
+			// float closest_time = timeline::durations[ focused_source ].duration;
+			float closest_time = timeline::durations[ clip_data::get_current_group_source() ].duration;
 
 			if ( time_pos > closest_time - TIMELINE_SKIP_TIME && clip_data::get_current_group_source() + 1 < group->sources.size() )
 			{
 				clip_source_usage_t& prev_source = group->sources[ clip_data::get_current_group_source() + 1 ];
-				float                duration    = durations[ clip_data::get_current_group_source() + 1 ].duration;
+				float                duration    = timeline::durations[ clip_data::get_current_group_source() + 1 ].duration;
 				closest_time                     = duration;
 
 				for ( u32 time_i = 0; time_i < prev_source.time_range.size(); time_i++ )
@@ -828,17 +817,17 @@ void timeline_draw()
 	ImVec2 cursor_pos              = ImGui::GetCursorPos();
 	ImVec2 region_avail            = ImGui::GetContentRegionAvail();
 
-	g_timeline_size.x              = region_avail.x;
-	// g_timeline_size.y        = region_avail.y - cursor_pos.y;
-	g_timeline_size.y              = region_avail.y - ( text_height + style.FramePadding.y * 2 + style.ItemSpacing.y );
+	timeline::window_size.x              = region_avail.x;
+	// timeline::window_size.y        = region_avail.y - cursor_pos.y;
+	timeline::window_size.y              = region_avail.y - ( ImGui::GetFontSize() + style.FramePadding.y * 2 + style.ItemSpacing.y );
 
 	//static float timeline_scroll_x = 0.f;
 
  	ImVec2 base_timeline_pos       = ImVec2( window_pos.x + cursor_pos.x, window_pos.y + cursor_pos.y );
-	if ( mouse_hovering_area( base_timeline_pos, { base_timeline_pos.x + g_timeline_size.x, base_timeline_pos.y + g_timeline_size.y } ) )
+	if ( mouse_hovering_area( base_timeline_pos, { base_timeline_pos.x + timeline::window_size.x, base_timeline_pos.y + timeline::window_size.y } ) )
 		timeline_handle_scroll( base_timeline_pos );
 
-	ImVec2 timeline_content_size = g_timeline_size;
+	ImVec2 timeline_content_size = timeline::window_size;
 	timeline_content_size.x *= timeline::zoom;
 	timeline_content_size.y -= style.ScrollbarSize;
 
@@ -860,7 +849,7 @@ void timeline_draw()
 		ImGui::SetNextWindowScroll( { timeline::scroll_x, 0 } );
 
 	// ZOOMING !!!
-	if ( !ImGui::BeginChild( "##timeline_area", g_timeline_size, ImGuiChildFlags_None, ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoScrollWithMouse | ImGuiWindowFlags_HorizontalScrollbar | ImGuiWindowFlags_AlwaysHorizontalScrollbar ) )
+	if ( !ImGui::BeginChild( "##timeline_area", timeline::window_size, ImGuiChildFlags_None, ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoScrollWithMouse | ImGuiWindowFlags_HorizontalScrollbar | ImGuiWindowFlags_AlwaysHorizontalScrollbar ) )
 	{
 		ImGui::EndChild();
 		return;
@@ -899,7 +888,7 @@ void timeline_draw()
 		{
 			clip_source_usage_t& source_use        = group->sources[ source_use_i ];
 			clip_source_t&       source            = clip_data::current_clip->source[ source_use.source_index ];
-			duration_t           duration          = durations[ source_use_i ];
+			duration_t           duration          = timeline::durations[ source_use_i ];
 
 			ImColor              main_border_color = style.Colors[ ImGuiCol_FrameBgActive ];
 			ImColor              main_bg_color     = style.Colors[ ImGuiCol_FrameBg ];
@@ -927,8 +916,8 @@ void timeline_draw()
 
 			float  total_area      = window_area_max.x - window_area_min.x;
 
-			float  percent_of_area = duration.duration / duration_total;
-			float  offset          = timeline_size.x / duration_total;
+			float  percent_of_area = duration.duration / timeline::duration_total;
+			float  offset          = timeline_size.x / timeline::duration_total;
 
 			vid_area_min.x         = window_area_min.x + total_area * ( last_percent );
 			vid_area_max.x         = window_area_min.x + total_area * ( percent_of_area + last_percent );
@@ -996,7 +985,7 @@ void timeline_draw()
 			draw_list->AddRectFilled( close_btn_min, close_btn_max, close_btn_color, style.FrameRounding, ImDrawFlags_RoundCornersAll );
 			#endif
 
-			if ( clip_data::get_current_group_source() == source_use_i && capture_inputs && g_selected_section == UINT32_MAX && ImGui::IsKeyPressed( ImGuiKey_Delete, false ) )
+			if ( clip_data::get_current_group_source() == source_use_i && capture_inputs && timeline::selected_section == UINT32_MAX && ImGui::IsKeyPressed( ImGuiKey_Delete, false ) )
 			{
 				delete_current_vid = true;
 			}
@@ -1037,7 +1026,6 @@ void timeline_draw()
 
 	static bool       just_selected_section         = false;
 
-	static bool       seek_drag                     = false;
 	static bool       seek_drag_play_state          = false;
 	static bool       delayed_seek_drag_disable     = false;
 	static bool       ensure_seek_drag_time_set     = false;
@@ -1051,19 +1039,20 @@ void timeline_draw()
 	bool              seek_time_override            = false;
 	bool              ignore_seek_drag              = false;
 
+#if 0
 	// shift time range params
 	static u32        shift_time_range_hovered_prev = UINT32_MAX;
 	u32               shift_time_range_hovered      = UINT32_MAX;
 	bool              shift_time_range              = false;
 	bool              shift_time_range_dir          = false;
 	u32               shift_time_range_vid          = 0;
+#endif
 
 	// This is used so we can scroll to the exact frame on mouse release during fast mouse movement
 	// we won't be on a keyframe instead of where the mouse was last held down
 	if ( delayed_seek_drag_disable )
 	{
-		seek_drag           = false;
-		timeline::in_seek   = false;
+		timeline::in_seek_drag   = false;
 
 		const char* cmd[]   = { "set", "pause", seek_drag_play_state ? "yes" : "no", NULL };
 		p_mpv_command_async( get_mpv(), 0, cmd );
@@ -1084,12 +1073,12 @@ void timeline_draw()
 
 		for ( size_t video_i = 0; video_i < group->sources.size(); video_i++ )
 		{
-			duration_t duration        = durations[ video_i ];
+			duration_t duration        = timeline::durations[ video_i ];
 
 			float      total_area      = window_area_max.x - window_area_min.x;
 
-			float      percent_of_area = duration.duration / duration_total;
-			float      offset          = timeline_size.x / duration_total;
+			float      percent_of_area = duration.duration / timeline::duration_total;
+			float      offset          = timeline_size.x / timeline::duration_total;
 
 			ImVec2     vid_area_min    = window_area_min;
 			ImVec2     vid_area_max    = window_area_max;
@@ -1123,7 +1112,7 @@ void timeline_draw()
 					int                section_pos_left  = seek_pos_start + seek_area * ( time_range.start / source.metadata.duration );
 					int                section_pos_right = seek_pos_start + seek_area * ( time_range.end / source.metadata.duration );
 
-					bool               is_selected       = clip_data::get_current_group_source() == video_i && g_selected_section == time_i;
+					bool               is_selected       = clip_data::get_current_group_source() == video_i && timeline::selected_section == time_i;
 					ImColor            border_color      = is_selected ? SECTION_COLOR_SELECT_BORDER : SECTION_COLOR_BORDER;
 
 					float              height_min        = window_area_min.y + ImGui::GetFrameHeight();
@@ -1323,7 +1312,7 @@ void timeline_draw()
 					// check if we want to select this one
 					if ( mouse_hovered && io.MouseClicked[ 0 ] && mouse_in_rect( ImVec2( section_pos_snap_start_l, height_min ), ImVec2( section_pos_snap_end_r, window_area_max.y ) ) )
 					{
-						g_selected_section    = time_i;
+						timeline::selected_section    = time_i;
 						just_selected_section = true;
 					}
 
@@ -1371,14 +1360,14 @@ void timeline_draw()
 				// ------------------------------------------------------------------------------------------
 				// Draw 2 Marker positions
 
-				if ( g_timeline_marker_source == video_i )
+				if ( timeline::marker_source == video_i )
 				{
 					for ( int marker_i = 0; marker_i < 2; marker_i++ )
 					{
-						if ( !g_timeline_marker_active[ marker_i ] )
+						if ( !timeline::marker_active[ marker_i ] )
 							continue;
 
-						double  time_pos_seconds = duration.duration ? duration.duration / g_timeline_marker_times[ marker_i ] : 0.0;
+						double  time_pos_seconds = duration.duration ? duration.duration / timeline::marker_times[ marker_i ] : 0.0;
 						int     marker_pos_final = duration.duration ? ( seek_area / time_pos_seconds ) + seek_pos_start : seek_pos_start;
 
 						ImColor marker_color     = marker_i == 0 ? TIMELINE_MARKER_COLOR_A : TIMELINE_MARKER_COLOR_B;
@@ -1518,21 +1507,19 @@ void timeline_draw()
 				{
 					if ( mouse_hovered_video_area && io.MouseClicked[ 0 ] )
 					{
-						seek_drag            = true;
+						timeline::in_seek_drag    = true;
 						seek_drag_play_state = paused;
-
-						timeline::in_seek    = true;
 
 						const char* cmd[]    = { "set", "pause", "yes", NULL };
 						p_mpv_command_async( get_mpv(), 0, cmd );
 
 						if ( !just_selected_section )
-							g_selected_section = UINT32_MAX;
+							timeline::selected_section = UINT32_MAX;
 					}
 
 					// TODO: check if we just did a single click, no need to do another seek in that case
 					// or if we did a long click, but no mouse movement, no seek would be needed after that
-					if ( seek_drag && !io.MouseDown[ 0 ] )
+					if ( timeline::in_seek_drag && !io.MouseDown[ 0 ] )
 					{
 						// timeline_set_seek_time( new_time_pos );
 						delayed_seek_drag_disable = true;
@@ -1543,8 +1530,8 @@ void timeline_draw()
 						//ensure_seek_drag_time_set = true;
 					}
 
-					// if ( seek_drag && mouse_hovered_video_area )
-					if ( seek_drag )
+					// if ( timeline::in_seek_drag && mouse_hovered_video_area )
+					if ( timeline::in_seek_drag )
 					{
 						bool mouse_x_hovered_video_area = app::mouse_pos[ 0 ] >= vid_area_min[ 0 ] && app::mouse_pos[ 0 ] <= vid_area_max[ 0 ];
 
@@ -1565,6 +1552,10 @@ void timeline_draw()
 							bool      mouse_moving    = abs( app::mouse_delta[ 0 ] ) > mouse_threshold || abs( app::mouse_delta[ 1 ] ) > mouse_threshold;
 
 							//printf( "MOUSE X SPEED: %.6f\n", app::mouse_delta[ 0 ] );
+							
+							// will this be buggy? i hope not
+							// make sure new time is withing a valid range of close enough to not spam it
+							bool      time_pos_matches = ( new_time_pos - 0.2f ) < time_pos && time_pos < ( new_time_pos + 0.2f );
 
 							if ( mouse_moving )
 							{
@@ -1574,6 +1565,12 @@ void timeline_draw()
 							{
 								// do an exact seek on mouse stop
 								seek_time_override = true;
+							}
+							else if ( !time_pos_matches )
+							{
+								// do an exact seek on mouse stop
+								seek_time_override = true;
+								//printf( "TIME POS DOESNT MATCH, EXACT SEEKING AGAIN\n" );
 							}
 						}
 					}
@@ -1592,8 +1589,8 @@ void timeline_draw()
 				// {
 				// 	seek_pos_final = seek_area / ( duration / section_resize_seek_time ) + seek_pos_start;
 				// }
-				// else if ( seek_drag )
-				if ( ( seek_drag && !section_resize ) || seek_time_override )
+				// else if ( timeline::in_seek_drag )
+				if ( ( timeline::in_seek_drag && !section_resize ) || seek_time_override )
 				{
 					// use seek drag position instead
 					seek_pos_final = duration.duration ? ( seek_area * new_seek_percent ) + seek_pos_start : seek_pos_start;
@@ -1624,27 +1621,30 @@ void timeline_draw()
 
 	ImGui::EndChild();
 
-	shift_time_range_hovered_prev = shift_time_range_hovered;
+	//shift_time_range_hovered_prev = shift_time_range_hovered;
 	just_selected_section         = false;
 
 	// ------------------------------------------------------------------------------------------
 	// Key binding controls
 
-	if ( group && capture_inputs && g_selected_section != UINT32_MAX && ImGui::IsKeyPressed( ImGuiKey_Delete ) )
+	if ( group && capture_inputs && timeline::selected_section != UINT32_MAX && ImGui::IsKeyPressed( ImGuiKey_Delete ) )
 	{
-		clip_group_remove_time_range( clip_data::current_clip, *group, clip_data::get_current_group_source(), g_selected_section );
-		g_selected_section = UINT32_MAX;
+		clip_group_remove_time_range( clip_data::current_clip, *group, clip_data::get_current_group_source(), timeline::selected_section );
+		timeline::selected_section = UINT32_MAX;
 	}
 
 	// ------------------------------------------------------------------------------------------
 	// Set new cursor pos for normal imgui widget drawing
 
-	// ImGui::SetCursorPos( ImVec2( cursor_pos.x, cursor_pos.y + g_timeline_size.y + ( style.ItemSpacing.y * 1.5 ) ) );
-	//ImGui::SetCursorPos( ImVec2( cursor_pos.x, cursor_pos.y + g_timeline_size.y + style.ItemSpacing.y ) );
-
-	if ( !seek_drag && was_playing && paused && group && group->sources.size() )
+	// ImGui::SetCursorPos( ImVec2( cursor_pos.x, cursor_pos.y + timeline::window_size.y + ( style.ItemSpacing.y * 1.5 ) ) );
+	//ImGui::SetCursorPos( ImVec2( cursor_pos.x, cursor_pos.y + timeline::window_size.y + style.ItemSpacing.y ) );
+	
+	// This weird chain of if statements allows the timeline to automatically swap to the next video in sequence when the current video ends
+	// Make sure it's not during a seek drag, we were playing the video
+	//if ( !timeline::in_seek_drag && was_playing && paused && group && group->sources.size() )
+	if ( !timeline::in_seek_drag && was_playing && ( group && group->sources.size() ) )
 	{
-		if ( time_pos >= durations[ clip_data::get_current_group_source() ].duration - 0.5f )
+		if ( time_pos >= timeline::durations[ clip_data::get_current_group_source() ].duration - 0.5f )
 		{
 			if ( group->sources.size() > clip_data::get_current_group_source() + 1 )
 			{
@@ -1672,7 +1672,7 @@ void timeline_draw()
 
 		mpv_data_t* mpv       = get_mpv_data( change_to_source_i );
 
-		if ( mpv && !stay_paused && !seek_drag && was_playing && paused )
+		if ( mpv && !stay_paused && !timeline::in_seek_drag && was_playing && paused )
 		{
 			const char* cmd[]   = { "set", "pause", "no", NULL };
 			int         cmd_ret = p_mpv_command_async( mpv->mpv, 0, cmd );
@@ -1682,7 +1682,7 @@ void timeline_draw()
 			stay_paused = false;
 	}
 
-	if ( seek_drag || seek_time_override )
+	if ( timeline::in_seek_drag || seek_time_override )
 	{
 		bool mouse_moving = app::mouse_delta[ 0 ] != 0 || app::mouse_delta[ 1 ] != 0;
 
@@ -1691,7 +1691,7 @@ void timeline_draw()
 			//if ( seek_keyframes )
 			//	printf( "SEEK KEYFRAMES\n" );
 			//else
-			//	printf( "SEEK EXACT\n" );
+			//	printf( "SEEK EXACT - %.3f\n", new_time_pos );
 
 			was_time_pos_set = mpv_cmd_seek( new_time_pos, seek_keyframes );
 
@@ -1703,10 +1703,12 @@ void timeline_draw()
 
 	if ( group )
 	{
+#if 0
 		if ( shift_time_range )
 		{
 			clip_group_shift_time_range( clip_data::current_clip, *group, shift_time_range_vid, shift_time_range_hovered, shift_time_range_dir );
 		}
+#endif
 
 		if ( delete_current_vid )
 		{
