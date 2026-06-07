@@ -378,6 +378,7 @@ void draw_time_range_move_button()
 #endif
 
 
+// Marker controls for creating new sections (Q and E, R to create as a section and clear markers)
 void timeline_marker_controls( clip_group_t* group )
 {
 	// Marker Controls
@@ -474,7 +475,7 @@ void timeline_handle_scroll( ImVec2 base_timeline_pos )
 }
 
 
-void timeline_draw_group_tabs()
+static void timeline_draw_group_tabs()
 {
 	if ( ImGui::BeginTabBar( "##timeline_group_tabs" ) )
 	{
@@ -599,7 +600,8 @@ void timeline_draw_group_tabs()
 }
 
 
-void timeline_draw_group_buttons( clip_group_t* group )
+// returns true if group changed/deleted
+static bool timeline_draw_group_buttons( clip_group_t* group )
 {
 	ImGui::BeginDisabled( !clip_data::current_clip );
 
@@ -615,15 +617,17 @@ void timeline_draw_group_buttons( clip_group_t* group )
 	{
 		clip_data::current_clip->groups.remove( clip_data::current_group );
 
+		u32 new_group = clip_data::current_group;
 		if ( clip_data::current_group > 0 && clip_data::current_group == clip_data::current_clip->groups.size() )
-			clip_data::current_group--;
+			new_group--;
 
-		timeline_reset();
+		replay_editor_current_set_group( new_group, clip_data::current_group_source[ new_group ] );
 
 		ImGui::EndDisabled();
 		ImGui::PopStyleColor( 3 );
 
-		return;
+		// group did change
+		return true;
 	}
 
 	ImGui::EndDisabled();
@@ -638,6 +642,8 @@ void timeline_draw_group_buttons( clip_group_t* group )
 
 		draw_preset_dropdown( *clip_data::current_clip, *group, true );
 	}
+
+	return false;
 }
 
 
@@ -672,7 +678,9 @@ void timeline_draw()
 
 	clip_group_t* group = clip_get_group( clip_data::current_clip, clip_data::current_group );
 
-	timeline_draw_group_buttons( group );
+	// returns true on group change
+	if ( timeline_draw_group_buttons( group ) )
+		group = clip_get_group( clip_data::current_clip, clip_data::current_group );
 
 	// ------------------------------------------------------------------------------------------
 
@@ -699,7 +707,6 @@ void timeline_draw()
 	bool draw_tabs_and_sections = clip_data::current_clip && clip_data::get_current_group_source() != UINT32_MAX && video_path_matches;
 
 	// ------------------------------------------------------------------------------------------
-	// Marker controls for creating new sections (Q and W, E to create as a section and clear markers)
 
 	// Store timeline::durations for all videos
 	if ( group )
