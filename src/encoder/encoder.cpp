@@ -292,98 +292,58 @@ u32 get_used_encode_preset_index( clip_encode_settings_t& override, u32 preset_i
 #endif
 
 
-void add_metadata_cmd( clip_t& clip, char* ffmpeg_cmd, bool add_markers, u32 preset_i )
+void add_chapter_markers( enc_video_data_t& video_data, u32 preset_i, std::string& metadata_file )
 {
-#if CLIP_TEMP
-	// write ffmpeg metadata.txt file
-	char metadata_path[ 256 ] = { 0 };
-	strcat( metadata_path, g_temp_video_dir );
-	strcat( metadata_path, SEP_S );
-	strcat( metadata_path, clip.name );
-	strcat( metadata_path, "__metadata.txt" );
-
-	char metadata_file[ 2048 ] = { 0 };
-	strcat( metadata_file, ";FFMETADATA1\n" );
-
-	char* time_file_path = nullptr;
-
-	for ( u32 in_i = 0; in_i < clip.source_count; in_i++ )
+	for ( u32 group_i = 0; group_i < video_data.clip.groups.size(); group_i++ )
 	{
-		clip_source_t& source = clip.source[ in_i ];
+		clip_group_t& other_group = video_data.clip.groups[ group_i ];
+		u32           preset_used = other_group.presets.index( preset_i );
 
-		// don't use this one if this file is from this preset
-		if ( source.encode_settings.presets_count <= 1 && uses_encode_preset( source.encode_settings, preset_i ) )
+		// don't use this group if this preset is in it
+		// we want other groups
+		if ( preset_used != UINT32_MAX )
 			continue;
 
-		if ( !time_file_path )
-			time_file_path = source.path;
-
-		// take all inputs videos that don't use the current encode preset, and use their time ranges as markers for this one
-		// a bit strange, but it makes sense for the raw encodes only lol
-		if ( !add_markers )
-			break;
-
-		// look for a matching source video first
-
-#if 0
-		clip_input_video_t* src_input   = nullptr;
-		u32                 time_offset = 0;
-		u32                 time_end    = 0;
-
-		for ( u32 src_i = 0; src_i < clip.source_count; src_i++ )
+		for ( u32 source_i = 0; source_i < other_group.sources.size(); source_i++ )
 		{
-			src_input = &clip.source[ src_i ];
+			clip_source_usage_t& source_use  = other_group.sources[ source_i ];
+			clip_source_t&       source      = video_data.clip.source[ source_use.source_index ];
 
-			// this video doesn't use this encode preset
-			if ( !uses_encode_preset( src_input->encode_overrides, preset_i ) )
-				continue;
+			u32                  main_source_use_i = UINT32_MAX;
 
-			for ( u32 time_i = 0; time_i < source.time_range_count; time_i++ )
+			// is this source in the current group?
+			for ( u32 s_source_i = 0; s_source_i < video_data.group.sources.size(); s_source_i++ )
 			{
-			}
+				clip_source_usage_t& main_source_use = video_data.group.sources[ s_source_i ];
 
-			// make sure this is the same path
-			if ( strcmp( src_input->path, source.path ) != 0 )
-			{
-				time_offset = time_end;
-				continue;
-			}
-
-			break;
-		}
-#endif
-
-		u32 marker_i = 0;
-		for ( u32 time_i = 0; time_i < source.time_range_count; time_i++ )
-		{
-			clip_time_range_t&  time_range  = source.time_range[ time_i ];
-
-			clip_source_t* src_input   = nullptr;
-			float               time_offset = 0.f;
-			float               time_end               = 0.f;
-
-			//u32                 dst_input_preset_index = get_used_encode_preset_index( source.encode_overrides, preset_i );
-			//
-			//if ( dst_input_preset_index == UINT32_MAX )
-			//	continue;
-
-			for ( u32 src_i = 0; src_i < clip.source_count; src_i++ )
-			{
-				src_input = &clip.source[ src_i ];
-
-				// this video doesn't use this encode preset
-				// if ( !uses_encode_preset( src_input->encode_overrides, preset_i ) )
-				// 	continue;
-
-				u32 src_input_preset_index = get_used_encode_preset_index( src_input->encode_settings, preset_i );
-				
-				if ( src_input_preset_index == UINT32_MAX )
-					continue;
-
-				bool skip_time = false;
-				for ( u32 src_time_i = 0; src_time_i < src_input->time_range_count; src_time_i++ )
+				// this other group uses this source too
+				if ( main_source_use.source_index == source_use.source_index )
 				{
-					clip_time_range_t& src_time_range = src_input->time_range[ src_time_i ];
+					main_source_use_i = s_source_i;
+					break;
+				}
+			}
+
+			// this group has a different source
+			if ( main_source_use_i == UINT32_MAX )
+				continue;
+
+			clip_source_usage_t& main_source_use = video_data.group.sources[ main_source_use_i ];
+
+			// check time ranges and add them as markers if possible
+			u32 marker_i = 0;
+			for ( u32 time_i = 0; time_i < source_use.time_range.size(); time_i++ )
+			{
+				clip_time_range_t& time_range  = source_use.time_range[ time_i ];
+
+				float              time_offset = 0.f;
+				float              time_end    = 0.f;
+
+				// compare with the source used in the exporting group
+				bool               skip_time   = false;
+				for ( u32 src_time_i = 0; src_time_i < main_source_use.time_range.size(); src_time_i++ )
+				{
+					clip_time_range_t& src_time_range = main_source_use.time_range[ src_time_i ];
 
 					// if this raw time range starts later than the discord time range, probably don't use this
 					if ( src_time_range.start > time_range.start )
@@ -391,7 +351,7 @@ void add_metadata_cmd( clip_t& clip, char* ffmpeg_cmd, bool add_markers, u32 pre
 						skip_time = true;
 						break;
 					}
-					
+
 					// is the raw time range before the discord time range?
 					if ( src_time_range.start <= time_range.start )
 					{
@@ -399,46 +359,68 @@ void add_metadata_cmd( clip_t& clip, char* ffmpeg_cmd, bool add_markers, u32 pre
 						time_end    = src_time_range.end;
 					}
 				}
-				
+
 				// stop offsetting the start time
 				if ( skip_time )
 					break;
 
-				// make sure this is the same path
-				if ( strcmp( src_input->path, source.path ) != 0 )
-				{
-					// skip to the next one
-					time_offset = time_end;
-					continue;
-				}
+				float       start_time       = ( time_range.start - time_offset ) * 1000;
+				float       end_time         = ( time_range.end - time_offset ) * 1000;
 
-				break;
+				char*       path_unix        = fs_replace_path_seps_unix( source.path );
+				//char*  preset_name = clip_data::preset[ preset_i ].name;
+
+				std::string other_group_name = clip_group_get_name( &video_data.clip, other_group, false );
+
+				// TODO: this probably breaks on videos with more than one source
+				// i think we need to offset the start/end times with the raw source video start time? idfk
+				char   buffer[ 1024 ]{};
+				snprintf(
+				  buffer, 1024,
+				  "[CHAPTER]\nTIMEBASE=1/1000\nSTART=%.6f\nEND=%.6f\ntitle='%d - %s - %s'\n\n"
+				  "[CHAPTER]\nTIMEBASE=1/1000\nSTART=%.6f\nEND=%.6f\ntitle='%d - %s - %s'\n\n",
+				  start_time, start_time, marker_i, path_unix ? path_unix : source.path, other_group_name.c_str(),
+				  end_time, end_time, marker_i + 1, path_unix ? path_unix : source.path, other_group_name.c_str() );
+
+				metadata_file += buffer;
+				marker_i += 2;
+
+				free( path_unix );
 			}
-
-			float  start_time  = ( time_range.start - time_offset ) * 1000;
-			float  end_time    = ( time_range.end - time_offset ) * 1000;
-
-			char*  path_unix   = fs_replace_path_seps_unix( source.path );
-			char*  preset_name = clip_data::preset[ preset_i ].name;
-
-			// TODO: this probably breaks on videos with more than one source
-			// i think we need to offset the start/end times with the raw source video start time? idfk
-			size_t str_offset = strlen( metadata_file );
-			snprintf(
-			  metadata_file + str_offset, 2048 - str_offset,
-			  "[CHAPTER]\nTIMEBASE=1/1000\nSTART=%.6f\nEND=%.6f\ntitle='%d - %s - %s'\n\n"
-			  "[CHAPTER]\nTIMEBASE=1/1000\nSTART=%.6f\nEND=%.6f\ntitle='%d - %s - %s'\n\n",
-			  start_time, start_time, marker_i, path_unix ? path_unix : source.path, preset_name,
-			  end_time, end_time, marker_i + 1, path_unix ? path_unix : source.path, preset_name
-			);
-
-			marker_i += 2;
-
-			free( path_unix );
 		}
 	}
+}
 
-	if ( !fs_write_file( metadata_path, metadata_file, strlen( metadata_file ) ) )
+
+void add_metadata_cmd( enc_video_data_t& video_data, char* ffmpeg_cmd, bool add_markers, u32 preset_i )
+{
+	// write ffmpeg metadata.txt file
+	char metadata_path[ 256 ] = { 0 };
+	strcat( metadata_path, g_temp_video_dir );
+	strcat( metadata_path, SEP_S );
+	strcat( metadata_path, video_data.clip.name );
+	strcat( metadata_path, "__metadata.txt" );
+
+	std::string metadata_file;
+	metadata_file += ";FFMETADATA1\n";
+
+	char* time_file_path = nullptr;
+
+	for ( u32 source_i = 0; source_i < video_data.group.sources.size(); source_i++ )
+	{
+		clip_source_usage_t& source_use = video_data.group.sources[ source_i ];
+		clip_source_t&       source     = video_data.clip.source[ source_use.source_index ];
+
+		time_file_path                  = source.path;
+		break;
+	}
+
+	// this marker system is kinda weird
+	// it's meant to take sections from other groups, and put it in raw encodes
+	if ( add_markers )
+		add_chapter_markers( video_data, preset_i, metadata_file );
+
+	if ( !fs_write_file( metadata_path, metadata_file.data(), metadata_file.size() ) )
 	{
 		log_printf( log_error, "failed to write metadata file - \"%s\"\n", metadata_path );
 		return;
@@ -473,11 +455,10 @@ void add_metadata_cmd( clip_t& clip, char* ffmpeg_cmd, bool add_markers, u32 pre
 	  "-i \"%s\" -map_metadata 0 -map_metadata 1 -metadata demez_date_encoded=\"%s\" -metadata demez_date_modified=\"%s\" -metadata demez_date_created=\"%s\" "
 	  "-metadata demez_date_encoded_u=%lld -metadata demez_date_modified_u=%lld -metadata demez_date_created_u=%lld ",
 	  metadata_path, str_time_encode, str_time_modified, str_time_created, (u64)cur_time, modified, creation );
-#endif
 }
 
 
-bool create_output_video( clip_t& clip, const char* full_out_path, enc_video_data_t& video_data, bool add_markers, u32 preset_i )
+bool create_output_video( enc_video_data_t& video_data, const char* full_out_path, bool add_markers, u32 preset_i )
 {
 	// write ffmpeg concat.txt file
 	FILE* fp = fopen( "concat.txt", "wb" );
@@ -499,7 +480,7 @@ bool create_output_video( clip_t& clip, const char* full_out_path, enc_video_dat
 
 	char ffmpeg_cmd[ FFMPEG_CMD_SIZE ] = { 0 };
 	strcat( ffmpeg_cmd, "ffmpeg -y -hide_banner -safe 0 -f concat -i concat.txt " );
-	add_metadata_cmd( clip, ffmpeg_cmd, add_markers, preset_i );
+	add_metadata_cmd( video_data, ffmpeg_cmd, add_markers, preset_i );
 	strcat( ffmpeg_cmd, " -c copy -map 0 \"" );
 	strcat( ffmpeg_cmd, full_out_path );
 	strcat( ffmpeg_cmd, "\"" );
@@ -1098,7 +1079,7 @@ void run_encode_clip( clip_t& clip, enc_clip_t& enc_clip )
 			if ( !skip_output )
 			{
 				// concat them together
-				if ( create_output_video( clip, filename.c_str(), video_data, !preset.target_size, preset_i ) )
+				if ( create_output_video( video_data, filename.c_str(), !preset.target_size, preset_i ) )
 					enc_clip.group_state[ group_export ] = e_enc_state_finished;
 				else
 					enc_clip.group_state[ group_export ] = e_enc_state_failed;
@@ -1131,6 +1112,7 @@ void run_encoding()
 {
 	g_encoder_data.output_dir.clear();
 	g_encoder_data.output_dir.append( g_output_dir );
+	g_encoder_data.clip_index_prev = UINT32_MAX;
 
 	for ( u32 clip_i = 0; clip_i < clip_data::clip_count; clip_i++ )
 	{
@@ -1141,6 +1123,7 @@ void run_encoding()
 		enc_clip_t& enc_clip      = g_encoder_clips[ clip_i ];
 
 		run_encode_clip( clip, enc_clip );
+		g_encoder_data.clip_index_prev = g_encoder_data.clip_index;
 		g_encoder_data.clip_index++;
 	}
 

@@ -119,7 +119,9 @@ void encode_draw_sidebar()
 	ImDrawList* draw_list          = ImGui::GetWindowDrawList();
 
 	static u32  last_clip_i        = 0;
-	bool        just_switched_clip = last_clip_i != g_encoder_data.clip_index;
+	bool        just_switched_clip = g_encoder_data.clip_index_prev != last_clip_i;
+
+	last_clip_i                    = g_encoder_data.clip_index_prev;
 
 	if ( ImGui::BeginChild( "##encode_sidebar", {}, ImGuiChildFlags_ResizeX, ImGuiWindowFlags_None ) )
 	{
@@ -544,7 +546,7 @@ void encode_draw_sidebar()
 
 	ImGui::EndChild();
 
-	last_clip_i = g_encoder_data.clip_index;
+	//last_clip_i = g_encoder_data.clip_index;
 }
 
 

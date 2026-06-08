@@ -95,6 +95,8 @@ struct encoder_t
 	u32                 clip_group_i     = 0;
 	u32                 clip_group_src_i = 0;
 
+	u32                 clip_index_prev  = 0;
+
 	u32                 encode_preset    = 0;
 };
 
