@@ -826,7 +826,7 @@ void clip_get_video_metadata( clip_source_t& source )
 
 void clip_check_video( clip_t& clip, bool check_filesystem )
 {
-	clip.state = e_clip_state_invalid;
+	clip.valid = false;
 
 	if ( clip.name == nullptr )
 		return;
@@ -887,23 +887,18 @@ void clip_check_video( clip_t& clip, bool check_filesystem )
 		{
 			clip_source_usage_t& source_use = group.sources[ source_i ];
 
+			if ( source_use.time_range.empty() )
+				return;
+
 			if ( source_use.source_index > clip.source_count )
 				return;
 
 			clip_source_t& source           = clip.source[ source_use.source_index ];
 
-			float          duration         = 0.f;
-			bool           duration_invalid = false;
-
 			for ( u32 time_i = 0; time_i < source_use.time_range.size(); time_i++ )
 			{
 				if ( !valid_time_range( source_use.time_range[ time_i ], source.metadata ) )
 					return;
-				
-				//if ( !valid_time_range( source_use.time_range[ time_i ], source.metadata ) )
-				//	duration_invalid = true;
-				//
-				//duration += source_use.time_range[ time_i ].end - source_use.time_range[ time_i ].start;
 			}
 		}
 	}
@@ -1023,7 +1018,7 @@ void clip_check_video( clip_t& clip, bool check_filesystem )
 		return;
 #endif
 
-	clip.state = e_clip_state_valid;
+	clip.valid = true;
 }
 
 

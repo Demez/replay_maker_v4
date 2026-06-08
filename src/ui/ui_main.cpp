@@ -148,6 +148,207 @@ void update_dividers()
 
 
 // ===============================================================================================
+// Clip Filtering
+
+
+namespace clip_filter
+{
+	//bool               sort_newest_top;
+	char               search[ 128 ] = { 0 };
+	u32                prefix        = UINT32_MAX;
+	std::vector< u32 > preset;
+}
+
+
+void clip_filtering_reset()
+{
+	//clip_filter::sort_newest_top = true;
+	clip_filter::search[ 128 ] = { 0 };
+	clip_filter::prefix        = UINT32_MAX;
+	clip_filter::preset.clear();
+}
+
+
+bool clip_filtering_visible( clip_t& clip )
+{
+	if ( clip_filter::prefix != UINT32_MAX )
+		if ( clip_filter::prefix != clip.prefix )
+			return false;
+
+	if ( clip_filter::search[ 0 ] != '\0' )
+		if ( !strcasestr( clip.name, clip_filter::search ) )
+			return false;
+
+	if ( clip_filter::preset.size() )
+	{
+		for ( u32 preset_i : clip_filter::preset )
+		{
+			for ( size_t preset_use_i = 0; preset_use_i < clip.groups.size(); preset_use_i++ )
+			{
+				clip_group_t& preset_use = clip.groups[ preset_use_i ];
+
+				if ( preset_use.presets.index( preset_i ) != UINT32_MAX )
+					return true;
+			}
+		}
+
+		return false;
+	}
+
+	return true;
+}
+
+
+void clip_filtering_draw()
+{
+	ImGuiStyle& style = ImGui::GetStyle();
+
+	//if ( ImGui::BeginChild( "##clip_filtering", {}, ImGuiChildFlags_Borders | ImGuiChildFlags_AutoResizeY, ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse ) )
+	{
+		ImGui::BeginDisabled( clip_thread_loading() );
+
+		//ImGui::TextUnformatted( "Clips" );
+		//ImGui::Separator();
+
+		ImVec2 prefix_filter_size = ImGui::CalcTextSize( "Prefix Filter" );
+		ImVec2 search_size        = ImGui::CalcTextSize( "Search" );
+
+		ImGui::TextUnformatted( "Search" );
+
+		ImGui::SameLine();
+		ImGui::Dummy( { prefix_filter_size.x - search_size.x - style.ItemSpacing.x, ImGui::GetTextLineHeight() } );
+		ImGui::SameLine();
+
+		ImGui::SetNextItemWidth( -FLT_MIN );
+
+		// Search Box
+		ImGui::InputText( "##search", clip_filter::search, 128 );
+
+		// Search by Prefixes
+		if ( clip_filter::prefix < UINT32_MAX )
+			clip_filter::prefix = MIN( clip_data::prefix_count, clip_filter::prefix );
+
+		ImGui::TextUnformatted( "Prefix Filter" );
+
+		ImGui::SameLine();
+		ImGui::SetNextItemWidth( -FLT_MIN );
+
+		if ( ImGui::BeginCombo( "##prefix_filter", clip_filter::prefix == UINT32_MAX ? "" : clip_data::prefix[ clip_filter::prefix ].name ) )
+		{
+			if ( ImGui::Selectable( "None", clip_filter::prefix == UINT32_MAX ) )
+				clip_filter::prefix = UINT32_MAX;
+
+			for ( u32 i = 0; i < clip_data::prefix_count; i++ )
+			{
+				clip_prefix_t& prefix                                     = clip_data::prefix[ i ];
+				char           prefix_display[ MAX_LEN_PRESET_NAME + 16 ] = { 0 };
+				u32            result_count                               = 0;
+
+				for ( u32 out_i = 0; out_i < clip_data::clip_count; out_i++ )
+				{
+					if ( i == clip_data::clip[ out_i ].prefix )
+						result_count++;
+				}
+
+				snprintf( prefix_display, MAX_LEN_PRESET_NAME + 16, "%d - %s", result_count, prefix.name );
+
+				if ( ImGui::Selectable( prefix_display, i == clip_filter::prefix ) )
+				{
+					clip_filter::prefix = i;
+				}
+			}
+
+			ImGui::EndCombo();
+		}
+
+		//ImGui::SameLine();
+
+		//ImGui::TextUnformatted( "Preset Filter" );
+		//
+		//ImGui::SameLine();
+		//ImGui::SetNextItemWidth( -FLT_MIN );
+
+		// Advanced filters, filter by encode presets
+		if ( ImGui::BeginCombo( "##presets", "Preset Filter", ImGuiComboFlags_HeightLargest | ImGuiComboFlags_WidthFitPreview ) )
+		{
+			for ( u32 i = 0; i < clip_data::preset_count; i++ )
+			{
+				// check if it's already in the search list
+				bool skip = false;
+				for ( size_t used_preset_i = 0; used_preset_i < clip_filter::preset.size(); used_preset_i++ )
+				{
+					if ( i == clip_filter::preset[ used_preset_i ] )
+					{
+						skip = true;
+						break;
+					}
+				}
+
+				if ( skip )
+					continue;
+
+				if ( ImGui::Selectable( clip_data::preset[ i ].name ) )
+				{
+					clip_filter::preset.emplace_back( i );
+				}
+			}
+
+			ImGui::EndCombo();
+		}
+
+		// index in the array to remove
+		size_t preset_remove = SIZE_MAX;
+
+		for ( size_t i = 0; i < clip_filter::preset.size(); i++ )
+		{
+			ImGui::SameLine();
+
+			clip_encode_preset_t& encode = clip_data::preset[ clip_filter::preset[ i ] ];
+
+			ImGui::PushStyleColor( ImGuiCol_ButtonActive, COLOR_BTN_RED_ACTIVE );
+			ImGui::PushStyleColor( ImGuiCol_ButtonHovered, COLOR_BTN_RED_HOVER );
+			ImGui::PushStyleColor( ImGuiCol_Button, COLOR_BTN_RED );
+
+			if ( ImGui::Button( encode.name ) )
+			{
+				preset_remove = i;
+			}
+
+			ImGui::PopStyleColor( 3 );
+		}
+
+		if ( preset_remove != SIZE_MAX )
+		{
+			clip_filter::preset.erase( clip_filter::preset.begin() + preset_remove );
+			preset_remove = SIZE_MAX;
+		}
+
+		//ImGui::Separator();
+
+		// collapse_all = ImGui::Button( "Collapse All" );
+		// ImGui::SameLine();
+
+		//if ( ImGui::Button( sort_newest_top ? "Sort: Newest First" : "Sort: Oldest First" ) )
+		//	sort_newest_top = !sort_newest_top;
+
+		//ImGui::SameLine();
+
+		//u32 result_count = 0;
+		//for ( u32 out_i = 0; out_i < clip_data::clip_count; out_i++ )
+		//{
+		//	if ( clip_filtering_visible( clip_data::clip[ out_i ] ) )
+		//		result_count++;
+		//}
+		//
+		//ImGui::Text( "%d Entries", result_count );
+
+		ImGui::EndDisabled();
+	}
+	//ImGui::EndChild();
+}
+
+
+// ===============================================================================================
 // Base UI
 
 
@@ -264,7 +465,7 @@ void draw_replay_edit_creation_info()
 		for ( u32 group_i = 0; group_i < clip_data::current_clip->groups.size(); group_i++ )
 		{
 			clip_group_t& group = clip_data::current_clip->groups[ group_i ];
-			std::string group_name = clip_group_get_name( group );
+			std::string group_name = clip_group_get_name( clip_data::current_clip, group, false );
 
 			ImGui::SameLine();
 			if ( ImGui::Button( group_name.c_str() ) )

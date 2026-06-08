@@ -16,10 +16,25 @@ enum e_target_size_state
 };
 
 
-struct enc_clip_preset_t
+//struct enc_clip_preset_t
+//{
+//	u32 preset;
+//	u32 group;
+//};
+
+
+enum e_enc_state
 {
-	u32 preset;
-	u32 group;
+	e_enc_state_wait,
+	e_enc_state_running,
+	e_enc_state_finished,
+	e_enc_state_skipped,
+	e_enc_state_failed,
+};
+
+
+struct enc_group_state_t
+{
 };
 
 
@@ -29,8 +44,8 @@ struct enc_clip_t
 	clip_t*                       clip  = nullptr;
 	bool                          valid = false;
 
-	// presets this output video uses
-	ChVector< enc_clip_preset_t > presets;
+	e_enc_state                   state;
+	ChVector< e_enc_state >       group_state;
 
 	// ffmpeg output
 	std::mutex                    ffmpeg_output_lock;
@@ -44,11 +59,11 @@ struct enc_clip_t
 
 struct video_segment_t
 {
-	char* path;
-	u32   source;  // refers to source in current group
-	u32   time;
+	char*             path;
+	u32               source;  // refers to source in current group
+	clip_time_range_t time;
 
-	float bitrate = 0.f;
+	float             bitrate = 0.f;
 };
 
 
@@ -74,9 +89,13 @@ struct encoder_t
 	//enc_clip_t*         output_videos  = nullptr;
 
 	// status info
-	u32                 encode_preset  = 0;
-	u32                 output_index   = 0;
-	u32                 scan_index     = 0;
+	u32                 scan_index       = 0;
+
+	u32                 clip_index       = 0;
+	u32                 clip_group_i     = 0;
+	u32                 clip_group_src_i = 0;
+
+	u32                 encode_preset    = 0;
 };
 
 
@@ -105,6 +124,6 @@ bool                       encode_check_state();
 float                      get_video_bitrate( const char* path );
 std::string                get_video_output_name( clip_t& clip, clip_encode_preset_t& preset );
 
-enc_clip_preset_t*         encode_get_enc_preset( enc_clip_t& enc_clip, u32 preset_idx );
+//enc_clip_preset_t*         encode_get_enc_preset( enc_clip_t& enc_clip, u32 preset_idx );
 
 void                       encode_draw();

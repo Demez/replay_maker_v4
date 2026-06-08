@@ -147,8 +147,8 @@ bool log_init()
 		return false;
 	}
 
-	if ( !log_set_file( "init" ) )
-		return false;
+	//if ( !log_set_file( "init" ) )
+	//	return false;
 
 	return true;
 }
@@ -217,12 +217,18 @@ void log_shutdown()
 
 void log_write_quick( const char* buffer, size_t len )
 {
+	if ( !g_log_file )
+		return;
+
 	fwrite( buffer, sizeof( char ), len, g_log_file );
 }
 
 
 void log_write( const char* buffer, size_t len )
 {
+	if ( !g_log_file )
+		return;
+
 	fwrite( buffer, sizeof( char ), len, g_log_file );
 	fflush( g_log_file );
 }
@@ -272,30 +278,16 @@ void log_print_v_channel( e_log_color color, const char* output, size_t len )
 }
 
 
-void log_print_v( log_channel channel, const char* format, va_list args )
+void log_print( log_channel channel, const char* result, size_t len )
 {
-	va_list copy;
-	va_copy( copy, args );
-	int len = std::vsnprintf( nullptr, 0, format, copy );
-	va_end( copy );
-
-	if ( len < 0 )
-	{
-		printf( "\n *** logging: vsnprintf failed?\n\n" );
-		return;
-	}
-
-	char* result = ch_malloc< char >( len + 1 );
-	std::vsnprintf( result, len + 1, format, args );
-	result[ len ] = '\0';
-
 	switch ( channel )
 	{
 		default:
 		case log_general:
+		case log_result:
 			log_print_v_channel( e_log_color_default, result, len );
 			break;
-			
+
 		case log_logging:
 			log_print_v_channel( e_log_color_cyan, result, len );
 			break;
@@ -336,20 +328,41 @@ void log_print_v( log_channel channel, const char* format, va_list args )
 			log_write( result, len );
 
 			log_set_con_color( e_log_color_default );
-			break; 
+			break;
 		}
-		case log_result:
-		{
-			printf( result );
-			log_write( result, len );
-
-			// also write to separate file
-			fwrite( result, sizeof( char ), len, g_log_file_results );
-			fflush( g_log_file_results );
-
-			break; 
-		}
+		//case log_result:
+		//{
+		//	printf( result );
+		//	log_write( result, len );
+		//
+		//	// also write to separate file
+		//	fwrite( result, sizeof( char ), len, g_log_file_results );
+		//	fflush( g_log_file_results );
+		//
+		//	break;
+		//}
 	}
+}
+
+
+void log_print_v( log_channel channel, const char* format, va_list args )
+{
+	va_list copy;
+	va_copy( copy, args );
+	int len = std::vsnprintf( nullptr, 0, format, copy );
+	va_end( copy );
+
+	if ( len < 0 )
+	{
+		printf( "\n *** logging: vsnprintf failed?\n\n" );
+		return;
+	}
+
+	char* result = ch_malloc< char >( len + 1 );
+	std::vsnprintf( result, len + 1, format, args );
+	result[ len ] = '\0';
+
+	log_print( channel, result, len );
 
 	free( result );
 }
@@ -370,5 +383,11 @@ void log_printf( log_channel channel, const char* format, ... )
 	va_start( args, format );
 	log_print_v( channel, format, args );
 	va_end( args );
+}
+
+
+void log_print( log_channel channel, const char* buffer )
+{
+	log_print( channel, buffer, strlen( buffer ) );
 }
 

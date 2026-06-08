@@ -1,7 +1,6 @@
 #pragma once
 
 #include "util.h"
-#include "logging.h"
 #include "imgui.h"
 #include "encoder/encoder.h"
 #include "clip/clip.h"
@@ -64,10 +63,12 @@ constexpr ImVec4 COLOR_RED_FRAME{ 0.5f, 0.1f, 0.1f, 0.5f };
 constexpr ImVec4 COLOR_GREEN_ACTIVE{ 0.1f, 0.9f, 0.1f, 1.0f };
 constexpr ImVec4 COLOR_GREEN_HOVER{ 0.2f, 0.7f, 0.2f, 1.0f };
 constexpr ImVec4 COLOR_GREEN{ 0.1f, 0.5f, 0.1f, 1.0f };
+constexpr ImVec4 COLOR_GREEN_FRAME{ 0.1f, 0.5f, 0.1f, 0.5f };
 
 constexpr ImVec4 COLOR_PURPLE_ACTIVE{ 0.8f, 0.0f, 1.f, 1.0f };
 constexpr ImVec4 COLOR_PURPLE_HOVER{ 0.67f, 0.0f, 0.8f, 1.0f };
 constexpr ImVec4 COLOR_PURPLE{ 0.55f, 0.0f, 0.65f, 1.0f };
+constexpr ImVec4 COLOR_PURPLE_FRAME{ 0.55f, 0.0f, 0.65f, 0.5f };
 
 
 namespace font
@@ -297,6 +298,23 @@ namespace app
 	extern bool        pause_window_events;
 	extern bool        sidebar;
 }
+
+
+namespace clip_filter
+{
+	extern char               search[ 128 ];
+	extern u32                prefix;
+	extern std::vector< u32 > preset;
+}
+
+// reset filter data
+void clip_filtering_reset();
+
+// is clip visible in filters
+bool clip_filtering_visible( clip_t& clip );
+
+// draw filter controls
+void clip_filtering_draw();
 
 
 struct duration_t

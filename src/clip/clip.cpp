@@ -371,8 +371,11 @@ void clip_remove_source( clip_t* clip, u32 source_i )
 }
 
 
-std::string clip_group_get_name( clip_group_t& group )
+std::string clip_group_get_name( clip_t* clip, clip_group_t& group, bool error_names )
 {
+	if ( !clip )
+		return {};
+
 	// collect presets used
 	char title[ 128 ]{};
 	snprintf( title, 128, "Group: " );
@@ -388,13 +391,44 @@ std::string clip_group_get_name( clip_group_t& group )
 				strcat( title, ", " );
 		}
 	}
-	else
+	else if ( error_names )
 	{
 		strcat( title, "[NO PRESETS]" );
 	}
 
-	if ( group.sources.empty() )
-		strcat( title, " [NO SOURCES]" );
+	if ( error_names )
+	{
+		if ( group.sources.empty() )
+			strcat( title, " [NO SOURCES]" );
+
+		for ( u32 source_i = 0; source_i < group.sources.size(); source_i++ )
+		{
+			clip_source_usage_t& source_use = group.sources[ source_i ];
+
+			if ( source_use.time_range.empty() )
+			{
+				strcat( title, " [NO SECTIONS]" );
+				break;
+			}
+
+			if ( source_use.source_index > clip->source_count )
+			{
+				strcat( title, " [INVALID SOURCE]" );
+				break;
+			}
+
+			clip_source_t& source = clip->source[ source_use.source_index ];
+
+			for ( u32 time_i = 0; time_i < source_use.time_range.size(); time_i++ )
+			{
+				if ( !valid_time_range( source_use.time_range[ time_i ], source.metadata ) )
+				{
+					strcat( title, " [INVALID SECTIONS]" );
+					return title;
+				}
+			}
+		}
+	}
 
 	return title;
 }

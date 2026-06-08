@@ -2,6 +2,7 @@
 #include "args.h"
 #include "clip/clip.h"
 #include "encoder/encoder.h"
+#include "logging.h"
 #include "util.h"
 
 #include <thread>
@@ -44,14 +45,16 @@ void encode_thread_start()
 		return;
 	}
 
+	g_encoder_data.clip_index = 0;
 	g_encoder_data.scan_index = 0;
+
 	g_encode_started          = false;
-	app::fullscreen              = false;
+	app::fullscreen           = false;
 
 	const char* cmd[]         = { "set", "pause", "yes", NULL };
 	int         cmd_ret       = p_mpv_command_async( get_mpv(), 0, cmd );
 
-	g_encode_thread = new std::thread( encode_worker );
+	g_encode_thread           = new std::thread( encode_worker );
 }
 
 
@@ -106,6 +109,7 @@ bool used_in_preset( clip_encode_settings_t& override, u32 preset_i )
 #endif
 
 
+#if 0
 enc_clip_preset_t* encode_get_enc_preset( enc_clip_t& enc_clip, u32 preset_idx )
 {
 	// check if this video is used on this preset
@@ -117,6 +121,7 @@ enc_clip_preset_t* encode_get_enc_preset( enc_clip_t& enc_clip, u32 preset_idx )
 
 	return nullptr;
 }
+#endif
 
 
 bool collect_video_info()
@@ -152,9 +157,18 @@ bool collect_video_info()
 		clip_check_video( clip, true );
 
 		// don't allow invalid videos at all
-		if ( clip.state == e_clip_state_invalid )
+		if ( !clip.valid )
 			return false;
 
+		for ( u32 group_i = 0; group_i < clip.groups.size(); group_i++ )
+		{
+			for ( u32 preset_i = 0; preset_i < clip.groups[ group_i ].presets.size(); preset_i++ )
+			{
+				enc_clip.group_state.push_back( e_enc_state_wait );
+			}
+		}
+
+		#if 0
 		// make a quick list of all presets the clip uses
 		for ( u32 group_i = 0; group_i < clip.groups.size(); group_i++ )
 		{
@@ -188,8 +202,10 @@ bool collect_video_info()
 				enc_clip.presets.push_back( enc_preset );
 			}
 		}
+		#endif
 
 		enc_clip.valid = true;
+		enc_clip.state = e_enc_state_wait;
 	}
 
 	return true;
@@ -354,7 +370,7 @@ bool collect_video_info()
 			}
 		}
 
-		clip.state = e_clip_state_valid;
+		clip.state = e_enc_state_valid;
 		log_printf( "----------------------------------------------------\n" );
 	}
 
@@ -367,11 +383,13 @@ void encode_videos()
 {
 	if ( !fs_make_dir_check( g_temp_video_dir ) )
 	{
+		printf( "Failed to make temp video folder\n" );
 		return;
 	}
 
 	if ( !fs_make_dir_check( g_output_dir ) )
 	{
+		printf( "Failed to make export folder\n" );
 		return;
 	}
 

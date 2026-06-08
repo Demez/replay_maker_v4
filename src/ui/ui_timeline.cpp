@@ -491,7 +491,7 @@ static void timeline_draw_group_tabs()
 		{
 			clip_group_t& group        = clip_data::current_clip->groups[ group_i ];
 
-			std::string   group_name   = clip_group_get_name( group );
+			std::string   group_name   = clip_group_get_name( clip_data::current_clip, group, true );
 
 			bool          selected_tab = clip_data::current_group == group_i;
 
@@ -501,6 +501,37 @@ static void timeline_draw_group_tabs()
 			}
 
 			bool group_invalid = ( group.presets.empty() || group.sources.empty() );
+
+			for ( u32 source_i = 0; source_i < group.sources.size(); source_i++ )
+			{
+				clip_source_usage_t& source_use = group.sources[ source_i ];
+
+				if ( source_use.time_range.empty() )
+				{
+					group_invalid = true;
+					break;
+				}
+
+				if ( source_use.source_index > clip_data::current_clip->source_count )
+				{
+					group_invalid = true;
+					break;
+				}
+
+				clip_source_t& source = clip_data::current_clip->source[ source_use.source_index ];
+
+				for ( u32 time_i = 0; time_i < source_use.time_range.size(); time_i++ )
+				{
+					if ( !valid_time_range( source_use.time_range[ time_i ], source.metadata ) )
+					{
+						group_invalid = true;
+						break;
+					}
+				}
+
+				if ( group_invalid )
+					break;
+			}
 
 			if ( group_invalid )
 			{
@@ -616,6 +647,8 @@ static bool timeline_draw_group_buttons( clip_group_t* group )
 	if ( ImGui::Button( "Delete Current Group" ) )
 	{
 		clip_data::current_clip->groups.remove( clip_data::current_group );
+
+		clip_check_video( *clip_data::current_clip, true );
 
 		u32 new_group = clip_data::current_group;
 		if ( clip_data::current_group > 0 && clip_data::current_group == clip_data::current_clip->groups.size() )

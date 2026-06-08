@@ -1,5 +1,6 @@
 #include "main.h"
 #include "encoder/encoder.h"
+#include "logging.h"
 
 #include "imgui_internal.h"
 
@@ -82,7 +83,7 @@ bool video_get_use_info( clip_t& clip, enc_clip_t& enc_clip, u32 preset_idx )
 	if ( group_i == clip.groups.size() )
 	{
 		// how would we even get here
-		clip.state = e_clip_state_failed;
+		clip.state = e_enc_state_failed;
 		return false;
 	}
 
@@ -119,6 +120,22 @@ void encode_draw_sidebar()
 
 	if ( ImGui::BeginChild( "##encode_sidebar", {}, ImGuiChildFlags_ResizeX, ImGuiWindowFlags_None ) )
 	{
+		ImGui::TextUnformatted( "Clip Filtering" );
+
+		if ( ImGui::BeginChild( "##clip_filtering", {}, ImGuiChildFlags_Borders | ImGuiChildFlags_AutoResizeY, ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse ) )
+		{
+			clip_filtering_draw();
+
+			//ImGui::Separator();
+			//
+			//if ( ImGui::Button( sort_newest_top ? "Sort: Newest First" : "Sort: Oldest First" ) )
+			//	sort_newest_top = !sort_newest_top;
+			//
+			//ImGui::SameLine();
+		}
+
+		ImGui::EndChild();
+
 		//ImGui::PushFont( font::normal, font::size + 4 );
 		//
 		//if ( g_encode_finished )
@@ -133,6 +150,8 @@ void encode_draw_sidebar()
 		//ImGui::PopFont();
 		//
 		//ImGui::Separator();
+
+		#if 0
 		ImGui::TextUnformatted( "Encode Presets" );
 
 		if ( ImGui::BeginChild( "##preset_list", {}, ImGuiChildFlags_Borders | ImGuiChildFlags_AutoResizeY, ImGuiWindowFlags_None ) )
@@ -174,8 +193,27 @@ void encode_draw_sidebar()
 		}
 
 		ImGui::EndChild();
+#endif
 
-		ImGui::TextUnformatted( "Video List" );
+		u32 result_count = 0;
+		for ( u32 out_i = 0; out_i < clip_data::clip_count; out_i++ )
+		{
+			if ( clip_filtering_visible( clip_data::clip[ out_i ] ) )
+				result_count++;
+		}
+
+		u32 clip_progress = g_encoder_data.clip_index;
+
+		//if ( !g_encode_finished && g_encoder_data.clip_index == 0 )
+		//	clip_progress -= 1;
+
+		ImGui::Text( "Video List - %u/%u Complete", clip_progress, clip_data::clip_count );
+
+		if ( result_count < clip_data::clip_count )
+		{
+			ImGui::SameLine();
+			ImGui::Text( "%u Shown", result_count );
+		}
 
 		ImGuiStyle& style = ImGui::GetStyle();
 
@@ -186,44 +224,30 @@ void encode_draw_sidebar()
 				clip_t&     clip       = clip_data::clip[ vid_i ];
 				enc_clip_t& enc_clip   = g_encoder_clips[ vid_i ];
 
-				u32         preset_idx = g_encoder_data.encode_preset;
+				if ( !clip_filtering_visible( clip ) )
+					continue;
+
+				if ( !clip.enabled )
+					continue;
+
+				u32 preset_idx = g_encoder_data.encode_preset;
 
 				if ( preset_select > -1 )
 					preset_idx = preset_select;
 
-				enc_clip_preset_t* enc_preset = encode_get_enc_preset( enc_clip, preset_idx );
+				clip_encode_preset_t& preset = clip_data::preset[ preset_idx ];
+				clip_prefix_t&        prefix = clip_data::prefix[ clip.prefix ];
 
-				if ( !enc_preset )
-					continue;
+				//enc_clip_preset_t* enc_preset = encode_get_enc_preset( enc_clip, preset_idx );
+				//
+				//if ( !enc_preset )
+				//	continue;
+				//
+				//clip_group_t& group = clip.groups[ enc_preset->group ];
 
-				clip_group_t& group = clip.groups[ enc_preset->group ];
+				#if 0
+				clip_group_t& group = clip.groups[ g_encoder_data.clip_group_i ];
 
-#if 0
-				// get the current group we want
-				u32 group_i = 0;
-				for ( ; group_i < clip.groups.size(); group_i++ )
-				{
-					clip_group_t& _group = clip.groups[ group_i ];
-
-					for ( u32 i = 0; i < enc_clip.presets.size(); i++ )
-					{
-						if ( _group.presets[ i ] == preset_idx )
-							goto group_found;
-					}
-				}
-
-				if ( group_i == clip.groups.size() )
-				{
-					// how would we even get here
-					clip.state = e_clip_state_failed;
-					continue;
-				}
-
-group_found:
-				clip_group_t& group = clip.groups[ group_i ];
-#endif
-
-				clip_encode_preset_t& preset           = clip_data::preset[ preset_idx ];
 
 				float                 duration         = 0.f;
 				bool                  duration_invalid = false;
@@ -241,11 +265,15 @@ group_found:
 						duration += source_use.time_range[ time_i ].end - source_use.time_range[ time_i ].start;
 					}
 				}
+				#endif
 
 				char name_buf[ 512 ]{};
-				snprintf( name_buf, 512, " %zu - %s", vid_i, clip.name );
+				snprintf( name_buf, 512, "%s - %s", prefix.name, clip.name );
 
-				bool draw_bg_color = clip.state != e_clip_state_valid;
+				// snprintf( name_buf, 512, " %zu - %s", vid_i, clip.name );
+
+				#if 0
+				bool draw_bg_color = clip.state != e_enc_state_valid;
 
 				if ( draw_bg_color )
 				{
@@ -266,45 +294,221 @@ group_found:
 					switch ( clip.state )
 					{
 						default:
-						case e_clip_state_running:
-						case e_clip_state_count:
+						case e_enc_state_running:
+						case e_enc_state_count:
 							break;
 
-						case e_clip_state_user_skipped:
+						case e_enc_state_user_skipped:
 							color = COLOR_PURPLE;
 							break;
 
-						case e_clip_state_failed:
-						case e_clip_state_invalid:
+						case e_enc_state_failed:
+						case e_enc_state_invalid:
 							color = COLOR_BTN_RED;
 							break;
 
-						case e_clip_state_finished:
-						case e_clip_state_already_finished:
+						case e_enc_state_finished:
+						case e_enc_state_already_finished:
 							color = COLOR_GREEN;
 							break;
 					}
 
-					draw_list->AddRectFilled( cursor_scr_pos, highlight_size, color );
+					//draw_list->AddRectFilled( cursor_scr_pos, highlight_size, color );
 				}
+				#endif
 
-				if ( ImGui::Selectable( name_buf, output_select == vid_i ) )
-				{
-					if ( output_select == vid_i )
-						output_select = -1;
-					else
-						output_select = vid_i;
-				}
+				//if ( ImGui::Selectable( name_buf, output_select == vid_i ) )
+				//{
+				//	if ( output_select == vid_i )
+				//		output_select = -1;
+				//	else
+				//		output_select = vid_i;
+				//}
 
-				bool focused = g_encoder_data.output_index == vid_i;
+				bool focused = g_encoder_data.clip_index == vid_i;
 
 				if ( output_select > -1 )
 				{
 					focused = output_select == vid_i;
 				}
 
-				if ( focused )
+				//if ( focused )
 				{
+					ImGui::PushID( vid_i + 1 );
+
+					// ImGuiChildFlags child_flags = ImGuiChildFlags_Border | ImGuiChildFlags_FrameStyle;
+					ImGuiChildFlags child_flags = ImGuiChildFlags_Border;
+
+					//bool            draw_bg_color = enc_clip.state != e_enc_state_valid;
+					bool            current       = g_encoder_data.clip_index == vid_i;
+
+					//if ( draw_bg_color )
+					{
+						ImVec2 region_avail   = ImGui::GetContentRegionAvail();
+						ImVec2 cursor_scr_pos = ImGui::GetCursorScreenPos();
+
+						ImVec2 highlight_size{
+							cursor_scr_pos.x + region_avail.x + style.ItemSpacing.x * 0.5f,
+							cursor_scr_pos.y + ImGui::GetFontSize() + style.ItemSpacing.y * 0.5f
+						};
+
+						// something with centering? idk tbh
+						cursor_scr_pos.x -= style.ItemSpacing.x * 0.5f;
+						cursor_scr_pos.y -= style.ItemSpacing.y * 0.5f;
+
+						ImVec4 color_bg = style.Colors[ ImGuiCol_FrameBg ];
+
+						switch ( enc_clip.state )
+						{
+							default:
+							case e_enc_state_wait:
+								//color_bg.w = 0.f;
+								color_bg = style.Colors[ ImGuiCol_ChildBg ];
+								color_bg.w = 0.5;
+								break;
+
+							case e_enc_state_running:
+								break;
+
+							case e_enc_state_skipped:
+								color_bg = COLOR_PURPLE_FRAME;
+								break;
+
+							case e_enc_state_failed:
+								color_bg = COLOR_RED_FRAME;
+								break;
+
+							case e_enc_state_finished:
+								color_bg = COLOR_GREEN_FRAME;
+								break;
+						}
+
+						if ( current )
+							color_bg = style.Colors[ ImGuiCol_FrameBg ];
+
+						ImGui::PushStyleColor( ImGuiCol_ChildBg, color_bg );
+
+						//draw_list->AddRectFilled( cursor_scr_pos, highlight_size, color );
+					}
+
+					if ( ImGui::BeginChild( "##clip_encode_progress", {}, child_flags | ImGuiChildFlags_AutoResizeY ) )
+					{
+						ImGui::TextUnformatted( name_buf );
+						ImGui::Separator();
+
+						ImGui::PushStyleVar( ImGuiStyleVar_ButtonTextAlign, ImVec2( 0, 0.5 ) );
+
+						u32 group_export_i = 0;
+						for ( u32 group_i = 0; group_i < clip.groups.size(); group_i++ )
+						{
+							for ( u32 preset_i : clip.groups[ group_i ].presets )
+							{
+								bool        current        = focused && g_encoder_data.encode_preset == preset_i;
+
+								e_enc_state preset_state   = enc_clip.group_state[ group_export_i++ ];
+
+								ImVec2 region_avail   = ImGui::GetContentRegionAvail();
+								ImVec2 cursor_scr_pos = ImGui::GetCursorScreenPos();
+
+								ImVec2 highlight_size{
+									cursor_scr_pos.x + region_avail.x + style.ItemSpacing.x * 0.5f,
+									cursor_scr_pos.y + ImGui::GetFontSize() + style.ItemSpacing.y * 0.5f
+								};
+
+								ImVec2 button_size{ region_avail.x, ImGui::GetFrameHeight() };
+
+								// something with centering? idk tbh
+								cursor_scr_pos.x -= style.ItemSpacing.x * 0.5f;
+								cursor_scr_pos.y -= style.ItemSpacing.y * 0.5f;
+
+								ImVec4 color_bg     = style.Colors[ ImGuiCol_Button ];
+								ImVec4 color_active = style.Colors[ ImGuiCol_ButtonActive ];
+								ImVec4 color_hover  = style.Colors[ ImGuiCol_ButtonHovered ];
+
+								//if ( current )
+								//{
+								//}
+
+								bool    draw_bg = true;
+
+								switch ( preset_state )
+								{
+									default:
+									case e_enc_state_wait:
+										color_bg.w     = 0.f;
+										//color_active.w = 0.f;
+										//color_hover.w  = 0.f;
+										draw_bg        = true;
+										break;
+
+									case e_enc_state_running:
+										draw_bg = false;
+										break;
+								
+									case e_enc_state_skipped:
+										color_bg     = COLOR_PURPLE;
+										color_active = COLOR_PURPLE_ACTIVE;
+										color_hover  = COLOR_PURPLE_HOVER;
+										draw_bg      = true;
+										break;
+								
+									case e_enc_state_failed:
+										color_bg     = COLOR_BTN_RED;
+										color_active = COLOR_BTN_RED_ACTIVE;
+										color_hover  = COLOR_BTN_RED_HOVER;
+										draw_bg      = true;
+										break;
+								
+									case e_enc_state_finished:
+										color_bg     = COLOR_GREEN;
+										color_active = COLOR_GREEN_ACTIVE;
+										color_hover  = COLOR_GREEN_HOVER;
+										draw_bg      = true;
+										break;
+								}
+
+								if ( current )
+								{
+
+								}
+
+								//if ( draw_bg )
+								//	draw_list->AddRectFilled( cursor_scr_pos, highlight_size, color );
+								
+								if ( draw_bg )
+								{
+									ImGui::PushStyleColor( ImGuiCol_Button, color_bg );
+									ImGui::PushStyleColor( ImGuiCol_ButtonActive, color_active );
+									ImGui::PushStyleColor( ImGuiCol_ButtonHovered, color_hover );
+								}
+
+								//clip_encode_preset_t* preset = clip_get_encode_preset( preset_i );
+								//ImGui::Text( "%sEncode Preset: %s", current ? "[CURRENT] " : "", preset->name );
+
+								//ImGui::SetNextItemWidth( -FLT_MIN );
+
+								std::string filename = get_video_output_name( clip, clip_data::preset[ preset_i ] );
+								if ( ImGui::Button( filename.c_str(), button_size ) )
+								{
+								}
+
+								if ( draw_bg )
+									ImGui::PopStyleColor( 3 );
+
+							}
+						}
+
+						ImGui::PopStyleVar();
+					}
+
+					ImGui::EndChild();
+
+					//if ( draw_bg_color )
+					{
+						ImGui::PopStyleColor();
+					}
+
+					ImGui::PopID();
 				}
 			}
 		}
@@ -348,12 +552,12 @@ void encode_draw_ffmpeg()
 	}
 
 	static float scroll_max = ImGui::GetScrollMaxY();
-	u32          output_idx = g_encoder_data.output_index;
+	u32          output_idx = g_encoder_data.clip_index;
 
 	if ( output_select > -1 )
 		output_idx = output_select;
 
-	if ( output_idx != UINT32_MAX )
+	if ( output_idx < clip_data::clip_count )
 	{
 		clip_t&     clip     = clip_data::clip[ output_idx ];
 		enc_clip_t& enc_clip = g_encoder_clips[ output_idx ];
@@ -381,7 +585,7 @@ void encode_draw_ffmpeg()
 
 void encode_draw_output_info()
 {
-	u32         output_idx = g_encoder_data.output_index;
+	u32         output_idx = g_encoder_data.clip_index;
 	u32         preset_idx = g_encoder_data.encode_preset;
 
 	ImGuiStyle& style      = ImGui::GetStyle();
@@ -411,7 +615,7 @@ void encode_draw_output_info()
 		ImGui::Separator();
 	}
 
-	if ( output_idx != UINT32_MAX && preset_idx != UINT32_MAX )
+	if ( output_idx < clip_data::clip_count && preset_idx != UINT32_MAX )
 	{
 		// Draw current video info
 		clip_t&               clip     = clip_data::clip[ output_idx ];
@@ -428,15 +632,15 @@ void encode_draw_output_info()
 
 		clip_info_area_height += ImGui::GetTextLineHeightWithSpacing() * 2;
 
-		enc_clip_preset_t* enc_preset = encode_get_enc_preset( enc_clip, preset_idx );
+		// enc_clip_preset_t* enc_preset = encode_get_enc_preset( enc_clip, preset_idx );
+		// 
+		// if ( !enc_preset )
+		// {
+		// 	// WE SHOULD NOT BE HERE
+		// 	goto clip_info_draw;
+		// }
 
-		if ( !enc_preset )
-		{
-			// WE SHOULD NOT BE HERE
-			goto clip_info_draw;
-		}
-
-		clip_group_t& group            = clip.groups[ enc_preset->group ];
+		clip_group_t& group            = clip.groups[ g_encoder_data.clip_group_i ];
 
 		float         duration         = 0.f;
 		bool          duration_invalid = false;

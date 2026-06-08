@@ -136,6 +136,13 @@ void draw_replay_edit_video_info( int size[ 2 ] )
 		clip_data::current_clip->enabled = enabled;
 
 	ImGui::SameLine();
+	
+	if ( ImGui::Button( "Recheck Clip and Sources" ) )
+	{
+		clip_check_video( *clip_data::current_clip, true );
+	}
+
+	ImGui::SameLine();
 	ImVec2 line_remain   = ImGui::GetContentRegionAvail();
 
 	float  spacing_width = line_remain.x;
@@ -281,11 +288,11 @@ void draw_replay_list_entry( u64& imgui_id, u32 out_i, bool collapse_all )
 	if ( current_clip )
 		ImGui::PushStyleColor( ImGuiCol_Button, { 0.28f, 1.f, 0.21f, 0.31f } );
 
-	else if ( clip.state == e_clip_state_invalid )
-		ImGui::PushStyleColor( ImGuiCol_Button, COLOR_BTN_RED );
-
 	else if ( !clip.enabled )
 		ImGui::PushStyleColor( ImGuiCol_Button, COLOR_PURPLE );
+
+	else if ( !clip.valid )
+		ImGui::PushStyleColor( ImGuiCol_Button, COLOR_BTN_RED );
 
 	ImGui::PushStyleVar( ImGuiStyleVar_ButtonTextAlign, { 0.f, 0.5f } );
 
@@ -294,7 +301,7 @@ void draw_replay_list_entry( u64& imgui_id, u32 out_i, bool collapse_all )
 	{
 		replay_editor_set_group( out_i, 0, 0 );
 
-		//if ( current_clip || output.state == e_clip_state_invalid )
+		//if ( current_clip || output.state == e_enc_state_invalid )
 		//	ImGui::PopStyleColor();
 		//
 		//ImGui::PopID();
@@ -303,7 +310,7 @@ void draw_replay_list_entry( u64& imgui_id, u32 out_i, bool collapse_all )
 
 	ImGui::PopStyleVar();
 
-	if ( current_clip || clip.state == e_clip_state_invalid || !clip.enabled )
+	if ( current_clip || !clip.valid || !clip.enabled )
 		ImGui::PopStyleColor();
 
 	ImGui::PopID();
@@ -358,9 +365,6 @@ void draw_replay_list( int size[ 2 ] )
 
 	bool                      collapse_all      = false;
 	static bool               sort_newest_top   = true;
-	static char               search_box[ 128 ] = { 0 };
-	static u32                prefix_search     = UINT32_MAX;
-	static std::vector< u32 > preset_search;
 
 	static float              source_videos_height = ImGui::GetFrameHeightWithSpacing();
 	static float              export_area_height   = ImGui::GetFrameHeightWithSpacing() * 2;
@@ -377,6 +381,30 @@ void draw_replay_list( int size[ 2 ] )
 		//ImGui::SetNextWindowSize( { -1, video_list_size } );
 	}
 
+	if ( ImGui::BeginChild( "##clip_filtering", {}, ImGuiChildFlags_Borders | ImGuiChildFlags_AutoResizeY, ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse ) )
+	{
+		clip_filtering_draw();
+
+		ImGui::Separator();
+
+		if ( ImGui::Button( sort_newest_top ? "Sort: Newest First" : "Sort: Oldest First" ) )
+			sort_newest_top = !sort_newest_top;
+
+		ImGui::SameLine();
+
+		u32 result_count = 0;
+		for ( u32 out_i = 0; out_i < clip_data::clip_count; out_i++ )
+		{
+			if ( clip_filtering_visible( clip_data::clip[ out_i ] ) )
+				result_count++;
+		}
+
+		ImGui::Text( "%u %s", result_count, result_count == 1 ? "Entry" : "Entries" );
+	}
+
+	ImGui::EndChild();
+
+#if 0
 	if ( ImGui::BeginChild( "clip_filtering", {}, ImGuiChildFlags_Borders | ImGuiChildFlags_AutoResizeY, ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse ) )
 	{
 		ImGui::BeginDisabled( clip_thread_loading() );
@@ -396,21 +424,22 @@ void draw_replay_list( int size[ 2 ] )
 		ImGui::SetNextItemWidth( -FLT_MIN );
 
 		// Search Box
-		ImGui::InputText( "##search", search_box, 128 );
+		ImGui::InputText( "##search", clip_filter::search, 128 );
 
 		// Search by Prefixes
-		if ( prefix_search < UINT32_MAX )
-			prefix_search = MIN( clip_data::prefix_count, prefix_search );
+		if ( clip_filter::prefix < UINT32_MAX )
+			clip_filter::prefix = MIN( clip_data::prefix_count, clip_filter::prefix );
 
+		
 		ImGui::TextUnformatted( "Prefix Filter" );
 
 		ImGui::SameLine();
 		ImGui::SetNextItemWidth( -FLT_MIN );
 
-		if ( ImGui::BeginCombo( "##prefix_filter", prefix_search == UINT32_MAX ? "" : clip_data::prefix[ prefix_search ].name ) )
+		if ( ImGui::BeginCombo( "##prefix_filter", clip_filter::prefix == UINT32_MAX ? "" : clip_data::prefix[ clip_filter::prefix ].name ) )
 		{
-			if ( ImGui::Selectable( "None", prefix_search == UINT32_MAX ) )
-				prefix_search = UINT32_MAX;
+			if ( ImGui::Selectable( "None", clip_filter::prefix == UINT32_MAX ) )
+				clip_filter::prefix = UINT32_MAX;
 
 			for ( u32 i = 0; i < clip_data::prefix_count; i++ )
 			{
@@ -426,33 +455,40 @@ void draw_replay_list( int size[ 2 ] )
 
 				snprintf( prefix_display, MAX_LEN_PRESET_NAME + 16, "%d - %s", result_count, prefix.name );
 
-				if ( ImGui::Selectable( prefix_display, i == prefix_search ) )
+				if ( ImGui::Selectable( prefix_display, i == clip_filter::prefix ) )
 				{
-					prefix_search = i;
+					clip_filter::prefix = i;
 				}
 			}
 
 			ImGui::EndCombo();
 		}
 
-		ImGui::SameLine();
+		//ImGui::SameLine();
 
+		#if 0
 		// do the search again for this text lol
 		u32 result_count = 0;
 		for ( u32 out_i = 0; out_i < clip_data::clip_count; out_i++ )
 		{
 			clip_t& clip = clip_data::clip[ out_i ];
 
-			if ( prefix_search != UINT32_MAX )
-				if ( prefix_search != clip.prefix )
+			if ( clip_filter::prefix != UINT32_MAX )
+				if ( clip_filter::prefix != clip.prefix )
 					continue;
 
-			if ( search_box[ 0 ] != '\0' )
-				if ( !strcasestr( clip.name, search_box ) )
+			if ( clip_filter::search[ 0 ] != '\0' )
+				if ( !strcasestr( clip.name, clip_filter::search ) )
 					continue;
 
 			result_count++;
 		}
+		#endif
+
+		//ImGui::TextUnformatted( "Preset Filter" );
+		//
+		//ImGui::SameLine();
+		//ImGui::SetNextItemWidth( -FLT_MIN );
 
 		// Advanced filters, filter by encode presets
 		if ( ImGui::BeginCombo( "##presets", "Preset Filter", ImGuiComboFlags_HeightLargest | ImGuiComboFlags_WidthFitPreview ) )
@@ -461,9 +497,9 @@ void draw_replay_list( int size[ 2 ] )
 			{
 				// check if it's already in the search list
 				bool skip = false;
-				for ( size_t used_preset_i = 0; used_preset_i < preset_search.size(); used_preset_i++ )
+				for ( size_t used_preset_i = 0; used_preset_i < clip_filter::preset.size(); used_preset_i++ )
 				{
-					if ( i == preset_search[ used_preset_i ] )
+					if ( i == clip_filter::preset[ used_preset_i ] )
 					{
 						skip = true;
 						break;
@@ -475,7 +511,7 @@ void draw_replay_list( int size[ 2 ] )
 
 				if ( ImGui::Selectable( clip_data::preset[ i ].name ) )
 				{
-					preset_search.emplace_back( i );
+					clip_filter::preset.emplace_back( i );
 				}
 			}
 
@@ -485,11 +521,11 @@ void draw_replay_list( int size[ 2 ] )
 		// index in the array to remove
 		size_t preset_remove = SIZE_MAX;
 
-		for ( size_t i = 0; i < preset_search.size(); i++ )
+		for ( size_t i = 0; i < clip_filter::preset.size(); i++ )
 		{
 			ImGui::SameLine();
 
-			clip_encode_preset_t& encode = clip_data::preset[ preset_search[ i ] ];
+			clip_encode_preset_t& encode = clip_data::preset[ clip_filter::preset[ i ] ];
 
 			ImGui::PushStyleColor( ImGuiCol_ButtonActive, COLOR_BTN_RED_ACTIVE );
 			ImGui::PushStyleColor( ImGuiCol_ButtonHovered, COLOR_BTN_RED_HOVER );
@@ -505,7 +541,7 @@ void draw_replay_list( int size[ 2 ] )
 
 		if ( preset_remove != SIZE_MAX )
 		{
-			preset_search.erase( preset_search.begin() + preset_remove );
+			clip_filter::preset.erase( clip_filter::preset.begin() + preset_remove );
 			preset_remove = SIZE_MAX;
 		}
 
@@ -518,7 +554,7 @@ void draw_replay_list( int size[ 2 ] )
 			sort_newest_top = !sort_newest_top;
 
 		ImGui::SameLine();
-		ImGui::Text( "%d Entries", result_count );
+		//ImGui::Text( "%d Entries", result_count );
 
 
 		// ImGui::Separator();
@@ -539,6 +575,7 @@ void draw_replay_list( int size[ 2 ] )
 		ImGui::EndDisabled();
 	}
 	ImGui::EndChild();
+#endif
 
 	// Spacing for region below clip list
 	ImVec2 region_avail       = ImGui::GetContentRegionAvail();
@@ -618,19 +655,19 @@ void draw_replay_list( int size[ 2 ] )
 			clip_t& clip = clip_data::clip[ out_i ];
 			clip_prefix_t&       prefix = clip_data::prefix[ clip.prefix ];
 
-			if ( prefix_search != UINT32_MAX )
-				if ( prefix_search != clip.prefix )
+			if ( clip_filter::prefix != UINT32_MAX )
+				if ( clip_filter::prefix != clip.prefix )
 					goto clip_loop_continue;
 
-			if ( search_box[ 0 ] != '\0' )
-				if ( !strcasestr( clip.name, search_box ) )
+			if ( clip_filter::search[ 0 ] != '\0' )
+				if ( !strcasestr( clip.name, clip_filter::search ) )
 					goto clip_loop_continue;
 
-			if ( preset_search.size() )
+			if ( clip_filter::preset.size() )
 			{
 				bool preset_found = false;
 
-				for ( u32 preset_i : preset_search )
+				for ( u32 preset_i : clip_filter::preset )
 				{
 					if ( preset_found )
 						break;
@@ -952,6 +989,16 @@ clip_loop_continue:
 				}
 
 				ImGui::EndDisabled();
+
+				//if ( missing )
+				//{
+				//	ImGui::SameLine();
+				//
+				//	if ( ImGui::Button( "Refresh" ) )
+				//	{
+				//		clip_check_video( *clip_data::current_clip, true );
+				//	}
+				//}
 			}
 
 			ImGui::EndChild();
@@ -982,11 +1029,39 @@ clip_loop_continue:
 		ImGui::InputText( "Output Path", g_output_dir, 512 );
 		// ImGui::InputText( "Temp Path", g_temp_video_dir, 512 );
 
-		ImGui::BeginDisabled( clip_data::clip_count == 0 || g_encode_running );
+		bool can_export = clip_data::clip_count > 0 || !g_encode_running;
+
+		for ( u32 clip_i = 0; clip_i < clip_data::clip_count; clip_i++ )
+		{
+			clip_t& clip = clip_data::clip[ clip_i ];
+
+			if ( !clip.enabled )
+				continue;
+
+			// clip_check_video( clip );
+
+			// don't allow invalid videos at all
+			if ( clip.valid )
+				continue;
+
+			can_export = false;
+			break;
+		}
+
+		ImGui::BeginDisabled( !can_export );
 
 		if ( ImGui::Button( "Export" ) )
 		{
 			encode_thread_start();
+		}
+
+		if ( !can_export )
+		{
+			if ( ImGui::BeginItemTooltip() )
+			{
+				ImGui::TextUnformatted( "Some Videos are Invalid still, can't export yet!\n" );
+				ImGui::EndTooltip();
+			}
 		}
 
 		ImGui::SameLine();

@@ -57,6 +57,9 @@ void        log_shutdown();
 std::string log_build_name( const char* name );
 bool        log_set_file( const char* name );
 
+void        log_print( log_channel channel, const char* buffer, size_t len );
+void        log_print( log_channel channel, const char* buffer );
+
 void        log_printf( const char* format, ... );
 void        log_printf( log_channel channel, const char* format, ... );
 

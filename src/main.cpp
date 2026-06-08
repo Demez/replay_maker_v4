@@ -1,5 +1,6 @@
 #include "main.h"
 #include "args.h"
+#include "logging.h"
 
 #include <locale.h>
 
@@ -920,7 +921,7 @@ auto main( int argc, char* argv[] ) -> int
 		return 1;
 	}
 
-	log_printf( "Startup Complete!\n" );
+	printf( "Startup Complete!\n" );
 
 	if ( !SDL_AddEventWatch( sdl_window_resize_watcher, nullptr ) )
 	{

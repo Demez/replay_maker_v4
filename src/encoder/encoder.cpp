@@ -92,17 +92,20 @@ e_exec_state ffmpeg_callback_read( char* buf, size_t buf_len )
 {
 	if ( buf )
 	{
-		log_printf( log_ffmpeg, buf );
+		log_print( log_ffmpeg, buf );
 
-		enc_clip_t& enc_clip  = g_encoder_clips[ g_encoder_data.output_index ];
+		enc_clip_t& enc_clip  = g_encoder_clips[ g_encoder_data.clip_index ];
 		enc_clip.ffmpeg_output_lock.lock();
 
 		check_buf_capacity( enc_clip );
 
 		char* return_char = strchr( buf, '\r' );
 
-		if ( return_char )
+		// TODO: fix this crashing sometimes
+		// if ( return_char )
+		if ( false )
 		{
+			#if 0
 			while ( return_char )
 			{
 				size_t return_len = strlen( return_char );
@@ -176,7 +179,7 @@ e_exec_state ffmpeg_callback_read( char* buf, size_t buf_len )
 				if ( buf[ 1 ] == '\0' )
 				{
 					// do nothing
-					buf_cat_len( enc_clip, "\r", 1 );
+					//buf_cat_len( enc_clip, "\r", 1 );
 					buf++;
 					buf_len--;
 				}
@@ -188,6 +191,7 @@ e_exec_state ffmpeg_callback_read( char* buf, size_t buf_len )
 			{
 				buf_cat_len( enc_clip, buf, buf_len );
 			}
+			#endif
 		}
 		else
 		{
@@ -540,12 +544,11 @@ void calc_target_bitrates( enc_video_data_t& video_data, clip_encode_preset_t& p
 		video_segment_t&     segment    = video_data.segment[ seg_i ];
 		clip_source_usage_t& source_use = video_data.group.sources[ segment.source ];
 		clip_source_t&       source     = video_data.clip.source[ source_use.source_index ];
-		clip_time_range_t&   time_range = source_use.time_range[ segment.time ];
 
-		float              duration   = time_range.end - time_range.start;
+		float                duration   = segment.time.end - segment.time.start;
 
-		// idk why we multiply by 8, was done in the python version, something with "KB to MB to Kbit"?
-		float              bitrate    = ( preset.target_size / duration ) * 8;
+		// TODO: idk why we multiply by 8, was done in the python version, something with "KB to MB to Kbit"?
+		float                bitrate    = ( preset.target_size / duration ) * 8;
 
 		// subtract audio bitrate
 		bitrate -= preset.audio_bitrate;
@@ -590,10 +593,9 @@ int run_encode_inputs_target_size_pass( enc_video_data_t& video_data, clip_encod
 		video_segment_t&     segment    = video_data.segment[ seg_i ];
 		clip_source_usage_t& source_use = video_data.group.sources[ segment.source ];
 		clip_source_t&       source     = video_data.clip.source[ source_use.source_index ];
-		clip_time_range_t&   time_range = source_use.time_range[ segment.time ];
 
 		// for raw encodes only right now, need to setup discord stuff later
-		char*                ffmpeg_cmd = gen_ffmpeg_cmd( preset, source, time_range );
+		char*                ffmpeg_cmd = gen_ffmpeg_cmd( preset, source, segment.time );
 		size_t               buf_len    = strlen( ffmpeg_cmd );
 
 		snprintf( ffmpeg_cmd + buf_len, FFMPEG_CMD_SIZE - buf_len, " -b:v %.4fk", segment.bitrate );
@@ -794,9 +796,8 @@ bool run_encode_inputs_standard( enc_video_data_t& video_data, clip_encode_prese
 		video_segment_t&     segment    = video_data.segment[ seg_i ];
 		clip_source_usage_t& source_use = video_data.group.sources[ segment.source ];
 		clip_source_t&       source     = video_data.clip.source[ source_use.source_index ];
-		clip_time_range_t&   time_range = source_use.time_range[ segment.time ];
 
-		char*                ffmpeg_cmd = gen_ffmpeg_cmd( preset, source, time_range );
+		char*                ffmpeg_cmd = gen_ffmpeg_cmd( preset, source, segment.time );
 		size_t               buf_len    = strlen( ffmpeg_cmd );
 
 		snprintf( ffmpeg_cmd + buf_len, FFMPEG_CMD_SIZE - buf_len, " \"%s\"\0", segment.path );
@@ -882,6 +883,18 @@ bool run_encode_inputs_standard( clip_t& clip, char**& segment_paths, u32& segme
 #endif
 
 
+int qsort_time_range( const void* left, const void* right )
+{
+	const clip_time_range_t* time_left  = static_cast< const clip_time_range_t* >( left );
+	const clip_time_range_t* time_right = static_cast< const clip_time_range_t* >( right );
+
+	if ( time_left->start > time_right->end )
+		return 1;
+
+	return -1;
+}
+
+
 enc_video_data_t get_video_segments( enc_clip_t& enc_clip, clip_t& clip, clip_group_t& group, u32 preset_i )
 {
 	enc_video_data_t video_data{
@@ -903,9 +916,12 @@ enc_video_data_t get_video_segments( enc_clip_t& enc_clip, clip_t& clip, clip_gr
 		//if ( !uses_encode_preset( source.encode_settings, preset_i ) )
 		//	continue;
 
-		char* input_name = fs_get_filename_no_ext( source.path );
+		char*                input_name = fs_get_filename_no_ext( source.path );
 
-		for ( u32 time_i = 0; time_i < source_use.time_range.size(); time_i++ )
+		ChVector< clip_time_range_t > sorted_times = source_use.time_range;
+		qsort( sorted_times.data(), sorted_times.size(), sizeof( clip_time_range_t ), qsort_time_range );
+
+		for ( u32 time_i = 0; time_i < sorted_times.size(); time_i++ )
 		{
 			// add it to the segment list
 			if ( array_append_err( video_data.segment, video_data.segment_count, "failed to allocate memory to store video segment path\n" ) )
@@ -919,7 +935,7 @@ enc_video_data_t get_video_segments( enc_clip_t& enc_clip, clip_t& clip, clip_gr
 			snprintf( temp_name, 256, "%s" SEP_S "%d__%s.%s", g_temp_video_dir, video_data.segment_count, input_name, preset.ext );
 			video_data.segment[ video_data.segment_count ].path   = strdup( temp_name );
 			video_data.segment[ video_data.segment_count ].source = source_i;
-			video_data.segment[ video_data.segment_count ].time   = time_i;
+			video_data.segment[ video_data.segment_count ].time   = sorted_times[ time_i ];
 			video_data.segment_count++;
 		}
 
@@ -963,128 +979,137 @@ std::string get_video_output_name( clip_t& clip, clip_encode_preset_t& preset )
 }
 
 
-void run_encode_preset( clip_encode_preset_t& preset, u32 preset_i )
+bool encode_set_output_dir( u32 preset_i )
 {
-	log_set_file( preset.name );
+	clip_encode_preset_t& preset = clip_data::preset[ preset_i ];
 
-	log_printf( log_result, "====================================================================\n[PRESET_CHANGE] %s\n", preset.name );
+	g_encoder_data.output_dir.clear();
+	g_encoder_data.output_dir.append( g_output_dir );
 
-	g_encoder_data.encode_preset = preset_i;
-
-	for ( u32 out_i = 0; out_i < clip_data::clip_count; out_i++ )
+	if ( preset.out_folder_append )
 	{
-		clip_t&        clip             = clip_data::clip[ out_i ];
-		clip_prefix_t& prefix           = clip_data::prefix[ clip.prefix ];
-		enc_clip_t&    enc_clip         = g_encoder_clips[ out_i ];
+		g_encoder_data.output_dir.append( SEP_S, 1 );
+		g_encoder_data.output_dir.append( preset.out_folder_append );
+		g_encoder_data.output_dir.append( SEP_S, 1 );
 
-		g_encoder_data.output_index     = out_i;
+		if ( !fs_make_dir_check( g_encoder_data.output_dir.c_str() ) )
+			return false;
+	}
 
-		// UNUSED: Invalid clips aren't allowed at all, can't run export with invalid clips
-		if ( clip.state == e_clip_state_invalid )
-		{
-			log_printf( log_error,  "skipping invalid video: \"%s\"\n", clip.name );
-			log_printf( log_result, "[FAIL] Invalid Video - %s\n", clip.name );
-			continue;
-		}
+	return true;
+}
 
-		enc_clip_preset_t* enc_preset = encode_get_enc_preset( enc_clip, preset_i );
 
-		// not used in this preset ?
-		if ( !enc_preset )
-			continue;
+void run_encode_clip( clip_t& clip, enc_clip_t& enc_clip )
+{
+	// g_encoder_data.encode_preset = preset_i;
 
-		clip_group_t& group = clip.groups[ enc_preset->group ];
+	clip_prefix_t& prefix = clip_data::prefix[ clip.prefix ];
 
-		// get the current group we want
-		#if 0
-		for ( ; group_i < clip.groups.size(); group_i++ )
-		{
-			clip_group_t& _group = clip.groups[ group_i ];
+	// UNUSED: Invalid clips aren't allowed at all, can't run export with invalid clips
+	if ( !clip.valid )
+	{
+		log_printf( log_error,  "skipping invalid video: \"%s\"\n", clip.name );
+		log_printf( log_result, "[FAIL] Invalid Video - %s\n", clip.name );
+		return;
+	}
 
-			for ( u32 i = 0; i < enc_clip.presets.size(); i++ )
-			{
-				if ( _group.presets[ i ] == preset_i )
-					goto group_found;
-			}
-		}
+	enc_clip.state = e_enc_state_running;
 
-		if ( group_i == clip.groups.size() )
-		{
-			// how would we even get here
-			clip.state = e_clip_state_failed;
-			continue;
-		}
-		#endif
-
-group_found:
+	u32 group_export = 0;
+	for ( u32 group_i = 0; group_i < clip.groups.size(); group_i++ )
+	{
 		log_printf( "\n----------------------------------------------------\n\n" );
 
-		clip.state         = e_clip_state_running;
+		clip_group_t& group         = clip.groups[ group_i ];
+		g_encoder_data.clip_group_i = group_i;
 
-		std::string filename = g_encoder_data.output_dir + get_video_output_name( clip, preset );
-
-		log_printf( "Output Video \"%s\"\n", filename.c_str() );
-
-		// check if the video exists
-		if ( fs_is_file( filename.c_str() ) )
+		for ( u32 preset_i : group.presets )
 		{
-			// make sure it's not an empty file
-			if ( fs_file_size( filename.c_str() ) > 0 )
+			if ( !encode_check_state() )
+				break;
+
+			g_encoder_data.encode_preset               = preset_i;
+			enc_clip.group_state[ group_export ] = e_enc_state_running;
+
+			if ( !encode_set_output_dir( preset_i ) )
 			{
-				log_printf( log_result, "[PASS] [ALREADY EXISTS] %s\n", filename.c_str() );
-				clip.state = e_clip_state_already_finished;
+				log_printf( log_error, "Failed to set output directory\n" );
+				enc_clip.group_state[ group_export++ ] = e_enc_state_failed;
 				continue;
 			}
-		}
 
-		// ----------------------------------------------------------------------------
-		// get the list of source videos and time ranges we will use for this preset
+			clip_encode_preset_t& preset   = clip_data::preset[ preset_i ];
+			std::string           filename = g_encoder_data.output_dir + get_video_output_name( clip, preset );
 
-		enc_video_data_t video_data = get_video_segments( enc_clip, clip, group, preset_i );
+			log_printf( "Output Video \"%s\"\n", filename.c_str() );
 
-		if ( video_data.segment_count == 0 )
-		{
-			// no segments found somehow
-			clip.state = e_clip_state_failed;
-			continue;
-		}
+			// check if the video exists
+			if ( fs_is_file( filename.c_str() ) )
+			{
+				// make sure it's not an empty file
+				if ( fs_file_size( filename.c_str() ) > 0 )
+				{
+					log_printf( log_result, "[PASS] [ALREADY EXISTS] %s\n", filename.c_str() );
+					//clip.state = e_enc_state_already_finished;
+					enc_clip.group_state[ group_export++ ] = e_enc_state_finished;
+					continue;
+				}
+			}
+
+			// ----------------------------------------------------------------------------
+			// get the list of source videos and time ranges we will use for this preset
+
+			enc_video_data_t video_data = get_video_segments( enc_clip, clip, group, preset_i );
+
+			if ( video_data.segment_count == 0 )
+			{
+				// no segments found somehow
+				enc_clip.state                         = e_enc_state_failed;
+				enc_clip.group_state[ group_export++ ] = e_enc_state_failed;
+				continue;
+			}
 		
-		bool skip_output = false;
+			bool skip_output = false;
 
-		// create all video segments
-		if ( preset.target_size )
-			skip_output = !run_encode_inputs_target_size( video_data, preset );
+			// create all video segments
+			if ( preset.target_size )
+				skip_output = !run_encode_inputs_target_size( video_data, preset );
 		
-		else
-			skip_output = !run_encode_inputs_standard( video_data, preset );
+			else
+				skip_output = !run_encode_inputs_standard( video_data, preset );
 
-		if ( !encode_check_state() )
-			break;
+			if ( !encode_check_state() )
+				break;
 
-		// if we want to skip this or we just have no video segments
-		if ( !skip_output )
-		{
-			// concat them together
-			if ( !create_output_video( clip, filename.c_str(), video_data, !preset.target_size, preset_i ) )
-				clip.state = e_clip_state_failed;
+			// if we want to skip this or we just have no video segments
+			if ( !skip_output )
+			{
+				// concat them together
+				if ( !create_output_video( clip, filename.c_str(), video_data, !preset.target_size, preset_i ) )
+					enc_clip.group_state[ group_export ] = e_enc_state_failed;
+			}
+			else
+			{
+				enc_clip.group_state[ group_export ] = e_enc_state_failed;
+			}
+
+			// free data
+			for ( u32 i = 0; i < video_data.segment_count; i++ )
+				free( video_data.segment[ i ].path );
+
+			free( video_data.segment );
+
+			if ( enc_clip.group_state[ group_export++ ] = e_enc_state_failed )
+			{
+				enc_clip.state = e_enc_state_failed;
+				break;
+			}
 		}
-		else
-		{
-			clip.state = e_clip_state_failed;
-		}
-
-		// free data
-		for ( u32 i = 0; i < video_data.segment_count; i++ )
-			free( video_data.segment[ i ].path );
-
-		free( video_data.segment );
-
-		if ( clip.state != e_clip_state_failed )
-			clip.state = e_clip_state_finished;
-
-		if ( !encode_check_state() )
-			break;
 	}
+
+	if ( enc_clip.state != e_enc_state_failed )
+		enc_clip.state = e_enc_state_finished;
 }
 
 
@@ -1093,31 +1118,41 @@ void run_encoding()
 	g_encoder_data.output_dir.clear();
 	g_encoder_data.output_dir.append( g_output_dir );
 
-	for ( u32 preset_i = 0; preset_i < clip_data::preset_count; preset_i++ )
+	for ( u32 clip_i = 0; clip_i < clip_data::clip_count; clip_i++ )
 	{
 		if ( !encode_check_state() )
 			break;
 
-		clip_encode_preset_t& preset = clip_data::preset[ preset_i ];
-		
-		g_encoder_data.output_dir.clear();
-		g_encoder_data.output_dir.append( g_output_dir );
+		clip_t&     clip          = clip_data::clip[ clip_i ];
+		enc_clip_t& enc_clip      = g_encoder_clips[ clip_i ];
 
-		if ( preset.out_folder_append )
-		{
-			g_encoder_data.output_dir.append( SEP_S, 1 );
-			g_encoder_data.output_dir.append( preset.out_folder_append );
-
-			if ( !fs_make_dir_check( g_encoder_data.output_dir.c_str() ) )
-				continue;
-		}
-
-		g_encoder_data.output_dir.append( SEP_S, 1 );
-
-		run_encode_preset( preset, preset_i );
+		run_encode_clip( clip, enc_clip );
+		g_encoder_data.clip_index++;
 	}
 
-	g_encoder_data.output_index  = UINT32_MAX;
+	//for ( u32 preset_i = 0; preset_i < clip_data::preset_count; preset_i++ )
+	//{
+	//	if ( !encode_check_state() )
+	//		break;
+	//
+	//	clip_encode_preset_t& preset = clip_data::preset[ preset_i ];
+	//	
+	//	g_encoder_data.output_dir.clear();
+	//	g_encoder_data.output_dir.append( g_output_dir );
+	//
+	//	if ( preset.out_folder_append )
+	//	{
+	//		g_encoder_data.output_dir.append( SEP_S, 1 );
+	//		g_encoder_data.output_dir.append( preset.out_folder_append );
+	//
+	//		if ( !fs_make_dir_check( g_encoder_data.output_dir.c_str() ) )
+	//			continue;
+	//	}
+	//
+	//	g_encoder_data.output_dir.append( SEP_S, 1 );
+	//}
+
+	//g_encoder_data.clip_index  = clip_data;
 	//g_encoder_data.encode_preset = UINT32_MAX;
 }
 

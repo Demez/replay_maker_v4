@@ -27,22 +27,6 @@ enum e_encode_preset
 };
 
 
-enum e_clip_state
-{
-	e_clip_state_invalid,  // there is something wrong with the video in some way that prevents us from processing it
-	e_clip_state_valid,    // valid, in edit mode or waiting to encode
-
-	// encode states (move to different enum?)
-	e_clip_state_running,
-	e_clip_state_finished,
-	e_clip_state_already_finished,
-	e_clip_state_user_skipped,
-	e_clip_state_failed,   // encode failed
-
-	e_clip_state_count,
-};
-
-
 struct video_metadata_t
 {
 	bool  valid    = false;
@@ -118,7 +102,7 @@ struct clip_t
 	// these are the real outputs this video has, use for format 4
 	ChVector< clip_group_t > groups;
 
-	e_clip_state             state;
+	bool                     valid;    // is everything valid in this clip? see clip_check_video()
 	bool                     enabled;  // if false, don't encode this video
 };
 
@@ -228,7 +212,7 @@ void                  clip_remove_source( clip_t* clip, u32 source_i );
 
 // Groups
 clip_group_t*         clip_get_group( clip_t* clip, u32 group_index );
-std::string           clip_group_get_name( clip_group_t& group );
+std::string           clip_group_get_name( clip_t* clip, clip_group_t& group, bool error_names );
 u32                   clip_group_add_source( clip_t* clip, u32 group_index, const char* path );
 void                  clip_group_remove_source( clip_t* clip, u32 group_index, u32 group_src_i );
 // void                  clip_group_remove_source( clip_t* output, u32 group_index, const char* path );
