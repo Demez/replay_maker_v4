@@ -53,6 +53,17 @@ bool fs_is_file( const char* path )
 }
 
 
+u64 fs_file_size( const char* path )
+{
+	struct stat s;
+
+	if ( stat( path, &s ) == 0 )
+		return s.st_size;
+
+	return 0;
+}
+
+
 // ----------------------------------------------------------------------------------------
 
 

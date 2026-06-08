@@ -425,15 +425,15 @@ bool fs_make_dir_check( const char* path )
 }
 
 
-u64 fs_file_size( const char* path )
-{
-	struct stat s;
-
-	if ( stat( path, &s ) == 0 )
-		return s.st_size;
-
-	return 0;
-}
+//u64 fs_file_size( const char* path )
+//{
+//	struct stat s;
+//
+//	if ( stat( path, &s ) == 0 )
+//		return s.st_size;
+//
+//	return 0;
+//}
 
 
 // returns the file length in the len argument

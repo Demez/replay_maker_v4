@@ -101,6 +101,38 @@ bool fs_is_file( const char* path )
 }
 
 
+u64 fs_file_size( const char* path )
+{
+	wchar_t*                  path_w = sys_to_wchar_extended( path );
+
+	WIN32_FILE_ATTRIBUTE_DATA data{};
+	BOOL                      ret = GetFileAttributesEx( path_w, GetFileExInfoStandard, &data );
+
+	free( path_w );
+
+	if ( !ret )
+	{
+		// printf( "Failed to get file attributes: %s\n", path );
+		// sys_print_last_error();
+		return 0;
+	}
+
+	return ( data.nFileSizeHigh * ( MAXDWORD + 1 ) ) + data.nFileSizeLow;
+
+	// HANDLE file = CreateFileA( path, GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING, 0, NULL );
+	// 
+	// if ( file == INVALID_HANDLE_VALUE )
+	// {
+	// 	DWORD errorID = GetLastError();
+	// 
+	// 	if ( errorID == ERROR_FILE_NOT_FOUND )
+	// 		return 0;
+	// }
+	// 
+	// DWORD ret = GetFileSizeEx( )
+}
+
+
 // ----------------------------------------------------------------------------------------
 
 
