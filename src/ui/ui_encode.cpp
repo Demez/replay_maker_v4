@@ -3,14 +3,111 @@
 
 #include "imgui_internal.h"
 
-//bool used_in_preset( clip_encode_settings_t& override, u32 preset_i );
-
 // makes sure the time range desired is valid for this source video
 bool valid_time_range( clip_time_range_t& range, video_metadata_t& metadata );
 
 
-static int preset_select = -1;
-static int output_select = -1;
+static int   preset_select         = -1;
+static int   output_select         = -1;
+
+static float clip_info_area_height = 0.f;
+
+#if 0
+clip_group_t* video_get_group_from_preset( enc_clip_t& enc_clip, u32 preset_idx )
+{
+	bool is_used_in_preset = false;
+
+	// check if this video is used on this preset
+	for ( u32 i = 0; i < enc_clip.presets.size(); i++ )
+	{
+		if ( enc_clip.presets[ i ].preset != preset_idx )
+			continue;
+
+		is_used_in_preset = true;
+		break;
+	}
+
+	if ( !is_used_in_preset )
+		return false;
+
+	// get the current group we want
+	u32 group_i = 0;
+	for ( ; group_i < enc_clip.clip->groups.size(); group_i++ )
+	{
+		clip_group_t& group = enc_clip.clip->groups[ group_i ];
+
+		for ( u32 i = 0; i < enc_clip.presets.size(); i++ )
+		{
+			if ( group.presets[ i ] == preset_idx )
+				return &group;
+		}
+	}
+
+	return nullptr;
+}
+#endif
+
+
+#if 0
+bool video_get_use_info( clip_t& clip, enc_clip_t& enc_clip, u32 preset_idx )
+{
+	bool is_used_in_preset = false;
+
+	// check if this video is used on this preset
+	for ( u32 i = 0; i < enc_clip.presets.size(); i++ )
+	{
+		if ( enc_clip.presets[ i ] != preset_idx )
+			continue;
+
+		is_used_in_preset = true;
+		break;
+	}
+
+	if ( !is_used_in_preset )
+		return false;
+
+	// get the current group we want
+	u32 group_i = 0;
+	for ( ; group_i < clip.groups.size(); group_i++ )
+	{
+		clip_group_t& _group = clip.groups[ group_i ];
+
+		for ( u32 i = 0; i < enc_clip.presets.size(); i++ )
+		{
+			if ( _group.presets[ i ] == preset_idx )
+				goto group_found;
+		}
+	}
+
+	if ( group_i == clip.groups.size() )
+	{
+		// how would we even get here
+		clip.state = e_clip_state_failed;
+		return false;
+	}
+
+group_found:
+	clip_group_t& group = clip.groups[ group_i ];
+	bool          duration_invalid = false;
+	//float         duration         = 0.f;
+
+	for ( u32 src_i = 0; src_i < group.sources.size(); src_i++ )
+	{
+		clip_source_usage_t& source_use = group.sources[ src_i ];
+		clip_source_t&       source     = clip.source[ source_use.source_index ];
+
+		for ( u32 time_i = 0; time_i < source_use.time_range.size(); time_i++ )
+		{
+			if ( !valid_time_range( source_use.time_range[ time_i ], source.metadata ) )
+				duration_invalid = true;
+
+			//duration += source_use.time_range[ time_i ].end - source_use.time_range[ time_i ].start;
+		}
+	}
+
+	return is_used_in_preset;
+}
+#endif
 
 
 void encode_draw_sidebar()
@@ -22,6 +119,20 @@ void encode_draw_sidebar()
 
 	if ( ImGui::BeginChild( "##encode_sidebar", {}, ImGuiChildFlags_ResizeX, ImGuiWindowFlags_None ) )
 	{
+		//ImGui::PushFont( font::normal, font::size + 4 );
+		//
+		//if ( g_encode_finished )
+		//{
+		//	ImGui::TextUnformatted( "Export Finished" );
+		//}
+		//else
+		//{
+		//	ImGui::TextUnformatted( "Export Running" );
+		//}
+		//
+		//ImGui::PopFont();
+		//
+		//ImGui::Separator();
 		ImGui::TextUnformatted( "Encode Presets" );
 
 		if ( ImGui::BeginChild( "##preset_list", {}, ImGuiChildFlags_Borders | ImGuiChildFlags_AutoResizeY, ImGuiWindowFlags_None ) )
@@ -80,26 +191,14 @@ void encode_draw_sidebar()
 				if ( preset_select > -1 )
 					preset_idx = preset_select;
 
-				clip_encode_preset_t& preset            = clip_data::preset[ preset_idx ];
+				enc_clip_preset_t* enc_preset = encode_get_enc_preset( enc_clip, preset_idx );
 
-				bool                  is_used_in_preset = false;
-				float                 duration          = 0.f;
-				bool                  duration_invalid  = false;
-
-				
-				// check if this video is used on this preset
-				for ( u32 i = 0; i < enc_clip.presets.size(); i++ )
-				{
-					if ( enc_clip.presets[ i ] != preset_idx )
-						continue;
-
-					is_used_in_preset = true;
-					break;
-				}
-
-				if ( !is_used_in_preset )
+				if ( !enc_preset )
 					continue;
 
+				clip_group_t& group = clip.groups[ enc_preset->group ];
+
+#if 0
 				// get the current group we want
 				u32 group_i = 0;
 				for ( ; group_i < clip.groups.size(); group_i++ )
@@ -122,6 +221,12 @@ void encode_draw_sidebar()
 
 group_found:
 				clip_group_t& group = clip.groups[ group_i ];
+#endif
+
+				clip_encode_preset_t& preset           = clip_data::preset[ preset_idx ];
+
+				float                 duration         = 0.f;
+				bool                  duration_invalid = false;
 
 				for ( u32 src_i = 0; src_i < group.sources.size(); src_i++ )
 				{
@@ -136,9 +241,6 @@ group_found:
 						duration += source_use.time_range[ time_i ].end - source_use.time_range[ time_i ].start;
 					}
 				}
-
-				if ( !is_used_in_preset )
-					continue;
 
 				char name_buf[ 512 ]{};
 				snprintf( name_buf, 512, " %zu - %s", vid_i, clip.name );
@@ -231,10 +333,13 @@ void encode_draw_ffmpeg()
 	float       basic_text_height  = ImGui::GetFontSize() + style.ItemSpacing.y * 2;
 	float       separator_height   = 1.f;
 
-	ffmpeg_output_size -= basic_text_height * 5;
-	ffmpeg_output_size -= ImGui::GetFrameHeight() * 1;
-	ffmpeg_output_size -= separator_height * 1;  // ???
-	ffmpeg_output_size -= style.WindowPadding.y * 2;
+	// ffmpeg_output_size -= basic_text_height * 5;
+	// ffmpeg_output_size -= ImGui::GetFrameHeight() * 1;
+	// ffmpeg_output_size -= separator_height * 1;  // ???
+	// ffmpeg_output_size -= style.WindowPadding.y * 2;
+
+	ffmpeg_output_size -= clip_info_area_height;
+	ffmpeg_output_size -= style.ItemSpacing.y;
 
 	if ( !ImGui::BeginChild( "##ffmpeg_output", { -1, ffmpeg_output_size }, ImGuiChildFlags_Borders, ImGuiWindowFlags_AlwaysVerticalScrollbar ) )
 	{
@@ -243,30 +348,32 @@ void encode_draw_ffmpeg()
 	}
 
 	static float scroll_max = ImGui::GetScrollMaxY();
-
-	ImGui::PushTextWrapPos();
-	ImGui::PushFont( font::console );
-
-	u32 output_idx = g_encoder_data.output_index;
+	u32          output_idx = g_encoder_data.output_index;
 
 	if ( output_select > -1 )
 		output_idx = output_select;
 
-	clip_t& clip     = clip_data::clip[ output_idx ];
-	enc_clip_t&  enc_clip = g_encoder_clips[ output_idx ];
+	if ( output_idx != UINT32_MAX )
+	{
+		clip_t&     clip     = clip_data::clip[ output_idx ];
+		enc_clip_t& enc_clip = g_encoder_clips[ output_idx ];
 
-	enc_clip.ffmpeg_output_lock.lock();
-	ImGui::TextUnformatted( enc_clip.ffmpeg_output );
-	enc_clip.ffmpeg_output_lock.unlock();
+		ImGui::PushTextWrapPos();
+		ImGui::PushFont( font::console );
 
-	ImGui::PopFont();
-	ImGui::PopTextWrapPos();
+		enc_clip.ffmpeg_output_lock.lock();
+		ImGui::TextUnformatted( enc_clip.ffmpeg_output );
+		enc_clip.ffmpeg_output_lock.unlock();
 
-	// if we were scrolled all the way down before, make sure we stay scrolled down all the way
-	if ( scroll_max == ImGui::GetScrollY() )
-		ImGui::SetScrollY( ImGui::GetScrollMaxY() );
+		ImGui::PopFont();
+		ImGui::PopTextWrapPos();
 
-	scroll_max = ImGui::GetScrollMaxY();
+		// if we were scrolled all the way down before, make sure we stay scrolled down all the way
+		if ( scroll_max == ImGui::GetScrollY() )
+			ImGui::SetScrollY( ImGui::GetScrollMaxY() );
+
+		scroll_max = ImGui::GetScrollMaxY();
+	}
 
 	ImGui::EndChild();
 }
@@ -274,14 +381,10 @@ void encode_draw_ffmpeg()
 
 void encode_draw_output_info()
 {
-	if ( !ImGui::BeginChild( "##output_info", {}, ImGuiChildFlags_Borders, ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoNav | ImGuiWindowFlags_NoScrollWithMouse ) )
-	{
-		ImGui::EndChild();
-		return;
-	}
+	u32         output_idx = g_encoder_data.output_index;
+	u32         preset_idx = g_encoder_data.encode_preset;
 
-	u32 output_idx = g_encoder_data.output_index;
-	u32 preset_idx = g_encoder_data.encode_preset;
+	ImGuiStyle& style      = ImGui::GetStyle();
 
 	if ( output_select > -1 )
 		output_idx = output_select;
@@ -289,79 +392,124 @@ void encode_draw_output_info()
 	if ( preset_select > -1 )
 		preset_idx = preset_select;
 
-	clip_t&  clip     = clip_data::clip[ output_idx ];
-	enc_clip_t&   enc_clip = g_encoder_clips[ output_idx ];
-	clip_encode_preset_t& preset     = clip_data::preset[ preset_idx ];
+	clip_info_area_height = 0;
 
-	std::string           filename   = get_video_output_name( clip, preset );
-
-	ImGui::Text( "Output Path: %s", g_encoder_data.output_dir.c_str() );
-
-	ImGui::Separator();
-
-	ImGui::Text( "File: %s", filename.c_str() );
-
-	float duration         = 0.f;
-	bool  duration_invalid = false;
-
-	ImGui::Separator();
-
-#if 0
-	for ( u32 in_i = 0; in_i < clip.source_count; in_i++ )
+	if ( !ImGui::BeginChild( "##clip_status_info", {}, ImGuiChildFlags_Borders | ImGuiChildFlags_AutoResizeY, ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoNav | ImGuiWindowFlags_NoScrollWithMouse ) )
 	{
-		clip_source_t& source = clip.source[ in_i ];
+		goto clip_info_draw;
+	}
 
-		if ( !used_in_preset( source.encode_settings, preset_idx ) )
-			continue;
+	//clip_info_area_height += style.WindowPadding.y;
 
-		ImGui::Text( "Source %u: %s", in_i, source.path );
+	if ( g_encode_finished )
+	{
+		ImGui::PushFont( font::normal, font::size + 4 );
+		ImGui::TextUnformatted( "Export Finished" );
+		clip_info_area_height += ImGui::GetTextLineHeight();
+		ImGui::PopFont();
+		
+		ImGui::Separator();
+	}
 
-		for ( u32 time_i = 0; time_i < source.time_range_count; time_i++ )
+	if ( output_idx != UINT32_MAX && preset_idx != UINT32_MAX )
+	{
+		// Draw current video info
+		clip_t&               clip     = clip_data::clip[ output_idx ];
+		enc_clip_t&           enc_clip = g_encoder_clips[ output_idx ];
+		clip_encode_preset_t& preset   = clip_data::preset[ preset_idx ];
+
+		std::string           filename = get_video_output_name( clip, preset );
+
+		ImGui::Text( "Output Path: %s", g_encoder_data.output_dir.c_str() );
+
+		ImGui::Separator();
+
+		ImGui::Text( "File: %s", filename.c_str() );
+
+		clip_info_area_height += ImGui::GetTextLineHeightWithSpacing() * 2;
+
+		enc_clip_preset_t* enc_preset = encode_get_enc_preset( enc_clip, preset_idx );
+
+		if ( !enc_preset )
 		{
-			if ( !valid_time_range( source.time_range[ time_i ], source.metadata ) )
-			{
-				duration_invalid = true;
-				continue;
-			}
-
-			float range_duration = source.time_range[ time_i ].end - source.time_range[ time_i ].start;
-			ImGui::Text( "    %.4f - %.4f (%.4f)", source.time_range[ time_i ].start, source.time_range[ time_i ].end, range_duration );
-
-			duration += source.time_range[ time_i ].end - source.time_range[ time_i ].start;
+			// WE SHOULD NOT BE HERE
+			goto clip_info_draw;
 		}
+
+		clip_group_t& group            = clip.groups[ enc_preset->group ];
+
+		float         duration         = 0.f;
+		bool          duration_invalid = false;
+
+		ImGui::Separator();
+
+		for ( u32 src_i = 0; src_i < group.sources.size(); src_i++ )
+		{
+			clip_source_usage_t& source_use = group.sources[ src_i ];
+			clip_source_t&       source     = clip.source[ source_use.source_index ];
+
+			for ( u32 time_i = 0; time_i < source_use.time_range.size(); time_i++ )
+			{
+				if ( !valid_time_range( source_use.time_range[ time_i ], source.metadata ) )
+				{
+					duration_invalid = true;
+					continue;
+				}
+
+				float range_duration = source_use.time_range[ time_i ].end - source_use.time_range[ time_i ].start;
+				ImGui::Text( "    %.4f - %.4f (%.4f)", source_use.time_range[ time_i ].start, source_use.time_range[ time_i ].end, range_duration );
+				clip_info_area_height += ImGui::GetTextLineHeightWithSpacing();
+
+				duration += source_use.time_range[ time_i ].end - source_use.time_range[ time_i ].start;
+			}
+		}
+
+		ImGui::Separator();
+
+		ImGui::Text( "Duration: %.4f%s", duration, duration_invalid ? " [INVALID]" : "" );
+		clip_info_area_height += ImGui::GetTextLineHeightWithSpacing();
+
+		// Output Path
+		// Source Videos
+		// Duration
+		// Current Video working on
+
+		ImGui::Separator();
 	}
-#endif
 
-	ImGui::Separator();
-
-	ImGui::Text( "Duration: %.4f%s", duration, duration_invalid ? " [INVALID]" : "" );
-
-	// Output Path
-	// Source Videos
-	// Duration
-	// Current Video working on
-
-	ImGui::Separator();
-
-	if ( ImGui::Button( g_encode_pause ? "Resume" : "Pause" ) )
+	if ( g_encode_finished )
 	{
-		g_encode_pause = !g_encode_pause;
-		SDL_Delay( 50 );
+		if ( ImGui::Button( "Return to Editor" ) )
+		{
+			encode_thread_stop();
+		}
+		
+		clip_info_area_height += ImGui::GetFrameHeight();
 	}
-
-	ImGui::SameLine();
-	ImGui::SeparatorEx( ImGuiSeparatorFlags_Vertical );
-	ImGui::SameLine();
-
-	if ( ImGui::Button( "Skip" ) )
+	else
 	{
-	}
+		if ( ImGui::Button( g_encode_pause ? "Resume" : "Pause" ) )
+		{
+			g_encode_pause = !g_encode_pause;
+			SDL_Delay( 50 );
+		}
 
-	ImGui::SameLine();
+		ImGui::SameLine();
+		ImGui::SeparatorEx( ImGuiSeparatorFlags_Vertical );
+		ImGui::SameLine();
 
-	if ( ImGui::Button( "Cancel" ) )
-	{
-		encode_thread_stop();
+		if ( ImGui::Button( "Skip" ) )
+		{
+		}
+
+		ImGui::SameLine();
+
+		if ( ImGui::Button( "Cancel" ) )
+		{
+			encode_thread_stop();
+		}
+		
+		clip_info_area_height += ImGui::GetFrameHeightWithSpacing() * 3;
 	}
 
 	ImGui::SameLine();
@@ -379,6 +527,10 @@ void encode_draw_output_info()
 		sys_open_folder( g_log_dir.c_str() );
 	}
 
+	clip_info_area_height += ImGui::GetFrameHeight() * 2;
+
+clip_info_draw:
+	clip_info_area_height = ImGui::GetWindowHeight();
 	ImGui::EndChild();
 }
 

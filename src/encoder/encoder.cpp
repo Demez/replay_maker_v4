@@ -916,7 +916,7 @@ enc_video_data_t get_video_segments( enc_clip_t& enc_clip, clip_t& clip, clip_gr
 
 			char temp_name[ 256 ] = { 0 };
 
-			snprintf( temp_name, 256, "%s/%d__%s.%s", g_temp_video_dir, video_data.segment_count, input_name, preset.ext );
+			snprintf( temp_name, 256, "%s" SEP_S "%d__%s.%s", g_temp_video_dir, video_data.segment_count, input_name, preset.ext );
 			video_data.segment[ video_data.segment_count ].path   = strdup( temp_name );
 			video_data.segment[ video_data.segment_count ].source = source_i;
 			video_data.segment[ video_data.segment_count ].time   = time_i;
@@ -956,6 +956,8 @@ std::string get_video_output_name( clip_t& clip, clip_encode_preset_t& preset )
 	filename.append( clip.name );
 	filename.append( "." );
 	filename.append( preset.ext );
+
+	filename = fs_path_clean( filename.c_str(), filename.size() );
 	
 	return filename;
 }
@@ -985,26 +987,16 @@ void run_encode_preset( clip_encode_preset_t& preset, u32 preset_i )
 			continue;
 		}
 
-		// check if this video is used on this preset
-		bool used_preset = false;
-		for ( u32 i = 0; i < enc_clip.presets.size(); i++ )
-		{
-			if ( enc_clip.presets[ i ] != preset_i )
-				continue;
+		enc_clip_preset_t* enc_preset = encode_get_enc_preset( enc_clip, preset_i );
 
-			used_preset = true;
-			break;
-		}
-
-		if ( !used_preset )
-		{
-			//clip.state = e_clip_state_failed;
+		// not used in this preset ?
+		if ( !enc_preset )
 			continue;
-		}
+
+		clip_group_t& group = clip.groups[ enc_preset->group ];
 
 		// get the current group we want
-
-		u32 group_i = 0;
+		#if 0
 		for ( ; group_i < clip.groups.size(); group_i++ )
 		{
 			clip_group_t& _group = clip.groups[ group_i ];
@@ -1022,10 +1014,9 @@ void run_encode_preset( clip_encode_preset_t& preset, u32 preset_i )
 			clip.state = e_clip_state_failed;
 			continue;
 		}
+		#endif
 
 group_found:
-		clip_group_t& group = clip.groups[ group_i ];
-
 		log_printf( "\n----------------------------------------------------\n\n" );
 
 		clip.state         = e_clip_state_running;
@@ -1100,6 +1091,7 @@ group_found:
 void run_encoding()
 {
 	g_encoder_data.output_dir.clear();
+	g_encoder_data.output_dir.append( g_output_dir );
 
 	for ( u32 preset_i = 0; preset_i < clip_data::preset_count; preset_i++ )
 	{
@@ -1107,6 +1099,8 @@ void run_encoding()
 			break;
 
 		clip_encode_preset_t& preset = clip_data::preset[ preset_i ];
+		
+		g_encoder_data.output_dir.clear();
 		g_encoder_data.output_dir.append( g_output_dir );
 
 		if ( preset.out_folder_append )
@@ -1122,5 +1116,8 @@ void run_encoding()
 
 		run_encode_preset( preset, preset_i );
 	}
+
+	g_encoder_data.output_index  = UINT32_MAX;
+	//g_encoder_data.encode_preset = UINT32_MAX;
 }
 

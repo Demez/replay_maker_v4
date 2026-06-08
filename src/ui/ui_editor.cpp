@@ -114,9 +114,9 @@ void replay_editor_set_group( u32 output_i, u32 group_i, u32 group_src_i )
 	if ( clip_data::current_clip_index != output_i )
 	{
 		clip_data::current_group_source.clear();
-		clip_data::current_group_source.resize( clip.groups.size() );
 	}
 
+	clip_data::current_group_source.resize( clip.groups.size() );
 	clip_group_t& group = clip.groups[ group_i ];
 
 	// No sources in current group

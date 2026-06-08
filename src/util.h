@@ -340,6 +340,9 @@ bool        fs_is_file( const char* path );
 // replace all backslash path separators with forward slashes
 char*       fs_replace_path_seps_unix( const char* path );
 
+// replaces path separators with os specific ones, and removes ".." from the path
+std::string fs_path_clean( const char* path, size_t path_len );
+
 // checks if it exists and if it's a file and not a directory
 bool        fs_make_dir_check( const char* path );
 

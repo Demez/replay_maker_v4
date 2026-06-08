@@ -27,7 +27,7 @@ static void         encode_worker()
 	g_encode_running = true;
 	encode_videos();
 	g_encode_finished = true;
-	g_encode_running  = false;
+	// g_encode_running  = false;
 
 	printf( "ENCODE FINISHED\n" );
 }
@@ -76,7 +76,7 @@ bool encode_check_state()
 	//if ( g_encode_finished )
 	//	encode_thread_stop();
 
-	if ( !g_encode_running || !app::running )
+	if ( !g_encode_running || !app::running || g_encode_finished )
 		return false;
 	
 	while ( g_encode_pause )
@@ -104,6 +104,19 @@ bool used_in_preset( clip_encode_settings_t& override, u32 preset_i )
 }
 
 #endif
+
+
+enc_clip_preset_t* encode_get_enc_preset( enc_clip_t& enc_clip, u32 preset_idx )
+{
+	// check if this video is used on this preset
+	for ( u32 i = 0; i < enc_clip.presets.size(); i++ )
+	{
+		if ( enc_clip.presets[ i ].preset == preset_idx )
+			return &enc_clip.presets[ i ];
+	}
+
+	return nullptr;
+}
 
 
 bool collect_video_info()
@@ -155,7 +168,7 @@ bool collect_video_info()
 				bool preset_already_added = false;
 				for ( u32 search_i = 0; search_i < enc_clip.presets.size(); search_i++ )
 				{
-					if ( enc_clip.presets[ search_i ] == group.presets[ preset_i ] )
+					if ( enc_clip.presets[ search_i ].preset == group.presets[ preset_i ] )
 					{
 						preset_already_added = true;
 						break;
@@ -165,7 +178,14 @@ bool collect_video_info()
 				if ( preset_already_added )
 					continue;
 
-				enc_clip.presets.push_back( group.presets[ preset_i ] );
+				enc_clip_preset_t enc_preset
+				{
+					.preset = group.presets[ preset_i ],
+					.group  = group_i,
+					//.group   = group
+				};
+
+				enc_clip.presets.push_back( enc_preset );
 			}
 		}
 

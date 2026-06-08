@@ -6,6 +6,8 @@
 #include <mutex>
 #include <string>
 
+#include "vector.hpp"
+
 enum e_target_size_state
 {
 	e_target_size_state_none,
@@ -14,20 +16,27 @@ enum e_target_size_state
 };
 
 
+struct enc_clip_preset_t
+{
+	u32 preset;
+	u32 group;
+};
+
+
 // encoder output video
 struct enc_clip_t
 {
-	clip_t*         clip  = nullptr;
-	bool            valid = false;
+	clip_t*                       clip  = nullptr;
+	bool                          valid = false;
 
 	// presets this output video uses
-	ChVector< u32 > presets;
+	ChVector< enc_clip_preset_t > presets;
 
 	// ffmpeg output
-	std::mutex      ffmpeg_output_lock;
-	char*           ffmpeg_output          = nullptr;
-	size_t          ffmpeg_output_capacity = 0;
-	size_t          ffmpeg_cursor_pos      = 0;
+	std::mutex                    ffmpeg_output_lock;
+	char*                         ffmpeg_output          = nullptr;
+	size_t                        ffmpeg_output_capacity = 0;
+	size_t                        ffmpeg_cursor_pos      = 0;
 
 	// markers for raw encodes here?
 };
@@ -81,6 +90,7 @@ extern encoder_t           g_encoder_data;
 extern std::atomic< bool > g_encode_started;
 
 extern bool                g_encode_running;
+extern bool                g_encode_finished;
 extern bool                g_encode_pause;
 
 void                       run_encoding();
@@ -94,5 +104,7 @@ bool                       encode_check_state();
 
 float                      get_video_bitrate( const char* path );
 std::string                get_video_output_name( clip_t& clip, clip_encode_preset_t& preset );
+
+enc_clip_preset_t*         encode_get_enc_preset( enc_clip_t& enc_clip, u32 preset_idx );
 
 void                       encode_draw();
