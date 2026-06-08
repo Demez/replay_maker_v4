@@ -113,10 +113,13 @@ group_found:
 
 void encode_draw_sidebar()
 {
-	ImGuiIO&    io        = ImGui::GetIO();
-	ImGuiStyle& style     = ImGui::GetStyle();
+	ImGuiIO&    io                 = ImGui::GetIO();
+	ImGuiStyle& style              = ImGui::GetStyle();
 
-	ImDrawList* draw_list = ImGui::GetWindowDrawList();
+	ImDrawList* draw_list          = ImGui::GetWindowDrawList();
+
+	static u32  last_clip_i        = 0;
+	bool        just_switched_clip = last_clip_i != g_encoder_data.clip_index;
 
 	if ( ImGui::BeginChild( "##encode_sidebar", {}, ImGuiChildFlags_ResizeX, ImGuiWindowFlags_None ) )
 	{
@@ -202,12 +205,7 @@ void encode_draw_sidebar()
 				result_count++;
 		}
 
-		u32 clip_progress = g_encoder_data.clip_index;
-
-		//if ( !g_encode_finished && g_encoder_data.clip_index == 0 )
-		//	clip_progress -= 1;
-
-		ImGui::Text( "Video List - %u/%u Complete", clip_progress, clip_data::clip_count );
+		ImGui::Text( "Video List - %u/%u Complete", g_encoder_data.clip_index, clip_data::clip_count );
 
 		if ( result_count < clip_data::clip_count )
 		{
@@ -400,7 +398,15 @@ void encode_draw_sidebar()
 						ImGui::PushStyleColor( ImGuiCol_HeaderActive, header_active );
 						ImGui::PushStyleColor( ImGuiCol_HeaderHovered, header_hover );
 
-						if ( ImGui::CollapsingHeader( name_buf, ImGuiTreeNodeFlags_DefaultOpen ) )
+						if ( just_switched_clip )
+						{
+							if ( g_encoder_data.clip_index == vid_i )
+								ImGui::SetNextItemOpen( true );
+							else if ( last_clip_i == vid_i )
+								ImGui::SetNextItemOpen( false );
+						}
+
+						if ( ImGui::CollapsingHeader( name_buf, ImGuiTreeNodeFlags_None ) )
 						{
 							ImGui::Separator();
 							ImGui::PushStyleVar( ImGuiStyleVar_ButtonTextAlign, ImVec2( 0, 0.5 ) );
@@ -537,6 +543,8 @@ void encode_draw_sidebar()
 	}
 
 	ImGui::EndChild();
+
+	last_clip_i = g_encoder_data.clip_index;
 }
 
 
