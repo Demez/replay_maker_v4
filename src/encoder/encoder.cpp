@@ -985,16 +985,21 @@ bool encode_set_output_dir( u32 preset_i )
 
 	g_encoder_data.output_dir.clear();
 	g_encoder_data.output_dir.append( g_output_dir );
+	//g_encoder_data.output_dir.append( SEP_S, 1 );
 
 	if ( preset.out_folder_append )
 	{
 		g_encoder_data.output_dir.append( SEP_S, 1 );
 		g_encoder_data.output_dir.append( preset.out_folder_append );
-		g_encoder_data.output_dir.append( SEP_S, 1 );
-
-		if ( !fs_make_dir_check( g_encoder_data.output_dir.c_str() ) )
-			return false;
+		//g_encoder_data.output_dir.append( SEP_S, 1 );
 	}
+
+	g_encoder_data.output_dir = fs_path_clean( g_encoder_data.output_dir.c_str(), g_encoder_data.output_dir.size() );
+	g_encoder_data.output_dir.append( SEP_S, 1 );
+
+	// TODO: make all directories at the start instead
+	if ( !fs_make_dir_check( g_encoder_data.output_dir.c_str() ) )
+		return false;
 
 	return true;
 }
@@ -1080,13 +1085,22 @@ void run_encode_clip( clip_t& clip, enc_clip_t& enc_clip )
 				skip_output = !run_encode_inputs_standard( video_data, preset );
 
 			if ( !encode_check_state() )
+			{
+				// free data
+				for ( u32 i = 0; i < video_data.segment_count; i++ )
+					free( video_data.segment[ i ].path );
+
+				free( video_data.segment );
 				break;
+			}
 
 			// if we want to skip this or we just have no video segments
 			if ( !skip_output )
 			{
 				// concat them together
-				if ( !create_output_video( clip, filename.c_str(), video_data, !preset.target_size, preset_i ) )
+				if ( create_output_video( clip, filename.c_str(), video_data, !preset.target_size, preset_i ) )
+					enc_clip.group_state[ group_export ] = e_enc_state_finished;
+				else
 					enc_clip.group_state[ group_export ] = e_enc_state_failed;
 			}
 			else
@@ -1100,7 +1114,7 @@ void run_encode_clip( clip_t& clip, enc_clip_t& enc_clip )
 
 			free( video_data.segment );
 
-			if ( enc_clip.group_state[ group_export++ ] = e_enc_state_failed )
+			if ( enc_clip.group_state[ group_export++ ] == e_enc_state_failed )
 			{
 				enc_clip.state = e_enc_state_failed;
 				break;

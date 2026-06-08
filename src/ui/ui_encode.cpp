@@ -332,173 +332,185 @@ void encode_draw_sidebar()
 					focused = output_select == vid_i;
 				}
 
+				//ImGui::PushStyleVar( ImGuiStyleVar_WindowPadding, { 2, 2 } );
+
 				//if ( focused )
 				{
 					ImGui::PushID( vid_i + 1 );
 
 					// ImGuiChildFlags child_flags = ImGuiChildFlags_Border | ImGuiChildFlags_FrameStyle;
-					ImGuiChildFlags child_flags = ImGuiChildFlags_Border;
+					ImGuiChildFlags child_flags   = ImGuiChildFlags_Border;
 
 					//bool            draw_bg_color = enc_clip.state != e_enc_state_valid;
 					bool            current       = g_encoder_data.clip_index == vid_i;
 
-					//if ( draw_bg_color )
+					ImVec4          color_bg      = style.Colors[ ImGuiCol_FrameBg ];
+
+					ImVec4          header_bg     = style.Colors[ ImGuiCol_Header ];
+					ImVec4          header_active = style.Colors[ ImGuiCol_HeaderActive ];
+					ImVec4          header_hover  = style.Colors[ ImGuiCol_HeaderHovered ];
+
+					switch ( enc_clip.state )
 					{
-						ImVec2 region_avail   = ImGui::GetContentRegionAvail();
-						ImVec2 cursor_scr_pos = ImGui::GetCursorScreenPos();
+						default:
+						case e_enc_state_wait:
+							//color_bg.w = 0.f;
+							color_bg = style.Colors[ ImGuiCol_ChildBg ];
+							color_bg.w = 0.5;
+							break;
 
-						ImVec2 highlight_size{
-							cursor_scr_pos.x + region_avail.x + style.ItemSpacing.x * 0.5f,
-							cursor_scr_pos.y + ImGui::GetFontSize() + style.ItemSpacing.y * 0.5f
-						};
+						case e_enc_state_running:
+							break;
 
-						// something with centering? idk tbh
-						cursor_scr_pos.x -= style.ItemSpacing.x * 0.5f;
-						cursor_scr_pos.y -= style.ItemSpacing.y * 0.5f;
+						case e_enc_state_skipped:
+							color_bg      = COLOR_PURPLE_FRAME;
+							header_active = COLOR_PURPLE_ACTIVE;
+							header_hover  = COLOR_PURPLE_HOVER;
+							break;
 
-						ImVec4 color_bg = style.Colors[ ImGuiCol_FrameBg ];
+						case e_enc_state_failed:
+							color_bg      = COLOR_RED_FRAME;
+							header_active = COLOR_BTN_RED_ACTIVE;
+							header_hover  = COLOR_BTN_RED_HOVER;
+							break;
 
-						switch ( enc_clip.state )
-						{
-							default:
-							case e_enc_state_wait:
-								//color_bg.w = 0.f;
-								color_bg = style.Colors[ ImGuiCol_ChildBg ];
-								color_bg.w = 0.5;
-								break;
-
-							case e_enc_state_running:
-								break;
-
-							case e_enc_state_skipped:
-								color_bg = COLOR_PURPLE_FRAME;
-								break;
-
-							case e_enc_state_failed:
-								color_bg = COLOR_RED_FRAME;
-								break;
-
-							case e_enc_state_finished:
-								color_bg = COLOR_GREEN_FRAME;
-								break;
-						}
-
-						if ( current )
-							color_bg = style.Colors[ ImGuiCol_FrameBg ];
-
-						ImGui::PushStyleColor( ImGuiCol_ChildBg, color_bg );
-
-						//draw_list->AddRectFilled( cursor_scr_pos, highlight_size, color );
+						case e_enc_state_finished:
+							color_bg      = COLOR_GREEN_FRAME;
+							header_active = COLOR_GREEN_ACTIVE;
+							header_hover  = COLOR_GREEN_HOVER;
+							break;
 					}
+
+					if ( current )
+						color_bg = style.Colors[ ImGuiCol_FrameBg ];
+
+					ImGui::PushStyleColor( ImGuiCol_ChildBg, color_bg );
+
+					//draw_list->AddRectFilled( cursor_scr_pos, highlight_size, color );
+					
 
 					if ( ImGui::BeginChild( "##clip_encode_progress", {}, child_flags | ImGuiChildFlags_AutoResizeY ) )
 					{
-						ImGui::TextUnformatted( name_buf );
-						ImGui::Separator();
+						// ImGui::TextUnformatted( name_buf );
+						// ImGui::Separator();
 
-						ImGui::PushStyleVar( ImGuiStyleVar_ButtonTextAlign, ImVec2( 0, 0.5 ) );
+						header_bg.w          = 0.f;
 
-						u32 group_export_i = 0;
-						for ( u32 group_i = 0; group_i < clip.groups.size(); group_i++ )
+						ImGui::PushStyleColor( ImGuiCol_Header, header_bg );
+						ImGui::PushStyleColor( ImGuiCol_HeaderActive, header_active );
+						ImGui::PushStyleColor( ImGuiCol_HeaderHovered, header_hover );
+
+						if ( ImGui::CollapsingHeader( name_buf, ImGuiTreeNodeFlags_DefaultOpen ) )
 						{
-							for ( u32 preset_i : clip.groups[ group_i ].presets )
+							ImGui::Separator();
+							ImGui::PushStyleVar( ImGuiStyleVar_ButtonTextAlign, ImVec2( 0, 0.5 ) );
+
+							u32 group_export_i = 0;
+							for ( u32 group_i = 0; group_i < clip.groups.size(); group_i++ )
 							{
-								bool        current        = focused && g_encoder_data.encode_preset == preset_i;
-
-								e_enc_state preset_state   = enc_clip.group_state[ group_export_i++ ];
-
-								ImVec2 region_avail   = ImGui::GetContentRegionAvail();
-								ImVec2 cursor_scr_pos = ImGui::GetCursorScreenPos();
-
-								ImVec2 highlight_size{
-									cursor_scr_pos.x + region_avail.x + style.ItemSpacing.x * 0.5f,
-									cursor_scr_pos.y + ImGui::GetFontSize() + style.ItemSpacing.y * 0.5f
-								};
-
-								ImVec2 button_size{ region_avail.x, ImGui::GetFrameHeight() };
-
-								// something with centering? idk tbh
-								cursor_scr_pos.x -= style.ItemSpacing.x * 0.5f;
-								cursor_scr_pos.y -= style.ItemSpacing.y * 0.5f;
-
-								ImVec4 color_bg     = style.Colors[ ImGuiCol_Button ];
-								ImVec4 color_active = style.Colors[ ImGuiCol_ButtonActive ];
-								ImVec4 color_hover  = style.Colors[ ImGuiCol_ButtonHovered ];
-
-								//if ( current )
-								//{
-								//}
-
-								bool    draw_bg = true;
-
-								switch ( preset_state )
+								for ( u32 preset_i : clip.groups[ group_i ].presets )
 								{
-									default:
-									case e_enc_state_wait:
-										color_bg.w     = 0.f;
-										//color_active.w = 0.f;
-										//color_hover.w  = 0.f;
-										draw_bg        = true;
-										break;
+									bool        current        = focused && g_encoder_data.encode_preset == preset_i;
 
-									case e_enc_state_running:
-										draw_bg = false;
-										break;
+									e_enc_state preset_state   = enc_clip.group_state[ group_export_i++ ];
+
+									ImVec2 region_avail   = ImGui::GetContentRegionAvail();
+									ImVec2 cursor_scr_pos = ImGui::GetCursorScreenPos();
+
+									ImVec2 highlight_size{
+										cursor_scr_pos.x + region_avail.x + style.ItemSpacing.x * 0.5f,
+										cursor_scr_pos.y + ImGui::GetFontSize() + style.ItemSpacing.y * 0.5f
+									};
+
+									ImVec2 button_size{ region_avail.x, ImGui::GetFrameHeight() };
+
+									// something with centering? idk tbh
+									cursor_scr_pos.x -= style.ItemSpacing.x * 0.5f;
+									cursor_scr_pos.y -= style.ItemSpacing.y * 0.5f;
+
+									ImVec4 color_bg     = style.Colors[ ImGuiCol_Button ];
+									ImVec4 color_active = style.Colors[ ImGuiCol_ButtonActive ];
+									ImVec4 color_hover  = style.Colors[ ImGuiCol_ButtonHovered ];
+
+									//if ( current )
+									//{
+									//}
+
+									bool    draw_bg = true;
+
+									switch ( preset_state )
+									{
+										default:
+										case e_enc_state_wait:
+											color_bg.w     = 0.f;
+											//color_active.w = 0.f;
+											//color_hover.w  = 0.f;
+											draw_bg        = true;
+											break;
+
+										case e_enc_state_running:
+											draw_bg = false;
+											break;
 								
-									case e_enc_state_skipped:
-										color_bg     = COLOR_PURPLE;
-										color_active = COLOR_PURPLE_ACTIVE;
-										color_hover  = COLOR_PURPLE_HOVER;
-										draw_bg      = true;
-										break;
+										case e_enc_state_skipped:
+											color_bg     = COLOR_PURPLE;
+											color_active = COLOR_PURPLE_ACTIVE;
+											color_hover  = COLOR_PURPLE_HOVER;
+											draw_bg      = true;
+											break;
 								
-									case e_enc_state_failed:
-										color_bg     = COLOR_BTN_RED;
-										color_active = COLOR_BTN_RED_ACTIVE;
-										color_hover  = COLOR_BTN_RED_HOVER;
-										draw_bg      = true;
-										break;
+										case e_enc_state_failed:
+											color_bg     = COLOR_BTN_RED;
+											color_active = COLOR_BTN_RED_ACTIVE;
+											color_hover  = COLOR_BTN_RED_HOVER;
+											draw_bg      = true;
+											break;
 								
-									case e_enc_state_finished:
-										color_bg     = COLOR_GREEN;
-										color_active = COLOR_GREEN_ACTIVE;
-										color_hover  = COLOR_GREEN_HOVER;
-										draw_bg      = true;
-										break;
-								}
+										case e_enc_state_finished:
+											color_bg     = COLOR_GREEN;
+											color_active = COLOR_GREEN_ACTIVE;
+											color_hover  = COLOR_GREEN_HOVER;
+											draw_bg      = true;
+											break;
+									}
 
-								if ( current )
-								{
+									if ( current )
+									{
 
-								}
+									}
 
-								//if ( draw_bg )
-								//	draw_list->AddRectFilled( cursor_scr_pos, highlight_size, color );
+									//if ( draw_bg )
+									//	draw_list->AddRectFilled( cursor_scr_pos, highlight_size, color );
 								
-								if ( draw_bg )
-								{
-									ImGui::PushStyleColor( ImGuiCol_Button, color_bg );
-									ImGui::PushStyleColor( ImGuiCol_ButtonActive, color_active );
-									ImGui::PushStyleColor( ImGuiCol_ButtonHovered, color_hover );
+									if ( draw_bg )
+									{
+										ImGui::PushStyleColor( ImGuiCol_Button, color_bg );
+										ImGui::PushStyleColor( ImGuiCol_ButtonActive, color_active );
+										ImGui::PushStyleColor( ImGuiCol_ButtonHovered, color_hover );
+									}
+
+									//clip_encode_preset_t* preset = clip_get_encode_preset( preset_i );
+									//ImGui::Text( "%sEncode Preset: %s", current ? "[CURRENT] " : "", preset->name );
+
+									//ImGui::SetNextItemWidth( -FLT_MIN );
+
+									std::string filename = get_video_output_name( clip, clip_data::preset[ preset_i ] );
+									if ( ImGui::Button( filename.c_str(), button_size ) )
+									{
+										// TODO: focus output info on this entry
+									}
+
+									if ( draw_bg )
+										ImGui::PopStyleColor( 3 );
+
 								}
-
-								//clip_encode_preset_t* preset = clip_get_encode_preset( preset_i );
-								//ImGui::Text( "%sEncode Preset: %s", current ? "[CURRENT] " : "", preset->name );
-
-								//ImGui::SetNextItemWidth( -FLT_MIN );
-
-								std::string filename = get_video_output_name( clip, clip_data::preset[ preset_i ] );
-								if ( ImGui::Button( filename.c_str(), button_size ) )
-								{
-								}
-
-								if ( draw_bg )
-									ImGui::PopStyleColor( 3 );
-
 							}
+
+							ImGui::PopStyleVar();
 						}
 
-						ImGui::PopStyleVar();
+						// Header Colors
+						ImGui::PopStyleColor( 3 );
 					}
 
 					ImGui::EndChild();
@@ -510,6 +522,9 @@ void encode_draw_sidebar()
 
 					ImGui::PopID();
 				}
+			
+				//ImGui::PopStyleVar();
+
 			}
 		}
 
