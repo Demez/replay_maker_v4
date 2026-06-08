@@ -391,8 +391,13 @@ void timeline_marker_controls( clip_group_t* group )
 	// Create section from markers, both markers don't need to be active, it will default to the start or end of the video
 	if ( ImGui::IsKeyPressed( ImGuiKey_R, false ) )
 	{
+		u32 source = timeline::marker_source;
+
+		if ( source == UINT32_MAX )
+			source = clip_data::get_current_group_source();
+
 		float start_time = timeline::marker_active[ 0 ] ? timeline::marker_times[ 0 ] : 0.f;
-		float end_time   = timeline::marker_active[ 1 ] ? timeline::marker_times[ 1 ] : timeline::durations[ clip_data::get_current_group_source() ].duration;
+		float end_time   = timeline::marker_active[ 1 ] ? timeline::marker_times[ 1 ] : timeline::durations[ source ].duration;
 
 		// can't have this be inverted, flip if needed
 		if ( end_time < start_time )
@@ -402,7 +407,7 @@ void timeline_marker_controls( clip_group_t* group )
 			start_time = temp;
 		}
 
-		clip_group_add_time_range( clip_data::current_clip, *group, timeline::marker_source, start_time, end_time );
+		clip_group_add_time_range( clip_data::current_clip, *group, source, start_time, end_time );
 
 		// reset markers
 		timeline::marker_active[ 0 ] = false;
