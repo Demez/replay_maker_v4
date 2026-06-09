@@ -458,6 +458,28 @@ void draw_replay_info_menu_bar()
 		ImGui::EndMenu();
 	}
 
+	if ( ImGui::BeginMenu( "Video" ) )
+	{
+		ImGui::BeginDisabled( !mpv_get_current_video() );
+
+		if ( ImGui::MenuItem( "Open Folder" ) )
+		{
+			sys_browse_to_file( mpv_get_current_video() );
+		}
+
+		ImGui::EndDisabled();
+
+		ImGui::BeginDisabled( true );
+		
+		if ( ImGui::MenuItem( "Take Screenshot" ) )
+		{
+		}
+
+		ImGui::EndDisabled();
+
+		ImGui::EndMenu();
+	}
+
 	ImGui::BeginDisabled( g_videos_file_path == nullptr );
 
 	// if ( ImGui::MenuItem( "Save" ) )

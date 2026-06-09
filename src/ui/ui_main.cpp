@@ -533,20 +533,6 @@ void draw_playback_controls( int size[ 2 ] )
 
 	//ImGui::PushStyleVarX( ImGuiStyleVar_ItemSpacing, 0.f );
 
-	ImGui::Text( "%s / %s", str_time_pos, str_duration );
-
-	ImGui::SameLine();
-	ImGui::SeparatorEx( ImGuiSeparatorFlags_Vertical );
-	ImGui::SameLine();
-
-	ImGui::TextUnformatted( mpv_get_current_video() ? mpv_get_current_video() : "No Video Loaded" );
-
-	ImGui::SameLine();
-	ImGui::SeparatorEx( ImGuiSeparatorFlags_Vertical );
-	ImGui::SameLine();
-
-	ImGui::Text( "Audio: %s", audio_track_name ? audio_track_name : "" );
-
 	const bool show_timeline = get_mpv_index() != EXTRA_VID_ID;
 
 	//ImGui::Separator();
@@ -642,8 +628,11 @@ void draw_playback_controls( int size[ 2 ] )
 	}
 	else
 	{
-		if ( ImGui::BeginChild( "clip_creation", {}, ImGuiChildFlags_Borders | ImGuiChildFlags_AutoResizeY ) )
+		//if ( ImGui::BeginChild( "clip_creation", {}, ImGuiChildFlags_Borders | ImGuiChildFlags_AutoResizeY ) )
 		{
+			ImGui::TextUnformatted( mpv_get_current_video() ? mpv_get_current_video() : "No Video Loaded" );
+			ImGui::Separator();
+
 			mpv_data_t* mpv = get_mpv_data( EXTRA_VID_ID );
 			ImGui::BeginDisabled( !mpv->current_video );
 
@@ -653,7 +642,7 @@ void draw_playback_controls( int size[ 2 ] )
 
 			// Basic video timeline
 			float time_pos_f = (float)time_pos;
-			if ( ImGui::SliderFloat( "##seek", &time_pos_f, 0.f, (float)duration ) )
+			if ( ImGui::SliderFloat( "##seek", &time_pos_f, 0.f, (float)duration, "", ImGuiSliderFlags_NoInput ) )
 			{
 				mpv_cmd_seek( time_pos_f );
 			}
@@ -662,14 +651,16 @@ void draw_playback_controls( int size[ 2 ] )
 			ImGui::EndDisabled();
 		}
 
-		ImGui::EndChild();
+		//ImGui::EndChild();
 	}
 
-	ImVec2 region_avail2 = ImGui::GetContentRegionAvail();
+	ImVec2 region_avail2         = ImGui::GetContentRegionAvail();
+	// float  video_controls_height = ImGui::GetFrameHeight() * 2 + style.ItemSpacing.y;
+	float  video_controls_height = ImGui::GetFrameHeight() + style.ItemSpacing.y;
 
-	if ( region_avail2.y > ImGui::GetFrameHeightWithSpacing() )
+	if ( region_avail2.y > video_controls_height )
 	{
-		ImGui::SetCursorPosY( size[ 1 ] - ImGui::GetFrameHeightWithSpacing() );
+		ImGui::SetCursorPosY( size[ 1 ] - video_controls_height );
 	}
 
 	// ------------------------------------------------------------------------------
@@ -677,6 +668,16 @@ void draw_playback_controls( int size[ 2 ] )
 
 	const ImVec2 label_size    = ImGui::CalcTextSize( "Pause", NULL, true );
 	ImVec2       play_btn_size = ImGui::CalcItemSize( { 0, 0 }, label_size.x + style.FramePadding.x * 2.0f, label_size.y + style.FramePadding.y * 2.0f );
+
+	// unsure about this, may misclick?
+	ImGui::PushID( "##toggle_sidebar" );
+	if ( ImGui::Button( app::sidebar ? "<" : ">" ) )
+	{
+		enable_sidebar( !app::sidebar );
+	}
+	ImGui::PopID();
+
+	ImGui::SameLine();
 
 	if ( paused )
 	{
@@ -705,7 +706,11 @@ void draw_playback_controls( int size[ 2 ] )
 	}
 
 	ImGui::SameLine();
-	ImGui::Spacing();
+
+	ImGui::Text( "%s / %s", str_time_pos, str_duration );
+
+	//ImGui::SameLine();
+	//ImGui::Spacing();
 
 	ImGui::SameLine();
 	if ( ImGui::Button( "<|" ) )
@@ -749,8 +754,18 @@ void draw_playback_controls( int size[ 2 ] )
 	ImGui::Spacing();
 	ImGui::SameLine();
 
+	ImGui::SetNextItemWidth( 130.f );
+
+	float volume_f = volume;
+	if ( ImGui::SliderFloat( "##volume", &volume_f, 0.f, 130.f, "Volume: %.1f" ) )
+	{
+		mpv_cmd_set_volume( volume_f );
+	}
+
+	ImGui::SameLine();
+
 	// audio track selection
-	char        audio_btn[ 16 ] = { 0 };
+	char        audio_btn[ 64 ] = { 0 };
 
 	mpv_data_t* mpv             = get_mpv_data();
 
@@ -763,16 +778,19 @@ void draw_playback_controls( int size[ 2 ] )
 		else*/
 		if ( strcmp( audio_track, "no" ) == 0 )
 		{
-			snprintf( audio_btn, 16, "Audio: -/%lld", mpv->track_count_audio );
+			snprintf( audio_btn, 64, "Audio: -/%lld", mpv->track_count_audio );
 		}
 		else
 		{
-			snprintf( audio_btn, 16, "Audio: %s/%lld", audio_track, mpv->track_count_audio );
+			snprintf( audio_btn, 64, "Audio: %s/%lld", audio_track, mpv->track_count_audio );
 		}
+
+		if ( audio_track_name )
+			snprintf( audio_btn, 64, "%s - %s", audio_btn, audio_track_name );
 	}
 	else
 	{
-		snprintf( audio_btn, 16, "Audio: none" );
+		snprintf( audio_btn, 64, "Audio: none" );
 	}
 
 	char temp_test[ 16 ] = { 0 };
@@ -786,47 +804,31 @@ void draw_playback_controls( int size[ 2 ] )
 	audio_btn_text.x += style.FramePadding.x * 2;
 	audio_btn_text.y += style.FramePadding.y * 2;
 
-	if ( ImGui::Button( audio_btn, audio_btn_text ) )
+	if ( ImGui::Button( audio_btn ) )
 	{
 		const char* cmd[]   = { "cycle", "audio", NULL };
 		int         cmd_ret = p_mpv_command_async( get_mpv(), 0, cmd );
 		printf( "cycle audio ret - %d\n", cmd_ret );
 	}
 
-	ImGui::SameLine();
+	//ImGui::SameLine();
 
 	// try to get the audio track (might be odd with muscle memory)
 
-	if ( ImGui::Button( "Open Folder" ) )
-	{
-		sys_browse_to_file( mpv_get_current_video() );
-	}
+	//if ( ImGui::Button( "Open Folder" ) )
+	//{
+	//	sys_browse_to_file( mpv_get_current_video() );
+	//}
 
-	ImGui::SameLine();
+	//ImGui::SameLine();
+	//
+	//ImGui::BeginDisabled( true );
+	//
+	//if ( ImGui::Button( "Take Screenshot" ) )
+	//{
+	//}
 
-	if ( ImGui::Button( "Toggle Sidebar" ) )
-	{
-		enable_sidebar( !app::sidebar );
-	}
-
-	ImGui::SameLine();
-
-	ImGui::BeginDisabled( true );
-
-	if ( ImGui::Button( "Take Screenshot" ) )
-	{
-	}
-
-	ImGui::EndDisabled();
-
-	ImGui::SameLine();
-	ImGui::SetNextItemWidth( 130.f );
-
-	float volume_f = volume;
-	if ( ImGui::SliderFloat( "Volume", &volume_f, 0.f, 130.f ) )
-	{
-		mpv_cmd_set_volume( volume_f );
-	}
+	//ImGui::EndDisabled();
 }
 
 

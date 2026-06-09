@@ -903,18 +903,19 @@ void timeline_draw()
 	// ------------------------------------------------------------------------------------------
 	// Positioning and Sizing Setup
 
-	ImVec2 window_pos              = ImGui::GetWindowPos();
-	ImVec2 cursor_pos              = ImGui::GetCursorPos();
-	ImVec2 region_avail            = ImGui::GetContentRegionAvail();
+	ImVec2 window_pos          = ImGui::GetWindowPos();
+	ImVec2 cursor_pos          = ImGui::GetCursorPos();
+	ImVec2 region_avail        = ImGui::GetContentRegionAvail();
 
-	timeline::window_size.x              = region_avail.x;
+	timeline::window_size.x    = region_avail.x;
 	// timeline::window_size.y        = region_avail.y - cursor_pos.y;
-	timeline::window_size.y              = region_avail.y - ( ImGui::GetFontSize() + style.FramePadding.y * 2 + style.ItemSpacing.y );
+	// timeline::window_size.y              = region_avail.y - ( ImGui::GetFontSize() + style.FramePadding.y * 2 + style.ItemSpacing.y );
+	timeline::window_size.y    = region_avail.y - ImGui::GetFrameHeightWithSpacing();  // offset for video controls height
 
 	//static float timeline_scroll_x = 0.f;
 
- 	ImVec2 base_timeline_pos             = ImVec2( window_pos.x + cursor_pos.x, window_pos.y + cursor_pos.y );
-	bool   mouse_hovered_popup           = mouse_hovering_popup();
+	ImVec2 base_timeline_pos   = ImVec2( window_pos.x + cursor_pos.x, window_pos.y + cursor_pos.y );
+	bool   mouse_hovered_popup = mouse_hovering_popup();
 
 	if ( !mouse_hovered_popup && mouse_in_rect( base_timeline_pos, { base_timeline_pos.x + timeline::window_size.x, base_timeline_pos.y + timeline::window_size.y } ) )
 	{
