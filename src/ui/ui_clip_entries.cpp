@@ -143,10 +143,19 @@ void draw_replay_edit_video_info( int size[ 2 ] )
 	}
 
 	ImGui::SameLine();
+	
+	if ( ImGui::Button( "Close Clip" ) )
+	{
+		set_mpv_count( 1 );
+		mpv_cmd_close_video( 0 );
+		replay_editor_reset();
+	}
+
+	ImGui::SameLine();
 	ImVec2 line_remain   = ImGui::GetContentRegionAvail();
 
 	float  spacing_width = line_remain.x;
-	spacing_width -= ImGui::CalcTextSize( "Delete Video" ).x;
+	spacing_width -= ImGui::CalcTextSize( "Delete Clip" ).x;
 	spacing_width -= style.FramePadding.x * 2;
 	spacing_width -= style.ItemSpacing.x;
 
@@ -160,12 +169,12 @@ void draw_replay_edit_video_info( int size[ 2 ] )
 	ImGui::PushStyleColor( ImGuiCol_Button, COLOR_BTN_RED );
 
 	//ImGui::SetCursorPosY( save_pos.y );
-	if ( ImGui::Button( "Delete Video" ) )
+	if ( ImGui::Button( "Delete Clip" ) )
 	{
 		ImGui::PopStyleColor( 3 );
 
 		set_mpv_count( 1 );
-		mpv_cmd_close_video();
+		mpv_cmd_close_video( 0 );
 		
 		clip_remove_entry( clip_data::current_clip );
 		replay_editor_reset();
