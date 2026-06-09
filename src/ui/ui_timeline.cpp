@@ -1066,6 +1066,7 @@ void timeline_draw()
 	static bool       section_resize_left           = false;
 	static u32        section_resize_index          = 0;
 	static float      section_resize_seek_time      = 0.f;
+	bool              section_resize_mouse_release  = false;
 
 	const float       section_snap_size_base        = 4 * app::dpi;
 
@@ -1099,7 +1100,7 @@ void timeline_draw()
 	{
 		timeline::in_seek_drag   = false;
 
-		const char* cmd[]   = { "set", "pause", seek_drag_play_state ? "yes" : "no", NULL };
+ 		const char* cmd[]   = { "set", "pause", seek_drag_play_state ? "yes" : "no", NULL };
 		p_mpv_command_async( get_mpv(), 0, cmd );
 
 		seek_drag_play_state      = false;
@@ -1383,6 +1384,13 @@ void timeline_draw()
 								section_resize_source     = video_i;
 								section_resize_seek_time  = 0.f;
 							}
+							else if ( io.MouseReleased[ 0 ] )
+							{
+								seek_time_override = true;
+
+								new_seek_percent   = CLAMP( time_range.start / duration.duration, 0.f, 1.f );
+								new_time_pos       = duration.duration * new_seek_percent;
+							}
 						}
 
 						// check right side for hit detection
@@ -1397,6 +1405,13 @@ void timeline_draw()
 								section_resize_source     = video_i;
 								section_resize_index      = time_i;
 								section_resize_seek_time  = 0.f;
+							}
+							else if ( io.MouseReleased[ 0 ] )
+							{
+								seek_time_override = true;
+
+								new_seek_percent   = CLAMP( time_range.end / duration.duration, 0.f, 1.f );
+								new_time_pos       = duration.duration * new_seek_percent;
 							}
 						}
 					}
@@ -1458,14 +1473,28 @@ void timeline_draw()
 
 					if ( !io.MouseDown[ 0 ] )
 					{
-						section_resize            = false;
-						section_resize_mouse_wait = false;
-						section_resize_left       = false;
+						if ( section_resize )
+						{
+							seek_time_override   = true;
+							new_time_pos         = section_resize_seek_time;
+							new_seek_percent     = CLAMP( section_resize_seek_time / duration.duration, 0.f, 1.f );
 
-						min_start_time            = 0.f;
-						max_end_time              = duration.duration;
-						calc_times                = true;
-						section_resize_seek_time  = 0.f;
+							//const char* cmd[]    = { "set", "pause", seek_drag_play_state ? "yes" : "no", NULL };
+							//p_mpv_command_async( get_mpv(), 0, cmd );
+							//
+							//seek_drag_play_state = false;
+						}
+
+						section_resize               = false;
+						section_resize_mouse_wait    = false;
+						section_resize_left          = false;
+						section_resize_mouse_release = true;
+
+						min_start_time               = 0.f;
+						max_end_time                 = duration.duration;
+						calc_times                   = true;
+						section_resize_seek_time     = 0.f;
+
 					}
 					else
 					{
@@ -1477,25 +1506,30 @@ void timeline_draw()
 							{
 								section_resize            = true;
 								section_resize_mouse_wait = false;
+
+								//seek_drag_play_state      = paused;
+
+								const char* cmd[]         = { "set", "pause", "yes", NULL };
+								p_mpv_command_async( get_mpv(), 0, cmd );
 							}
 							else if ( just_selected_section )
 							{
-								seek_time_override = true;
-								new_time_pos     = section_resize_left ? time_range.start : time_range.end;
-								new_seek_percent = CLAMP( new_time_pos / duration.duration, 0.f, 1.f );
-
-								if ( mouse_hovered_video_area && clip_data::get_current_group_source() != video_i )
-								{
-									change_to_source_i = video_i;
-								}
+								//seek_time_override = true;
+								//new_time_pos     = section_resize_left ? time_range.start : time_range.end;
+								//new_seek_percent = CLAMP( new_time_pos / duration.duration, 0.f, 1.f );
+								//
+								//if ( mouse_hovered_video_area && clip_data::get_current_group_source() != video_i )
+								//{
+								//	change_to_source_i = video_i;
+								//}
 							}
 						}
 
 						if ( section_resize )
 						{
-							seek_time_override = true;
-							new_seek_percent   = CLAMP( mouse_pos_local.x / seek_area, 0.f, 1.f );
-							new_time_pos       = duration.duration * new_seek_percent;
+							// seek_time_override = true;
+							//new_seek_percent   = CLAMP( mouse_pos_local.x / seek_area, 0.f, 1.f );
+							//new_time_pos       = duration.duration * new_seek_percent;
 
 							// get earliest start time and latest end time for other sections around this one
 							if ( calc_times )
@@ -1519,22 +1553,25 @@ void timeline_draw()
 
 							constexpr double SEEK_POS_SNAP = 0.5;
 
+							float section_resize_seek_percent = CLAMP( mouse_pos_local.x / seek_area, 0.f, 1.f );
+							section_resize_seek_time          = duration.duration * section_resize_seek_percent;
+
 							// check if close enough to seek time to snap to
-							if ( MAX( 0, time_pos - SEEK_POS_SNAP ) <= new_time_pos && new_time_pos <= MIN( duration.duration, time_pos + SEEK_POS_SNAP ) )
+							if ( MAX( 0, time_pos - SEEK_POS_SNAP ) <= section_resize_seek_time && section_resize_seek_time <= MIN( duration.duration, time_pos + SEEK_POS_SNAP ) )
 							{
-								new_time_pos = time_pos;
+								section_resize_seek_time = time_pos;
 							}
 
 							if ( section_resize_left )
 							{
 								// time_range.start         = std::clamp( std::min( new_time_pos, time_range.end - 0.1f ), min_start_time, time_range.end );
-								time_range.start         = std::max( std::min( new_time_pos, time_range.end - 0.1f ), min_start_time );
+								time_range.start         = std::max( std::min( section_resize_seek_time, time_range.end - 0.1f ), min_start_time );
 								section_resize_seek_time = time_range.start;
 							}
 							else
 							{
 								// time_range.end           = std::clamp( std::max( new_time_pos, time_range.start + 0.1f ), time_range.start, max_end_time );
-								time_range.end           = std::min( std::max( new_time_pos, time_range.start + 0.1f ), max_end_time );
+								time_range.end           = std::min( std::max( section_resize_seek_time, time_range.start + 0.1f ), max_end_time );
 								section_resize_seek_time = time_range.end;
 							}
 						}
@@ -1549,8 +1586,14 @@ void timeline_draw()
 			{
 				// if ( mouse_hovered && capture_inputs && !section_resize && !seek_time_override && !ignore_seek_drag )
 				if ( capture_inputs && !section_resize && !seek_time_override && !ignore_seek_drag )
+				// if ( capture_inputs && !seek_time_override && !ignore_seek_drag )
 				{
-					if ( mouse_hovered_video_area && io.MouseClicked[ 0 ] )
+					bool mouse_pressed = io.MouseClicked[ 0 ];
+
+					if ( section_resize_mouse_wait || section_resize || section_resize_mouse_release )
+						mouse_pressed = io.MouseReleased[ 0 ];
+
+					if ( mouse_hovered_video_area && mouse_pressed )
 					{
 						timeline::in_seek_drag    = true;
 						seek_drag_play_state = paused;
@@ -1558,7 +1601,7 @@ void timeline_draw()
 						const char* cmd[]    = { "set", "pause", "yes", NULL };
 						p_mpv_command_async( get_mpv(), 0, cmd );
 
-						if ( !just_selected_section )
+						if ( !just_selected_section && !section_resize_mouse_release )
 							timeline::selected_section = UINT32_MAX;
 					}
 
@@ -1578,6 +1621,8 @@ void timeline_draw()
 					// if ( timeline::in_seek_drag && mouse_hovered_video_area )
 					if ( timeline::in_seek_drag )
 					{
+						printf( "SEEKING\n" );
+
 						bool mouse_x_hovered_video_area = app::mouse_pos[ 0 ] >= vid_area_min[ 0 ] && app::mouse_pos[ 0 ] <= vid_area_max[ 0 ];
 
 						// only calculate the new time in the video source we are hovered over
