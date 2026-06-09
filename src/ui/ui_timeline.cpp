@@ -13,6 +13,7 @@ namespace timeline
 	double                 zoom             = 1.0;
 	int                    zoom_step        = 0;
 	bool                   do_scroll        = false;
+	bool                   do_pan           = false;
 
 	bool                   in_seek_drag     = false;
 
@@ -480,6 +481,36 @@ void timeline_handle_scroll( ImVec2 base_timeline_pos )
 }
 
 
+static void timeline_handle_pan()
+{
+	if ( timeline::zoom_step == 0 )
+	{
+		timeline::do_pan = false;
+		return;
+	}
+
+	timeline::do_pan = ImGui::IsMouseDown( ImGuiMouseButton_Middle );
+
+	if ( !timeline::do_pan )
+		return;
+
+	ImGui::SetMouseCursor( ImGuiMouseCursor_Hand );
+	timeline::scroll_x -= app::mouse_delta[ 0 ];
+	timeline::do_scroll = true;
+
+	// get base timeline pos, and apply scroll offset to it
+	ImVec2 base_screen_pos = ImGui::GetCursorScreenPos();
+	base_screen_pos.x -= timeline::scroll_x;
+
+	ImVec2 timeline_content_size = timeline::window_size;
+	timeline_content_size.x *= timeline::zoom;
+
+	float scroll_size = MAX( 0.0f, timeline_content_size.x - timeline::window_size.x );
+
+	timeline::scroll_x = CLAMP( timeline::scroll_x, 0.f, scroll_size );
+}
+
+
 static void timeline_draw_group_tabs()
 {
 	if ( ImGui::BeginTabBar( "##timeline_group_tabs" ) )
@@ -868,9 +899,18 @@ void timeline_draw()
 
 	//static float timeline_scroll_x = 0.f;
 
- 	ImVec2 base_timeline_pos       = ImVec2( window_pos.x + cursor_pos.x, window_pos.y + cursor_pos.y );
-	if ( mouse_hovering_area( base_timeline_pos, { base_timeline_pos.x + timeline::window_size.x, base_timeline_pos.y + timeline::window_size.y } ) )
+ 	ImVec2 base_timeline_pos             = ImVec2( window_pos.x + cursor_pos.x, window_pos.y + cursor_pos.y );
+	bool   mouse_hovered_popup           = mouse_hovering_popup();
+
+	if ( !mouse_hovered_popup && mouse_in_rect( base_timeline_pos, { base_timeline_pos.x + timeline::window_size.x, base_timeline_pos.y + timeline::window_size.y } ) )
+	{
 		timeline_handle_scroll( base_timeline_pos );
+	}
+
+	if ( timeline::do_pan || ( !mouse_hovered_popup && mouse_in_rect( base_timeline_pos, { base_timeline_pos.x + timeline::window_size.x, base_timeline_pos.y + timeline::window_size.y } ) ) )
+	{
+		timeline_handle_pan();
+	}
 
 	ImVec2 timeline_content_size = timeline::window_size;
 	timeline_content_size.x *= timeline::zoom;
@@ -885,7 +925,6 @@ void timeline_draw()
 	ImVec2 mouse_pos     = ImGui::GetMousePos();
 
 	// is mouse within the frame here
-	bool   mouse_hovered_popup = mouse_hovering_popup();
 	bool   mouse_hovered       = !mouse_hovered_popup && mouse_in_rect( window_area_min, window_area_max );
 
 	ImGui::SetNextWindowContentSize( timeline_content_size );
