@@ -1621,8 +1621,6 @@ void timeline_draw()
 					// if ( timeline::in_seek_drag && mouse_hovered_video_area )
 					if ( timeline::in_seek_drag )
 					{
-						printf( "SEEKING\n" );
-
 						bool mouse_x_hovered_video_area = app::mouse_pos[ 0 ] >= vid_area_min[ 0 ] && app::mouse_pos[ 0 ] <= vid_area_max[ 0 ];
 
 						// only calculate the new time in the video source we are hovered over
