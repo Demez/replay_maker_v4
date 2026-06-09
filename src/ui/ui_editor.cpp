@@ -106,7 +106,7 @@ void replay_editor_set_group( u32 output_i, u32 group_i, u32 group_src_i )
 	if ( output_i >= clip_data::clip_count )
 		return;
 
-	clip_t& clip       = clip_data::clip[ output_i ];
+	clip_t& clip = clip_data::clip[ output_i ];
 
 	if ( group_i >= clip.groups.size() )
 		return;
@@ -117,7 +117,9 @@ void replay_editor_set_group( u32 output_i, u32 group_i, u32 group_src_i )
 	}
 
 	clip_data::current_group_source.resize( clip.groups.size() );
-	clip_group_t& group = clip.groups[ group_i ];
+	clip_group_t& group        = clip.groups[ group_i ];
+
+	timeline::selected_section = UINT32_MAX;
 
 	// No sources in current group
 	if ( group.sources.empty() )
