@@ -243,22 +243,9 @@ void replay_editor_set_group( u32 output_i, u32 group_i, u32 group_src_i )
 }
 
 
-
 void replay_editor_current_set_group( u32 group_i, u32 group_src_i )
 {
 	replay_editor_set_group( clip_data::current_clip_index, group_i, group_src_i );
-}
-
-
-void replay_editor_load( clip_t* clip )
-{
-	replay_editor_reset();
-
-	clip_data::current_clip = clip;
-	clip_data::current_source  = 0;
-
-	memcpy( g_output_name_buf, clip->name, strlen( clip->name ) * sizeof( char ) );
-	g_focus_replay_maker = true;
 }
 
 

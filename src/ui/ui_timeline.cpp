@@ -651,11 +651,25 @@ static void timeline_draw_group_tabs()
 
 				if ( ImGui::Selectable( preset.name ) )
 				{
-					u32           new_group = clip_data::current_clip->groups.size();
-					clip_group_t& group     = clip_data::current_clip->groups.emplace_back();
+					clip_group_t* current_group     = clip_get_group( clip_data::current_clip, clip_data::current_group );
+
+					u32           current_group_src = clip_data::get_current_group_source();
+
+					u32           new_group         = clip_data::current_clip->groups.size();
+					clip_group_t& group             = clip_data::current_clip->groups.emplace_back();
 
 					clip_group_add_preset( *clip_data::current_clip, group, preset_i );
-					replay_editor_set_group( clip_data::current_clip_index, new_group, 0 );
+
+					// copy sources over
+					if ( current_group )
+					{
+						group.sources.resize( current_group->sources.size() );
+
+						for ( u32 src_i = 0; src_i < group.sources.size(); src_i++ )
+							group.sources[ src_i ].source_index = current_group->sources[ src_i ].source_index;
+					}
+
+					replay_editor_set_group( clip_data::current_clip_index, new_group, current_group_src );
 				}
 			}
 
