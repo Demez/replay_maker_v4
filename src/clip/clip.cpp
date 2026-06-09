@@ -568,6 +568,8 @@ void clip_group_add_time_range( clip_t* clip, clip_group_t& group, u32 source_i,
 
 	new_data.start                = start_time;
 	new_data.end                  = end_time;
+
+	clip_check_video( *clip );
 }
 
 
@@ -591,6 +593,8 @@ void clip_group_remove_time_range( clip_t* clip, clip_group_t& group, u32 source
 	}
 
 	source.time_range.remove( time_range );
+
+	clip_check_video( *clip );
 }
 
 
