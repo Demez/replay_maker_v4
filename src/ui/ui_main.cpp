@@ -401,7 +401,7 @@ void draw_replay_edit_creation_info()
 				s32    paused   = mpv->pause;
 
 				char   time_pos_str[ 16 ];
-				gcvt( time_pos, 4, time_pos_str );
+				snprintf( time_pos_str, 16, "%.4f", time_pos );
 
 				p_mpv_set_option_string( get_mpv_data( 0 )->mpv, "start", time_pos_str );
 
@@ -718,7 +718,7 @@ void draw_playback_controls( int size[ 2 ] )
 	if ( ImGui::Button( "|>" ) )
 	{
 		char duration_str[ 16 ];
-		gcvt( duration, 4, duration_str );
+		snprintf( duration_str, 16, "%.4f", duration );
 
 		// const char* cmd[]   = { "seek", duration_str, "absolute", NULL };
 		const char* cmd[]   = { "seek", "100", "absolute-percent+exact", NULL };
@@ -732,6 +732,7 @@ void draw_playback_controls( int size[ 2 ] )
 	if ( ImGui::Button( "<" ) )
 	{
 		const char* cmd[]   = { "frame-back-step", NULL };
+		//const char* cmd[]   = { "cycle-values", "play-dir", "-", "+", ";", "frame-step", NULL };
 		int         cmd_ret = p_mpv_command_async( get_mpv(), 0, cmd );
 	}
 
@@ -824,12 +825,7 @@ void draw_playback_controls( int size[ 2 ] )
 	float volume_f = volume;
 	if ( ImGui::SliderFloat( "Volume", &volume_f, 0.f, 130.f ) )
 	{
-		// convert float to string in c
-		char volume_str[ 16 ];
-		gcvt( volume_f, 4, volume_str );
-
-		const char* cmd[]   = { "set", "volume", volume_str, NULL };
-		int         cmd_ret = p_mpv_command_async( get_mpv(), 0, cmd );
+		mpv_cmd_set_volume( volume_f );
 	}
 }
 

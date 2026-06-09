@@ -112,6 +112,13 @@ struct mpv_data_t
 };
 
 
+// shared video player data
+namespace video_shared
+{
+	extern double volume;
+}
+
+
 extern mpv_data_t             g_mpv_extra_vid;
 extern bool                   g_mpv_extra_vid_on;
 
@@ -155,6 +162,7 @@ enum e_mpv_cmd
 
 	e_mpv_cmd_audio_track,
 	e_mpv_cmd_audio_title,
+	e_mpv_cmd_track_type,
 
 	e_mpv_cmd_count,
 };
@@ -193,8 +201,8 @@ void                               mpv_cmd_seek_offset( double seconds );
 bool                               mpv_cmd_seek( mpv_data_t* mpv, double seconds, bool keyframes = false );
 bool                               mpv_cmd_seek( double seconds, bool keyframes = false );
 
-void                               mpv_cmd_hook_window( void* window );
-void                               mpv_cmd_hook_window_mpv();
+// applies volume to all mpv instances
+void                               mpv_cmd_set_volume( float volume );
 
 void                               mpv_handle_error();
 

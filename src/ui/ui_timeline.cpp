@@ -52,7 +52,7 @@ constexpr double            TIMELINE_SKIP_TIME = 0.15;
 void timeline_set_seek_time_fast( float seconds )
 {
 	char time_pos_str[ 16 ];
-	gcvt( seconds, 4, time_pos_str );
+	snprintf( time_pos_str, 16, "%.4f", seconds );
 
 	// const char* cmd[] = { "seek", time_pos_str, "absolute", "keyframes", NULL };
 	const char* cmd[] = { "seek", time_pos_str, "absolute", NULL };
@@ -1783,13 +1783,7 @@ void timeline_draw()
 
 	if ( change_to_source_i != UINT32_MAX )
 	{
-		// char time_pos_str[ 16 ];
-		// gcvt( new_time_pos, 4, time_pos_str );
-		// 
-		// int ret = p_mpv_set_option_string( get_mpv(), "start", time_pos_str );
-
 		replay_editor_set_group( clip_data::current_clip_index, clip_data::current_group, change_to_source_i );
-		// timeline_set_seek_time( new_time_pos );
 
 		// HACK: despite trying to wait for mpv to load the video fully, or even starting at at the desired time
 		// it still places the start time at 0 sometimes

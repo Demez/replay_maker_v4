@@ -16,6 +16,13 @@ GLuint                        g_fbo_tex          = 0;
 
 std::vector< std::string >    g_mpv_exts;
 
+
+namespace video_shared
+{
+	double volume = 100.0;
+}
+
+
 #define FUNC_PTR( func ) func##_t p_##func = nullptr
 
 // function pointers
@@ -362,6 +369,18 @@ bool start_mpv( mpv_data_t& mpv )
 	// Start Paused
 	p_mpv_set_option_string( mpv.mpv, "pause", "" );
 
+	// Fast frame step back?
+	// https://github.com/mpv-player/mpv/issues/4019#issuecomment-747853186
+	p_mpv_set_option_string( mpv.mpv, "cache", "yes" );
+	p_mpv_set_option_string( mpv.mpv, "demuxer-seekable-cache", "yes" );
+
+	p_mpv_set_option_string( mpv.mpv, "demuxer-readahead-secs", "60" );
+	//p_mpv_set_option_string( mpv.mpv, "demuxer-max-bytes", "1000M" );
+	p_mpv_set_option_string( mpv.mpv, "demuxer-max-back-bytes", "300M" );
+
+	p_mpv_set_option_string( mpv.mpv, "video-reversal-buffer", "500M" );
+	p_mpv_set_option_string( mpv.mpv, "audio-reversal-buffer", "200M" );
+
 	if ( p_mpv_initialize( mpv.mpv ) < 0 )
 	{
 		printf( "mpv_initialize failed!\n" );
@@ -407,6 +426,8 @@ bool start_mpv( mpv_data_t& mpv )
 
 	observe_ret     = p_mpv_observe_property( mpv.mpv, e_mpv_cmd_observe, "audio", MPV_FORMAT_STRING );
 	observe_ret     = p_mpv_observe_property( mpv.mpv, e_mpv_cmd_observe, "current-tracks/audio/title", MPV_FORMAT_STRING );
+
+	p_mpv_observe_property( mpv.mpv, e_mpv_cmd_observe, "track-list/count", MPV_FORMAT_INT64 );
 
 	if ( g_mpv_exts.empty() )
 	{
@@ -677,28 +698,30 @@ void get_media_info( mpv_data_t& mpv )
 	if ( !mpv.current_video )
 		return;
 
-	mpv.track_count       = 0;
+	//mpv.track_count       = 0;
 	mpv.track_count_audio = 0;
 	mpv.track_count_video = 0;
 
-	mpv_error ret          = (mpv_error)p_mpv_get_property( mpv.mpv, "track-list/count", MPV_FORMAT_INT64, &mpv.track_count );
+	//p_mpv_get_property_async( mpv.mpv, "track-list/count", MPV_FORMAT_INT64, &mpv.track_count );
 
+	// mpv_error ret          = (mpv_error)p_mpv_get_property( mpv.mpv, "track-list/count", MPV_FORMAT_INT64, &mpv.track_count );
+	// 
 	for ( s32 i = 0; i < mpv.track_count; i++ )
 	{
 		char cmd[ 64 ] = { 0 };
 		snprintf( cmd, 64, "track-list/%d/type", i );
-
-		char* type = nullptr;
-		ret        = (mpv_error)p_mpv_get_property( mpv.mpv, cmd, MPV_FORMAT_STRING, &type );
-
-		if ( !type )
-			continue;
-
-		if ( strcmp( type, "video" ) == 0 )
-			mpv.track_count_video++;
-
-		else if ( strcmp( type, "audio" ) == 0 )
-			mpv.track_count_audio++;
+	
+		//char* type = nullptr;
+		p_mpv_get_property_async( mpv.mpv, e_mpv_cmd_track_type, cmd, MPV_FORMAT_STRING );
+	
+		//if ( !type )
+		//	continue;
+		//
+		//if ( strcmp( type, "video" ) == 0 )
+		//	mpv.track_count_video++;
+		//
+		//else if ( strcmp( type, "audio" ) == 0 )
+		//	mpv.track_count_audio++;
 	}
 }
 
@@ -758,11 +781,32 @@ void mpv_update( mpv_data_t& data )
 				{
 					data.audio_track_title = get_mpv_string( data.audio_track_title, property, nullptr );
 				}
+				else if ( strcmp( "track-list/count", property->name ) == 0 )
+				{
+					data.track_count = get_mpv_value< s64 >( property->data, 0 );
+					get_media_info( data );
+				}
 			}
 		}
 		else if ( mpv_event->event_id == MPV_EVENT_GET_PROPERTY_REPLY )
 		{
 			struct mpv_event_property* property = (struct mpv_event_property*)mpv_event->data;
+
+			if ( mpv_event->reply_userdata == e_mpv_cmd_track_type )
+			{
+				char* track_type = get_mpv_string( data.audio_track_title, property, nullptr );
+
+				if ( !track_type )
+					continue;
+				
+				if ( strcmp( track_type, "video" ) == 0 )
+					data.track_count_video++;
+				
+				else if ( strcmp( track_type, "audio" ) == 0 )
+					data.track_count_audio++;
+
+				free( track_type );
+			}
 
 			if ( property->name )
 			{
@@ -770,19 +814,24 @@ void mpv_update( mpv_data_t& data )
 				//{
 				//	data.audio_track = get_mpv_value< char* >( property->data, nullptr );
 				//}
-				if ( strcmp( "current-tracks/audio/title", property->name ) == 0 )
-				{
-					//if ( data.audio_track_title )
-					//	p_mpv_free( data.audio_track_title );
+				//if ( strcmp( "current-tracks/audio/title", property->name ) == 0 )
+				//{
+				//	//if ( data.audio_track_title )
+				//	//	p_mpv_free( data.audio_track_title );
+				//
+				//	//data.audio_track_title = get_mpv_value< char* >( property->data, nullptr );
+				//}
 
-					//data.audio_track_title = get_mpv_value< char* >( property->data, nullptr );
-				}
+				//if ( strncmp( "track-list/", property->name, 11 ) == 0 )
+				//{
+				//	char* track_type = get_mpv_string( data.audio_track_title, property, nullptr );
+				//}
 			}
 		}
 		else if ( mpv_event->event_id == MPV_EVENT_PLAYBACK_RESTART )
 		{
 			data.loaded_file = true;
-			get_media_info( data );
+			// get_media_info( data );
 
 			// this may be called on new video creation to set to specific time
 			p_mpv_set_option_string( data.mpv, "start", "0" );
@@ -798,6 +847,14 @@ void mpv_update( mpv_data_t& data )
 					free( data.current_video );
 					data.current_video = nullptr;
 					data.loaded_file   = false;
+				}
+				else
+				{
+					char volume_str[ 16 ];
+					snprintf( volume_str, 16, "%.4f", video_shared::volume );
+
+					const char* cmd[]    = { "set", "volume", volume_str, NULL };
+					int         cmd_ret  = p_mpv_command_async( data.mpv, 0, cmd );
 				}
 			}
 			else if ( mpv_event->reply_userdata == e_mpv_cmd_seek )
@@ -834,9 +891,8 @@ void mpv_window_resize()
 
 void mpv_cmd_set_video_zoom( float zoom )
 {
-	// convert float to string
 	char zoom_str[ 16 ];
-	gcvt( zoom, 4, zoom_str );
+	snprintf( zoom_str, 16, "%.4f", zoom );
 
 	const char* cmd[]   = { "set", "video-zoom", zoom_str, nullptr };
 	int         cmd_ret = p_mpv_command_async( get_mpv(), 0, cmd );
@@ -847,7 +903,7 @@ void mpv_cmd_add_video_zoom( float zoom )
 {
 	// convert float to string
 	char zoom_str[ 16 ];
-	gcvt( zoom, 4, zoom_str );
+	snprintf( zoom_str, 16, "%.4f", zoom );
 
 	const char* cmd[]   = { "set", "video-zoom", zoom_str, nullptr };
 	int         cmd_ret = p_mpv_command_async( get_mpv(), 0, cmd );
@@ -915,7 +971,7 @@ bool mpv_cmd_seek( mpv_data_t* mpv, double seconds, bool keyframes )
 	mpv->seek_queued_time = sys_get_time_ms();
 
 	char time_pos_str[ 16 ];
-	gcvt( seconds, 4, time_pos_str );
+	snprintf( time_pos_str, 16, "%.4f", seconds );
 
 	if ( keyframes )
 	{
@@ -938,13 +994,21 @@ bool mpv_cmd_seek( double seconds, bool keyframes )
 }
 
 
-void mpv_cmd_hook_window( void* window )
+// applies volume to all mpv instances
+void mpv_cmd_set_volume( float volume )
 {
-}
+	video_shared::volume = volume;
 
+	char volume_str[ 16 ];
+	snprintf( volume_str, 16, "%.4f", volume );
 
-void mpv_cmd_hook_window_mpv()
-{
+	const char* cmd[] = { "set", "volume", volume_str, NULL };
+
+	for ( u32 i = 0; i < get_mpv_count(); i++ )
+		p_mpv_command_async( get_mpv_data( i )->mpv, 0, cmd );
+
+	if ( g_mpv_extra_vid_on )
+		p_mpv_command_async( g_mpv_extra_vid.mpv, 0, cmd );
 }
 
 
