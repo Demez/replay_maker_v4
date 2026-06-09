@@ -246,7 +246,7 @@ void                               replay_editor_reset();
 
 void                               draw_replay_edit_creation_info();
 
-void                               draw_preset_dropdown( clip_t& clip, clip_group_t& group, bool edit );
+void                               draw_preset_dropdown( clip_t& clip, clip_group_t& group );
 
 void                               enable_sidebar( bool enabled );
 void                               window_on_resize();

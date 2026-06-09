@@ -723,7 +723,7 @@ static bool timeline_draw_group_buttons( clip_group_t* group )
 		ImGui::SeparatorEx( ImGuiSeparatorFlags_Vertical );
 		ImGui::SameLine();
 
-		draw_preset_dropdown( *clip_data::current_clip, *group, true );
+		draw_preset_dropdown( *clip_data::current_clip, *group );
 	}
 
 	return false;

@@ -514,46 +514,37 @@ void draw_replay_info_menu_bar()
 }
 
 
-void draw_preset_dropdown( clip_t& clip, clip_group_t& group, bool edit )
+void draw_preset_dropdown( clip_t& clip, clip_group_t& group )
 {
 	ImGuiStyle& style = ImGui::GetStyle();
 
-	if ( edit )
+	if ( ImGui::BeginCombo( "##presets", "Add Encode Preset", ImGuiComboFlags_HeightLargest | ImGuiComboFlags_WidthFitPreview ) )
 	{
-		if ( ImGui::BeginCombo( "##presets", "Add Encode Preset", ImGuiComboFlags_HeightLargest | ImGuiComboFlags_WidthFitPreview ) )
+		for ( u32 i = 0; i < clip_data::preset_count; i++ )
 		{
-			for ( u32 i = 0; i < clip_data::preset_count; i++ )
+			// find a preset not in use by any group
+			for ( u32 g = 0; g < clip.groups.size(); g++ )
 			{
-				// lmao what the fuck
-				bool skip = false;
-				for ( u32 g = 0; g < clip.groups.size(); g++ )
+				clip_group_t& group_ = clip.groups[ g ];
+
+				for ( u32 used_preset_i = 0; used_preset_i < group_.presets.size(); used_preset_i++ )
 				{
-					clip_group_t& group_ = clip.groups[ g ];
-
-					for ( u32 used_preset_i = 0; used_preset_i < group_.presets.size(); used_preset_i++ )
-					{
-						if ( group_.presets[ used_preset_i ] == i )
-						{
-							skip = true;
-							break;
-						}
-					}
-
-					if ( skip )
-						break;
-				}
-
-				if ( skip )
-					continue;
-
-				if ( ImGui::Selectable( clip_data::preset[ i ].name ) )
-				{
-					clip_group_add_preset( clip, group, i );
+					if ( group_.presets[ used_preset_i ] == i )
+						goto preset_selectable;
 				}
 			}
 
-			ImGui::EndCombo();
+			// none found
+			continue;
+
+preset_selectable:
+			if ( ImGui::Selectable( clip_data::preset[ i ].name ) )
+			{
+				clip_group_add_preset( clip, group, i );
+			}
 		}
+
+		ImGui::EndCombo();
 	}
 
 	// index in the array to remove
@@ -561,8 +552,7 @@ void draw_preset_dropdown( clip_t& clip, clip_group_t& group, bool edit )
 
 	for ( u32 i = 0; i < group.presets.size(); i++ )
 	{
-		if ( edit || i > 0 )
-			ImGui::SameLine();
+		ImGui::SameLine();
 
 		clip_encode_preset_t& encode = clip_data::preset[ group.presets[ i ] ];
 
