@@ -164,6 +164,9 @@ void draw_replay_edit_video_info( int size[ 2 ] )
 	{
 		ImGui::PopStyleColor( 3 );
 
+		set_mpv_count( 1 );
+		mpv_cmd_close_video();
+		
 		clip_remove_entry( clip_data::current_clip );
 		replay_editor_reset();
 		ImGui::EndDisabled();

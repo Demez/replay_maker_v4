@@ -33,7 +33,7 @@ void                           draw_replay_list( int size[ 2 ] );
 void replay_editor_reset()
 {
 	clip_data::current_clip       = nullptr;
-	clip_data::current_clip_index = 0;
+	clip_data::current_clip_index = UINT32_MAX;
 	clip_data::current_source     = 0;
 	clip_data::current_group      = 0;
 	clip_data::current_group_source.clear();
@@ -120,6 +120,9 @@ void replay_editor_set_group( u32 output_i, u32 group_i, u32 group_src_i )
 	clip_group_t& group        = clip.groups[ group_i ];
 
 	timeline::selected_section = UINT32_MAX;
+
+	if ( group_src_i == UINT32_MAX )
+		group_src_i = 0;
 
 	// No sources in current group
 	if ( group.sources.empty() )
