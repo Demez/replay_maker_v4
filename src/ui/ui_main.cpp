@@ -400,12 +400,14 @@ void draw_replay_edit_creation_info()
 				double time_pos = mpv->time_pos;
 				s32    paused   = mpv->pause;
 
+				char   time_pos_str[ 16 ];
+				gcvt( time_pos, 4, time_pos_str );
+
+				p_mpv_set_option_string( get_mpv_data( 0 )->mpv, "start", time_pos_str );
+
 				clip_group_add_source( clip, new_group, mpv->current_video );
 				replay_editor_set_group( clip_data::clip_count - 1, new_group, 0 );
 				clip->prefix = default_prefix;
-
-				p_mpv_set_property( get_mpv(), "time-pos", MPV_FORMAT_DOUBLE, &time_pos );
-				// p_mpv_set_property( get_mpv(), "pause", MPV_FORMAT_FLAG, &paused );
 
 				const char* cmd[]   = { "set", "pause", paused ? "yes" : "no", NULL };
 				int         cmd_ret = p_mpv_command_async( get_mpv(), 0, cmd );

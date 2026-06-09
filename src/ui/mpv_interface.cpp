@@ -783,6 +783,9 @@ void mpv_update( mpv_data_t& data )
 		{
 			data.loaded_file = true;
 			get_media_info( data );
+
+			// this may be called on new video creation to set to specific time
+			p_mpv_set_option_string( data.mpv, "start", "0" );
 		}
 		else if ( mpv_event->event_id == MPV_EVENT_COMMAND_REPLY )
 		{
@@ -931,7 +934,7 @@ bool mpv_cmd_seek( mpv_data_t* mpv, double seconds, bool keyframes )
 
 bool mpv_cmd_seek( double seconds, bool keyframes )
 {
-	return mpv_cmd_seek( get_mpv_data(), seconds, keyframes );
+ 	return mpv_cmd_seek( get_mpv_data(), seconds, keyframes );
 }
 
 
