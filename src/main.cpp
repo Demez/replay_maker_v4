@@ -763,7 +763,7 @@ auto main( int argc, char* argv[] ) -> int
 
 	// calculate the size of the mpv window (what about DPI Scale here later?)
 	app::mpv_size[ 0 ] = app::window_size[ 0 ] - 600;  // replay editor/sidebar
-	app::mpv_size[ 1 ] = app::window_size[ 1 ] - 240;  // playback controls
+	app::mpv_size[ 1 ] = app::window_size[ 1 ] - 260;  // playback controls
 
 	app::window   = SDL_CreateWindow( "Replay Maker", app::window_size[ 0 ], app::window_size[ 1 ], SDL_WINDOW_RESIZABLE | SDL_WINDOW_OPENGL | SDL_WINDOW_HIGH_PIXEL_DENSITY | SDL_WINDOW_HIDDEN );
 
