@@ -1342,15 +1342,15 @@ void timeline_draw()
 					}
 
 					// clamp to timeline area
-					// float section_pos_snap_start_l  = std::max( section_pos_left - section_snap_size, window_area_min.x );
-					float section_pos_snap_start_l  = section_pos_left;
+					float section_pos_snap_start_l  = std::max( section_pos_left - section_snap_size, window_area_min.x );
+					// float section_pos_snap_start_l  = section_pos_left;
 					float section_pos_snap_start_r  = std::min( section_pos_left + section_snap_size, window_area_max.x );
 					// float section_pos_snap_start_r  = CLAMP( section_pos_left + section_snap_size, float(section_pos_right), window_area_max.x );
 
 					float section_pos_snap_end_l    = std::max( section_pos_right - section_snap_size, window_area_min.x );
 					//float section_pos_snap_end_l    = section_pos_right - section_snap_size;
-					//float section_pos_snap_end_r    = std::max( section_pos_right + section_snap_size, window_area_max.x );
-					float section_pos_snap_end_r    = section_pos_right;
+					float section_pos_snap_end_r    = std::min( section_pos_right + section_snap_size, window_area_max.x );
+					//float section_pos_snap_end_r    = section_pos_right;
 
 					if ( mouse_hovered )
 					{
@@ -1360,26 +1360,12 @@ void timeline_draw()
 							snap_to_time_range = 1;
 						}
 
-						// check to the left of the section in the timeline
-						//else if( mouse_in_rect( ImVec2( section_pos_left - section_snap_size, height_min ), ImVec2( section_pos_left, window_area_max.y ) ) )
-						//{
-						//	//ImGui::SetMouseCursor( ImGuiMouseCursor_Hand );
-						//	snap_to_time_range = 1;
-						//}
-
 						// check snap to end time
 						else if ( mouse_in_rect( ImVec2( section_pos_snap_end_l, window_area_min.y ), ImVec2( section_pos_snap_end_r, height_min ) ) )
 						{
 							ImGui::SetMouseCursor( ImGuiMouseCursor_Hand );
 							snap_to_time_range = 2;
 						}
-
-						// check to the right of the section in the timeline
-						//else if ( mouse_in_rect( ImVec2( section_pos_right, height_min ), ImVec2( section_pos_right + section_snap_size, window_area_max.y ) ) )
-						//{
-						//	//ImGui::SetMouseCursor( ImGuiMouseCursor_Hand );
-						//	snap_to_time_range = 2;
-						//}
 					}
 
 					if ( snap_to_time_range > 0 && io.MouseClicked[ 0 ] )
