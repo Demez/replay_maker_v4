@@ -646,7 +646,8 @@ void clip_parse_video( json_object_t& root, u32 output_i )
 				clip.source[ video_i ].filename     = fs_get_filename( json_video.aString.data );
 				clip.source[ video_i ].file_missing = !fs_is_file( json_video.aString.data );
 
-				clip_get_video_metadata( clip.source[ video_i ] );
+				if ( !clip.source[ video_i ].file_missing )
+					clip_get_video_metadata( clip.source[ video_i ] );
 			}
 		}
 		else if ( util_strncmp( "groups", 6, object.aName.data, object.aName.size ) )
@@ -817,10 +818,15 @@ void clip_get_video_metadata( clip_source_t& source )
 	if ( it != g_video_metadata_map.end() )
 	{
 		source.metadata = it->second;
+		return;
 	}
 
 	get_video_metadata( source.path, source.metadata );
-	g_video_metadata_map[ path ] = source.metadata;
+
+	if ( source.metadata.valid )
+		g_video_metadata_map[ path ] = source.metadata;
+	else
+		printf( "INVALID METADATA\n" );
 }
 
 

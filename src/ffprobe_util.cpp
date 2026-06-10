@@ -66,6 +66,11 @@ static bool parse_ffprobe_float( bool& failed, char*& line_start, const char* na
 
 bool get_video_metadata( const char* path, video_metadata_t& metadata )
 {
+	metadata.valid = false;
+
+	if ( !fs_is_file( path ) )
+		return false;
+
 	// build command line
 	char cmd[ 512 ] = { 0 };
 	// strcat( cmd, "ffprobe.exe -threads 6 -v error -show_streams -select_streams v:0 -show_format -of default=noprint_wrappers=1 \"" );
