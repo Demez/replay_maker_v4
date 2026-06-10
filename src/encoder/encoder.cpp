@@ -7,7 +7,7 @@
 
 constexpr int FFMPEG_CMD_SIZE = 1024;
 
-#if 1
+extern char*  g_videos_file_path;
 
 char* gen_ffmpeg_cmd( clip_encode_preset_t& preset, clip_source_t& source, clip_time_range_t& time_range )
 {
@@ -262,34 +262,6 @@ bool run_ffmpeg_check( const char* cmd, const char* path )
 
 	return true;
 }
-
-
-#if 0
-bool uses_encode_preset( clip_encode_settings_t& override, u32 preset_i )
-{
-	bool valid_preset = override.presets_count == 0;
-
-	for ( u32 i = 0; i < override.presets_count; i++ )
-	{
-		if ( override.presets[ i ] == preset_i )
-			return true;
-	}
-
-	return valid_preset;
-}
-
-
-u32 get_used_encode_preset_index( clip_encode_settings_t& override, u32 preset_i )
-{
-	for ( u32 i = 0; i < override.presets_count; i++ )
-	{
-		if ( override.presets[ i ] == preset_i )
-			return i;
-	}
-
-	return UINT32_MAX;
-}
-#endif
 
 
 void add_chapter_markers( enc_video_data_t& video_data, u32 preset_i, std::string& metadata_file )
@@ -934,9 +906,6 @@ enc_video_data_t get_video_segments( enc_clip_t& enc_clip, clip_t& clip, clip_gr
 }
 
 
-#endif
-
-
 std::string get_video_output_name( clip_t& clip, clip_encode_preset_t& preset )
 {
 	if ( clip.prefix >= clip_data::prefix_count )
@@ -988,15 +957,13 @@ bool encode_set_output_dir( u32 preset_i )
 
 void run_encode_clip( clip_t& clip, enc_clip_t& enc_clip )
 {
-	// g_encoder_data.encode_preset = preset_i;
-
 	clip_prefix_t& prefix = clip_data::prefix[ clip.prefix ];
 
 	// UNUSED: Invalid clips aren't allowed at all, can't run export with invalid clips
-	if ( !clip.valid )
+	if ( !clip.valid || !enc_clip.valid )
 	{
 		log_printf( log_error,  "skipping invalid video: \"%s\"\n", clip.name );
-		log_printf( log_result, "[FAIL] Invalid Video - %s\n", clip.name );
+		//log_printf( log_result, "[FAIL] Invalid Video - %s\n", clip.name );
 		return;
 	}
 
@@ -1110,6 +1077,10 @@ void run_encode_clip( clip_t& clip, enc_clip_t& enc_clip )
 
 void run_encoding()
 {
+	char* clip_list_name = fs_get_filename_no_ext( g_videos_file_path );
+	log_set_file( clip_list_name );
+	free( clip_list_name );
+
 	g_encoder_data.output_dir.clear();
 	g_encoder_data.output_dir.append( g_output_dir );
 	g_encoder_data.clip_index_prev = UINT32_MAX;
