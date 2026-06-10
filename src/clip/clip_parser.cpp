@@ -893,7 +893,7 @@ void clip_check_video( clip_t& clip, bool check_filesystem )
 			if ( source_use.source_index > clip.source_count )
 				return;
 
-			clip_source_t& source           = clip.source[ source_use.source_index ];
+			clip_source_t& source = clip.source[ source_use.source_index ];
 
 			for ( u32 time_i = 0; time_i < source_use.time_range.size(); time_i++ )
 			{
@@ -902,121 +902,6 @@ void clip_check_video( clip_t& clip, bool check_filesystem )
 			}
 		}
 	}
-
-#if 0
-	// ----------------------------------------------------------------------------------------
-	// determine encode presets for this output video
-
-	extern bool used_in_preset( clip_encode_settings_t & override, u32 preset_i );
-
-	// figure out what encode presets this runs on
-	for ( u32 in_i = 0; in_i < clip.source_count; in_i++ )
-	{
-		clip_source_t& source = clip.source[ in_i ];
-
-		for ( u32 preset_i = 0; preset_i < source.encode_settings.presets_count; preset_i++ )
-		{
-			bool preset_already_added = false;
-			for ( u32 search_i = 0; search_i < clip.presets_count; search_i++ )
-			{
-				if ( clip.presets[ search_i ] == source.encode_settings.presets[ preset_i ] )
-				{
-					preset_already_added = true;
-					break;
-				}
-			}
-
-			if ( preset_already_added )
-				continue;
-
-			// add it to this list
-			u32* new_data = ch_realloc< u32 >( clip.presets, clip.presets_count + 1 );
-
-			if ( !new_data )
-			{
-				log_printf( "failed to allocate data for storing output video presets\n" );
-				return;
-			}
-
-			clip.presets                           = new_data;
-			clip.presets[ clip.presets_count++ ] = source.encode_settings.presets[ preset_i ];
-		}
-	}
-
-	// ----------------------------------------------------------------------------------------
-	// get source video metadata
-
-	bool all_valid = true;
-
-	// find all unique source videos, there will be duplicates for different encode presets
-	// this way we don't need get metadata for the same video multiple times
-
-	for ( u32 in_i = 0; in_i < clip.source_count; in_i++ )
-	{
-		clip_source_t& source = clip.source[ in_i ];
-
-		if ( source.file_missing || !fs_exists( source.path ) )
-		{
-			all_valid          = false;
-			source.file_missing = true;
-			break;
-		}
-	}
-
-	// ----------------------------------------------------------------------------------------
-	// print data for each encode preset
-
-	for ( u32 preset_i = 0; preset_i < clip.presets_count; preset_i++ )
-	{
-		clip_encode_preset_t& preset = g_clip_clip_data::preset[ clip.presets[ preset_i ] ];
-
-		float duration         = 0.f;
-		bool  duration_invalid = false;
-		for ( u32 in_i = 0; in_i < clip.source_count; in_i++ )
-		{
-			clip_source_t& source = clip.source[ in_i ];
-
-			if ( !used_in_preset( source.encode_settings, preset_i ) )
-				continue;
-
-			for ( u32 time_i = 0; time_i < source.time_range_count; time_i++ )
-			{
-				if ( !valid_time_range( source.time_range[ time_i ], source.metadata ) )
-					duration_invalid = true;
-
-				duration += source.time_range[ time_i ].end - source.time_range[ time_i ].start;
-			}
-		}
-
-		log_printf( "    Duration: %.4f%s\n\n", duration, duration_invalid ? " [INVALID]" : "" );
-
-		// print source videos for this preset and their time ranges
-		for ( u32 in_i = 0; in_i < clip.source_count; in_i++ )
-		{
-			clip_source_t& source = clip.source[ in_i ];
-
-			// validate preset
-			if ( !used_in_preset( source.encode_settings, preset_i ) )
-				continue;
-
-			log_printf( "    %s%s\n", source.path, source.file_missing ? " [INVALID]" : "" );
-
-			if ( source.file_missing )
-				continue;
-
-			for ( u32 time_i = 0; time_i < source.time_range_count; time_i++ )
-			{
-				bool  valid          = valid_time_range( source.time_range[ time_i ], source.metadata );
-				float range_duration = source.time_range[ time_i ].end - source.time_range[ time_i ].start;
-
-				log_printf( "        %.4f - %.4f (%.4f)%s\n", source.time_range[ time_i ].start, source.time_range[ time_i ].end, range_duration, valid ? "" : " [INVALID]" );
-			}
-		}
-	}
-
-	if ( !all_valid )
-		return;
-#endif
 
 	clip.valid = true;
 }
