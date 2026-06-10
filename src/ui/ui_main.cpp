@@ -262,14 +262,14 @@ void clip_filtering_draw()
 		}
 
 		//ImGui::SameLine();
-
+		//
 		//ImGui::TextUnformatted( "Preset Filter" );
 		//
 		//ImGui::SameLine();
 		//ImGui::SetNextItemWidth( -FLT_MIN );
 
 		// Advanced filters, filter by encode presets
-		if ( ImGui::BeginCombo( "##presets", "Preset Filter", ImGuiComboFlags_HeightLargest | ImGuiComboFlags_WidthFitPreview ) )
+		if ( ImGui::BeginCombo( "##encode_presets", "Filter by Encode Preset", ImGuiComboFlags_HeightLargest | ImGuiComboFlags_WidthFitPreview ) )
 		{
 			for ( u32 i = 0; i < clip_data::preset_count; i++ )
 			{

@@ -353,6 +353,38 @@ void draw_replay_list_entry( u64& imgui_id, u32 out_i, bool collapse_all )
 	if ( current_clip || !clip.valid || !clip.enabled )
 		ImGui::PopStyleColor();
 
+	if ( ImGui::BeginPopupContextItem( "##clip_ctx_menu" ) )
+	{
+		if ( !current_clip )
+		{
+			if ( ImGui::Selectable( "Select" ) )
+			{
+				check_video = true;
+				replay_editor_set_group( out_i, 0, 0 );
+			}
+		}
+		else
+		{
+			if ( ImGui::Selectable( "Deselect" ) )
+			{
+				set_mpv_count( 1 );
+				mpv_cmd_close_video( 0 );
+				replay_editor_reset();
+			}
+		}
+
+		if ( ImGui::Selectable( "Delete Clip" ) )
+		{
+			set_mpv_count( 1 );
+			mpv_cmd_close_video( 0 );
+
+			clip_remove_entry( out_i );
+			replay_editor_reset();
+		}
+
+		ImGui::EndPopup();
+	}
+
 	ImGui::PopID();
 
 	if ( check_video )
@@ -830,12 +862,27 @@ clip_loop_continue:
 
 			bool missing = source.file_missing;
 
+			bool pop_frame_bg = false;
+
 			if ( missing )
 			{
 				ImGui::PushStyleColor( ImGuiCol_FrameBg, COLOR_RED_FRAME );
 				ImGui::PushStyleColor( ImGuiCol_Button, COLOR_BTN_RED );
 				ImGui::PushStyleColor( ImGuiCol_ButtonHovered, COLOR_BTN_RED_HOVER );
 				ImGui::PushStyleColor( ImGuiCol_ButtonActive, COLOR_BTN_RED_ACTIVE );
+				pop_frame_bg = true;
+			}
+			else
+			{
+				char* current_video = mpv_get_current_video();
+
+				if ( current_video && strcmp( current_video, source.path ) == 0 )
+				{
+					ImVec4 color = style.Colors[ ImGuiCol_FrameBg ];
+					color.w      = 1.f;
+					ImGui::PushStyleColor( ImGuiCol_FrameBg, color );
+					pop_frame_bg = true;
+				}
 			}
 
 			if ( ImGui::BeginChild( source_i + 1, {}, ImGuiChildFlags_Borders | ImGuiChildFlags_AutoResizeY | ImGuiChildFlags_FrameStyle ) )
@@ -856,6 +903,35 @@ clip_loop_continue:
 					{
 						sys_browse_to_file( source.path );
 					}
+				}
+
+				if ( ImGui::BeginPopupContextItem( "##source_ctx_menu" ) )
+				{
+					ImGui::BeginDisabled();
+					if ( ImGui::Selectable( "Move File" ) )
+					{
+					}
+					ImGui::EndDisabled();
+
+					if ( ImGui::Selectable( "Replace File" ) )
+					{
+						replace_source_video( source );
+					}
+
+					ImGui::Separator();
+
+					if ( ImGui::Selectable( "Open Folder" ) )
+					{
+						sys_browse_to_file( source.path );
+					}
+
+					ImGui::BeginDisabled();
+					if ( ImGui::Selectable( "File Properties" ) )
+					{
+					}
+					ImGui::EndDisabled();
+
+					ImGui::EndPopup();
 				}
 
 				ImGui::Separator();
@@ -894,16 +970,28 @@ clip_loop_continue:
 
 				ImGui::SameLine();
 
-				ImGui::BeginDisabled();
+				//ImGui::BeginDisabled();
+				//
+				//// moves the file to a separate location, might default to a specific move folder in the settings somewhere
+				//if ( ImGui::Button( "Move File" ) )
+				//{
+				//}
+				//
+				//ImGui::SameLine();
+				//
+				//ImGui::EndDisabled();
 
-				// moves the file to a separate location, might default to a specific move folder in the settings somewhere
-				if ( ImGui::Button( "Move File" ) )
-				{
-				}
+				ImVec2 line_remain   = ImGui::GetContentRegionAvail();
 
+				float  spacing_width = line_remain.x;
+				spacing_width -= ImGui::CalcTextSize( "Remove" ).x;
+				spacing_width -= style.FramePadding.x * 2;
+				spacing_width -= style.ItemSpacing.x;
+
+				spacing_width = MAX( -style.ItemSpacing.x, spacing_width );
+
+				ImGui::Dummy( { spacing_width, 0.f } );
 				ImGui::SameLine();
-
-				ImGui::EndDisabled();
 
 				if ( ImGui::Button( "Remove" ) )
 				{
@@ -913,10 +1001,11 @@ clip_loop_continue:
 
 			ImGui::EndChild();
 
+			if ( pop_frame_bg )
+				ImGui::PopStyleColor();
+
 			if ( missing )
-			{
-				ImGui::PopStyleColor( 4 );
-			}
+				ImGui::PopStyleColor( 3 );
 		}
 	}
 
