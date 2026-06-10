@@ -83,6 +83,10 @@ void draw_replay_edit_video_info( int size[ 2 ] )
 
 	ImGui::SetNextItemWidth( name_bar_width );
 
+	// Rename hotkey
+	if ( ImGui::IsKeyPressed( ImGuiKey_F2, false ) )
+		ImGui::SetKeyboardFocusHere();
+
 	// display output video data
 	if ( ImGui::InputText( "Name", g_output_name_buf, 512 ) )
 	{
