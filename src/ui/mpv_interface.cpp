@@ -188,46 +188,27 @@ void unload_mpv_dll()
 
 void mpv_draw_frame()
 {
-	// mpv_handle*         mpv = get_mpv();
-	// mpv_render_context* gl  = get_mpv_gl();
-
-	u64 _time = sys_get_time_ms();
-
 	mpv_data_t* mpv_data = get_mpv_data();
 
 	if ( !mpv_data )
 		return;
 
-	mpv_handle*         mpv = mpv_data->mpv;
-	mpv_render_context* gl  = mpv_data->gl;
-
-	s64    video_width = 0, video_height = 0;
-
-	video_width  = mpv_data->dwidth;
-	video_height = mpv_data->dheight;
-
-	// p_mpv_get_property( mpv, "dwidth", MPV_FORMAT_INT64, &video_width );
-	// p_mpv_get_property( mpv, "dheight", MPV_FORMAT_INT64, &video_height );
-
-	s64   window_scale;
-	//	p_mpv_get_property( g_mpv, "current-window-scale", MPV_FORMAT_INT64, &window_scale );
-
 	// Fit image in window size
-	float factor[ 2 ] = { 1.f, 1.f };
+	float               factor[ 2 ] = { 1.f, 1.f };
 
-	factor[ 0 ]       = (float)app::mpv_size[ 0 ] / (float)video_width;
-	factor[ 1 ]       = (float)app::mpv_size[ 1 ] / (float)video_height;
+	factor[ 0 ]                     = (float)app::mpv_size[ 0 ] / (float)mpv_data->dwidth;
+	factor[ 1 ]                     = (float)app::mpv_size[ 1 ] / (float)mpv_data->dheight;
 
-	float zoom_level = std::min( factor[ 0 ], factor[ 1 ] );
+	float zoom_level                = std::min( factor[ 0 ], factor[ 1 ] );
 
-	int   new_width  = video_width * zoom_level;
-	int   new_height = video_height * zoom_level;
+	int   new_width                 = mpv_data->dwidth * zoom_level;
+	int   new_height                = mpv_data->dheight * zoom_level;
 
-	int   pos_x       = app::mpv_size[ 0 ] / 2 - ( new_width / 2 );
-	int   pos_y       = app::mpv_size[ 1 ] / 2 - ( new_height / 2 );
+	int   pos_x                     = app::mpv_size[ 0 ] / 2 - ( new_width / 2 );
+	int   pos_y                     = app::mpv_size[ 1 ] / 2 - ( new_height / 2 );
 
-	int   offset_x    = app::mpv_size[ 0 ] - new_width;
-	int   offset_y    = app::mpv_size[ 1 ] - new_height;
+	int   offset_x                  = app::mpv_size[ 0 ] - new_width;
+	int   offset_y                  = app::mpv_size[ 1 ] - new_height;
 
 	glBindFramebuffer( GL_FRAMEBUFFER, g_fbo );
 	////glBindRenderbuffer( GL_RENDERBUFFER, g_mpv_rbo );
@@ -246,7 +227,7 @@ void mpv_draw_frame()
 		{ MPV_RENDER_PARAM_INVALID, NULL },
 	};
 
-	int err = p_mpv_render_context_render( gl, rp );
+	int err = p_mpv_render_context_render( mpv_data->gl, rp );
 
 	// glFramebufferRenderbuffer( GL_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT, GL_RENDERBUFFER, g_mpv_rbo );
 
@@ -292,11 +273,6 @@ void mpv_draw_frame()
 
 	//glDisable( GL_SCISSOR_TEST );
 	glDisable( GL_TEXTURE_2D );
-
-	//u64 _end_time = sys_get_time_ms();
-	//
-	//if ( _end_time > _time )
-	//	printf( "MPV DRAW TIME - %u\n", _end_time - _time );
 }
 
 
