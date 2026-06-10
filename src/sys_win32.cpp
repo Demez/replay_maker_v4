@@ -16,6 +16,7 @@
 #include <shlobj_core.h> 
 #include <time.h>
 #include <TlHelp32.h>
+#include <locale.h>
 
 
 // ----------------------------------------------------------------------------------------
@@ -903,6 +904,10 @@ void sys_open_folder( const char* path )
 
 int sys_init()
 {
+	// https://learn.microsoft.com/en-us/cpp/c-runtime-library/reference/setlocale-wsetlocale?view=msvc-170#utf-8-support
+	// Allows using utf8 in the C runtime in windows 10 1803 or newer
+	setlocale( LC_ALL, ".utf8" );
+
 	g_con_out = GetStdHandle( STD_OUTPUT_HANDLE );
 
 	if ( g_con_out == INVALID_HANDLE_VALUE )
