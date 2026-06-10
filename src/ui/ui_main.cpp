@@ -516,28 +516,8 @@ void draw_playback_controls( int size[ 2 ] )
 	util_format_time( str_time_pos, time_pos );
 	util_format_time( str_duration, duration );
 
-	// draw audio track name
-	// audio track test
-	//char* audio_track       = 0;
-	// mpv_error audio_ret         = (mpv_error)p_mpv_get_property( g_mpv, "audio", MPV_FORMAT_NONE, &audio_track );
-	//mpv_error audio_ret            = (mpv_error)p_mpv_get_property( get_mpv(), "audio", MPV_FORMAT_STRING, &audio_track );
-	// mpv_error audio_ret         = (mpv_error)p_mpv_get_property( g_mpv, "track-list/audio/id", MPV_FORMAT_STRING, &audio_track );
-	// mpv_error audio_ret         = (mpv_error)p_mpv_get_property( g_mpv, "track-list/audio/id", MPV_FORMAT_STRING, &audio_track );
-
-	char      track_name_buf[ 32 ] = { 0 };
-	// snprintf( track_name_buf, 32, "track-list/%s/title", audio_track );
-
-	//audio_ret                      = (mpv_error)p_mpv_get_property( get_mpv(), "current-tracks/audio/title", MPV_FORMAT_STRING, &audio_track_name );
-	//p_mpv_get_property_async( get_mpv(), e_mpv_cmd_audio_track, "audio", MPV_FORMAT_STRING );
-	//p_mpv_get_property_async( get_mpv(), e_mpv_cmd_audio_title, "current-tracks/audio/title", MPV_FORMAT_STRING );
-
-	//ImGui::PushStyleVarX( ImGuiStyleVar_ItemSpacing, 0.f );
-
 	const bool show_timeline = get_mpv_index() != EXTRA_VID_ID;
 
-	//ImGui::Separator();
-
-	//ImGui::PopStyleVar();
 	{
 		ImVec2 button_size = region_avail;
 		button_size.y      = ImGui::GetTextLineHeight();
@@ -706,35 +686,16 @@ void draw_playback_controls( int size[ 2 ] )
 	}
 
 	ImGui::SameLine();
+	ImGui::Spacing();
+	ImGui::SameLine();
 
 	ImGui::Text( "%s / %s", str_time_pos, str_duration );
 
-	//ImGui::SameLine();
-	//ImGui::Spacing();
-
-	ImGui::SameLine();
-	if ( ImGui::Button( "<|" ) )
-	{
-		const char* cmd[]   = { "seek", "0", "absolute", NULL };
-		int         cmd_ret = p_mpv_command_async( get_mpv(), 0, cmd );
-	}
-
-	ImGui::SameLine();
-	if ( ImGui::Button( "|>" ) )
-	{
-		char duration_str[ 16 ];
-		snprintf( duration_str, 16, "%.4f", duration );
-
-		// const char* cmd[]   = { "seek", duration_str, "absolute", NULL };
-		const char* cmd[]   = { "seek", "100", "absolute-percent+exact", NULL };
-		int         cmd_ret = p_mpv_command_async( get_mpv(), 0, cmd );
-	}
-
 	ImGui::SameLine();
 	ImGui::Spacing();
-
 	ImGui::SameLine();
-	if ( ImGui::Button( "<" ) )
+
+	if ( ImGui::ArrowButton( "frame-step-back", ImGuiDir_Left ) )
 	{
 		const char* cmd[]   = { "frame-back-step", NULL };
 		//const char* cmd[]   = { "cycle-values", "play-dir", "-", "+", ";", "frame-step", NULL };
@@ -742,7 +703,7 @@ void draw_playback_controls( int size[ 2 ] )
 	}
 
 	ImGui::SameLine();
-	if ( ImGui::Button( ">" ) )
+	if ( ImGui::ArrowButton( "frame-step", ImGuiDir_Right ) )
 	{
 		const char* cmd[]   = { "frame-step", NULL };
 		int         cmd_ret = p_mpv_command_async( get_mpv(), 0, cmd );
@@ -810,25 +771,6 @@ void draw_playback_controls( int size[ 2 ] )
 		int         cmd_ret = p_mpv_command_async( get_mpv(), 0, cmd );
 		printf( "cycle audio ret - %d\n", cmd_ret );
 	}
-
-	//ImGui::SameLine();
-
-	// try to get the audio track (might be odd with muscle memory)
-
-	//if ( ImGui::Button( "Open Folder" ) )
-	//{
-	//	sys_browse_to_file( mpv_get_current_video() );
-	//}
-
-	//ImGui::SameLine();
-	//
-	//ImGui::BeginDisabled( true );
-	//
-	//if ( ImGui::Button( "Take Screenshot" ) )
-	//{
-	//}
-
-	//ImGui::EndDisabled();
 }
 
 
