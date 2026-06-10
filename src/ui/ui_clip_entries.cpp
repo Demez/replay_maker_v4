@@ -74,7 +74,7 @@ void draw_replay_edit_video_info( int size[ 2 ] )
 #endif
 
 	const ImVec2 name_text_size   = ImGui::CalcTextSize( "Name" );
-	const ImVec2 prefix_text_size = ImGui::CalcTextSize( "Prefix" );
+	const ImVec2 prefix_text_size = ImGui::CalcTextSize( "Category" );
 
 	float        avaliable_width  = size[ 0 ] - ( style.ItemSpacing.x * 2 + style.WindowPadding.x * 2 );
 	float        name_bar_width   = ( avaliable_width - prefix_text_size.x );
@@ -115,7 +115,7 @@ void draw_replay_edit_video_info( int size[ 2 ] )
 
 	ImGui::SetNextItemWidth( name_bar_width );
 
-	if ( ImGui::BeginCombo( "Prefix", current_prefix ) )
+	if ( ImGui::BeginCombo( "Category", current_prefix ) )
 	{
 		for ( u32 i = 0; i < clip_data::prefix_count; i++ )
 		{
@@ -135,21 +135,33 @@ void draw_replay_edit_video_info( int size[ 2 ] )
 	if ( ImGui::Checkbox( "Enabled", &enabled ) )
 		clip_data::current_clip->enabled = enabled;
 
-	ImGui::SameLine();
-	
-	if ( ImGui::Button( "Recheck Clip and Sources" ) )
-	{
-		clip_check_video( *clip_data::current_clip, true );
-	}
-
-	ImGui::SameLine();
-	
-	if ( ImGui::Button( "Close Clip" ) )
-	{
-		set_mpv_count( 1 );
-		mpv_cmd_close_video( 0 );
-		replay_editor_reset();
-	}
+	//if ( clip_data::current_clip && !clip_data::current_clip->valid )
+	//{
+	//	ImGui::SameLine();
+	//
+	//	ImGui::BeginDisabled( !clip_data::current_clip );
+	//
+	//	if ( ImGui::Button( "Re-Verify Clip" ) )
+	//	{
+	//		clip_check_video( *clip_data::current_clip, true );
+	//	}
+	//
+	//	if ( ImGui::BeginItemTooltip() )
+	//	{
+	//		//ImGui::PushTextWrapPos( 300 );
+	//
+	//		ImGui::TextUnformatted(
+	//		  "If this clip is invalid, this will rescan the clip, doing a few things:\n"
+	//		  " - checks if the source videos exist on disk\n"
+	//		  " - the clip has at least one group\n"
+	//		  " - all groups have at least one source video, and one section used in that source video" );
+	//
+	//		//ImGui::PopTextWrapPos();
+	//		ImGui::EndTooltip();
+	//	}
+	//
+	//	ImGui::EndDisabled();
+	//}
 
 	ImGui::SameLine();
 	ImVec2 line_remain   = ImGui::GetContentRegionAvail();
@@ -308,10 +320,22 @@ void draw_replay_list_entry( u64& imgui_id, u32 out_i, bool collapse_all )
 
 	ImGui::PushStyleVar( ImGuiStyleVar_ButtonTextAlign, { 0.f, 0.5f } );
 
+	bool check_video = false;
+
 	// if ( !ImGui::CollapsingHeader( output.name ? header_name : "Loading...", current_clip ? ImGuiTreeNodeFlags_Selected | ImGuiTreeNodeFlags_Framed : 0 ) )
 	if ( ImGui::Button( clip.name ? header_name : "Loading...", { -FLT_MIN, 0 } ) )
 	{
-		replay_editor_set_group( out_i, 0, 0 );
+		if ( clip_data::current_clip_index != out_i )
+		{
+			check_video = true;
+			replay_editor_set_group( out_i, 0, 0 );
+		}
+		else
+		{
+			set_mpv_count( 1 );
+			mpv_cmd_close_video( 0 );
+			replay_editor_reset();
+		}
 
 		//if ( current_clip || output.state == e_enc_state_invalid )
 		//	ImGui::PopStyleColor();
@@ -326,6 +350,9 @@ void draw_replay_list_entry( u64& imgui_id, u32 out_i, bool collapse_all )
 		ImGui::PopStyleColor();
 
 	ImGui::PopID();
+
+	if ( check_video )
+		clip_check_video( clip, true );
 
 	//for ( u32 in_i = 0; in_i < output.source_count; in_i++ )
 	//{
@@ -369,6 +396,53 @@ void draw_replay_list_entry_dummy( ImVec2 cursor_screen_pos, ImVec2 region_avail
 }
 
 
+void replace_source_video( clip_source_t& source )
+{
+	on_file_dialog_open();
+
+	char*                 cwd      = sys_get_cwd();
+	nfdu8char_t*          out_path = nullptr;
+
+	char*                 exts     = p_mpv_get_property_string( get_mpv(), "video-exts" );
+	nfdu8filteritem_t     filter   = { "MPV Supported Videos", exts };
+
+	nfdopendialogu8args_t args     = { 0 };
+
+	args.filterList                = &filter;
+	args.filterCount               = 1;
+	//args.defaultPath               = cwd;
+
+	nfdresult_t result             = NFD_OpenDialogU8_With( &out_path, &args );
+
+	if ( result == NFD_OKAY )
+	{
+		source.path = util_strdup_r( source.path, out_path );
+
+		if ( source.filename )
+			free( source.filename );
+
+		source.filename = fs_get_filename( source.path );
+
+		clip_get_video_metadata( source );
+		clip_check_video( *clip_data::current_clip, true );
+
+		replay_editor_current_set_group( clip_data::current_group, clip_data::get_current_group_source() );
+
+		NFD_FreePathU8( out_path );
+
+		mpv_cmd_loadfile( source.path );
+	}
+	else if ( result == NFD_ERROR )
+	{
+		printf( "NativeFileDialog Error: %s\n", NFD_GetError() );
+	}
+
+	free( cwd );
+
+	on_file_dialog_exit();
+}
+
+
 void draw_replay_list( int size[ 2 ] )
 {
 	ImGuiStyle&               style             = ImGui::GetStyle();
@@ -393,6 +467,10 @@ void draw_replay_list( int size[ 2 ] )
 		//ImGui::SetNextWindowSize( { -1, video_list_size } );
 	}
 
+	ImGui::PushFont( font::normal_bold, font::size + 2 );
+	ImGui::TextUnformatted( "Clips" );
+	ImGui::PopFont();
+
 	if ( ImGui::BeginChild( "##clip_filtering", {}, ImGuiChildFlags_Borders | ImGuiChildFlags_AutoResizeY, ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse ) )
 	{
 		clip_filtering_draw();
@@ -415,179 +493,6 @@ void draw_replay_list( int size[ 2 ] )
 	}
 
 	ImGui::EndChild();
-
-#if 0
-	if ( ImGui::BeginChild( "clip_filtering", {}, ImGuiChildFlags_Borders | ImGuiChildFlags_AutoResizeY, ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse ) )
-	{
-		ImGui::BeginDisabled( clip_thread_loading() );
-
-		//ImGui::TextUnformatted( "Clips" );
-		//ImGui::Separator();
-
-		ImVec2 prefix_filter_size = ImGui::CalcTextSize( "Prefix Filter" );
-		ImVec2 search_size        = ImGui::CalcTextSize( "Search" );
-
-		ImGui::TextUnformatted( "Search" );
-
-		ImGui::SameLine();
-		ImGui::Dummy( { prefix_filter_size.x - search_size.x - style.ItemSpacing.x, ImGui::GetTextLineHeight() } );
-		ImGui::SameLine();
-
-		ImGui::SetNextItemWidth( -FLT_MIN );
-
-		// Search Box
-		ImGui::InputText( "##search", clip_filter::search, 128 );
-
-		// Search by Prefixes
-		if ( clip_filter::prefix < UINT32_MAX )
-			clip_filter::prefix = MIN( clip_data::prefix_count, clip_filter::prefix );
-
-		
-		ImGui::TextUnformatted( "Prefix Filter" );
-
-		ImGui::SameLine();
-		ImGui::SetNextItemWidth( -FLT_MIN );
-
-		if ( ImGui::BeginCombo( "##prefix_filter", clip_filter::prefix == UINT32_MAX ? "" : clip_data::prefix[ clip_filter::prefix ].name ) )
-		{
-			if ( ImGui::Selectable( "None", clip_filter::prefix == UINT32_MAX ) )
-				clip_filter::prefix = UINT32_MAX;
-
-			for ( u32 i = 0; i < clip_data::prefix_count; i++ )
-			{
-				clip_prefix_t& prefix                                     = clip_data::prefix[ i ];
-				char           prefix_display[ MAX_LEN_PRESET_NAME + 16 ] = { 0 };
-				u32            result_count                               = 0;
-
-				for ( u32 out_i = 0; out_i < clip_data::clip_count; out_i++ )
-				{
-					if ( i == clip_data::clip[ out_i ].prefix )
-						result_count++;
-				}
-
-				snprintf( prefix_display, MAX_LEN_PRESET_NAME + 16, "%d - %s", result_count, prefix.name );
-
-				if ( ImGui::Selectable( prefix_display, i == clip_filter::prefix ) )
-				{
-					clip_filter::prefix = i;
-				}
-			}
-
-			ImGui::EndCombo();
-		}
-
-		//ImGui::SameLine();
-
-		#if 0
-		// do the search again for this text lol
-		u32 result_count = 0;
-		for ( u32 out_i = 0; out_i < clip_data::clip_count; out_i++ )
-		{
-			clip_t& clip = clip_data::clip[ out_i ];
-
-			if ( clip_filter::prefix != UINT32_MAX )
-				if ( clip_filter::prefix != clip.prefix )
-					continue;
-
-			if ( clip_filter::search[ 0 ] != '\0' )
-				if ( !strcasestr( clip.name, clip_filter::search ) )
-					continue;
-
-			result_count++;
-		}
-		#endif
-
-		//ImGui::TextUnformatted( "Preset Filter" );
-		//
-		//ImGui::SameLine();
-		//ImGui::SetNextItemWidth( -FLT_MIN );
-
-		// Advanced filters, filter by encode presets
-		if ( ImGui::BeginCombo( "##presets", "Preset Filter", ImGuiComboFlags_HeightLargest | ImGuiComboFlags_WidthFitPreview ) )
-		{
-			for ( u32 i = 0; i < clip_data::preset_count; i++ )
-			{
-				// check if it's already in the search list
-				bool skip = false;
-				for ( size_t used_preset_i = 0; used_preset_i < clip_filter::preset.size(); used_preset_i++ )
-				{
-					if ( i == clip_filter::preset[ used_preset_i ] )
-					{
-						skip = true;
-						break;
-					}
-				}
-
-				if ( skip )
-					continue;
-
-				if ( ImGui::Selectable( clip_data::preset[ i ].name ) )
-				{
-					clip_filter::preset.emplace_back( i );
-				}
-			}
-
-			ImGui::EndCombo();
-		}
-
-		// index in the array to remove
-		size_t preset_remove = SIZE_MAX;
-
-		for ( size_t i = 0; i < clip_filter::preset.size(); i++ )
-		{
-			ImGui::SameLine();
-
-			clip_encode_preset_t& encode = clip_data::preset[ clip_filter::preset[ i ] ];
-
-			ImGui::PushStyleColor( ImGuiCol_ButtonActive, COLOR_BTN_RED_ACTIVE );
-			ImGui::PushStyleColor( ImGuiCol_ButtonHovered, COLOR_BTN_RED_HOVER );
-			ImGui::PushStyleColor( ImGuiCol_Button, COLOR_BTN_RED );
-
-			if ( ImGui::Button( encode.name ) )
-			{
-				preset_remove = i;
-			}
-
-			ImGui::PopStyleColor( 3 );
-		}
-
-		if ( preset_remove != SIZE_MAX )
-		{
-			clip_filter::preset.erase( clip_filter::preset.begin() + preset_remove );
-			preset_remove = SIZE_MAX;
-		}
-
-		ImGui::Separator();
-
-		// collapse_all = ImGui::Button( "Collapse All" );
-		// ImGui::SameLine();
-
-		if ( ImGui::Button( sort_newest_top ? "Sort: Newest First" : "Sort: Oldest First" ) )
-			sort_newest_top = !sort_newest_top;
-
-		ImGui::SameLine();
-		//ImGui::Text( "%d Entries", result_count );
-
-
-		// ImGui::Separator();
-
-		float video_list_size{};
-
-		{
-			ImVec2 cursor_screen_pos = ImGui::GetCursorScreenPos();
-			ImVec2 region_avail      = ImGui::GetContentRegionAvail();
-			// video_list_size          = region_avail;
-			video_list_size          = size[ 1 ] - cursor_screen_pos[ 1 ];
-
-			//video_list_size -= ( ImGui::GetFrameHeightWithSpacing() * 2 + style.ItemSpacing.y * 2 );
-		}
-
-		//ImGui::SetNextWindowSize( { -1, video_list_size } );
-
-		ImGui::EndDisabled();
-	}
-	ImGui::EndChild();
-#endif
 
 	// Spacing for region below clip list
 	ImVec2 region_avail       = ImGui::GetContentRegionAvail();
@@ -862,12 +767,40 @@ clip_loop_continue:
 
 	ImGui::TextUnformatted( "Source Videos" );
 
+	bool one_source_missing = false;
+
+	if ( clip_data::current_clip )
+	{
+		for ( u32 source_i = 0; source_i < clip_data::current_clip->source_count; source_i++ )
+		{
+			clip_source_t& source = clip_data::current_clip->source[ source_i ];
+			if ( !source.file_missing )
+				continue;
+
+			one_source_missing = true;
+			break;
+		}
+	}
+
 	ImGui::SetNextWindowSizeConstraints( { -1, ImGui::GetFrameHeightWithSpacing() }, { -1, ImGui::GetFrameHeightWithSpacing() * 8.f } );
 
 	u32 delete_source = UINT32_MAX;
 
 	if ( ImGui::BeginChild( "source_list", {}, ImGuiChildFlags_Borders | ImGuiChildFlags_AutoResizeY ) && clip_data::current_clip )
 	{
+		ImVec2 region_avail = ImGui::GetContentRegionAvail();
+
+		if ( one_source_missing )
+		{
+			if ( ImGui::Button( "Check Missing Files", { region_avail.x, ImGui::GetFrameHeight() } ) )
+			{
+				clip_check_video( *clip_data::current_clip, true );
+				replay_editor_current_set_group( clip_data::current_group, clip_data::get_current_group_source() );
+			}
+
+			ImGui::Separator();
+		}
+
 		for ( u32 source_i = 0; source_i < clip_data::current_clip->source_count; source_i++ )
 		{
 			clip_source_t& source               = clip_data::current_clip->source[ source_i ];
@@ -905,11 +838,20 @@ clip_loop_continue:
 			{
 				if ( missing )
 				{
-					ImGui::Text( "MISSING - %s", source.path );
+					char missing_name[ 512 ]{};
+					snprintf( missing_name, 512, "MISSING - %s", source.path );
+
+					if ( ImGui::Selectable( missing_name ) )
+					{
+						replace_source_video( source );
+					}
 				}
 				else
 				{
-					ImGui::TextUnformatted( source.path );
+					if ( ImGui::Selectable( source.path ) )
+					{
+						sys_browse_to_file( source.path );
+					}
 				}
 
 				ImGui::Separator();
@@ -917,10 +859,17 @@ clip_loop_continue:
 				ImGui::BeginDisabled( missing );
 
 				if ( ImGui::Button( "Add to Current Group" ) )
+				//if ( ImGui::Button( "+" ) )
 				{
 					u32 i = clip_group_add_source( clip_data::current_clip, clip_data::current_group, source.path );
 					replay_editor_set_group( clip_data::current_clip_index, clip_data::current_group, i );
 				}
+
+				//if ( ImGui::BeginItemTooltip() )
+				//{
+				//	ImGui::TextUnformatted( "Add to Current Group" );
+				//	ImGui::EndTooltip();
+				//}
 
 				ImGui::SameLine();
 
@@ -932,54 +881,12 @@ clip_loop_continue:
 
 				ImGui::EndDisabled();
 
-				ImGui::SameLine();
-
-				// moves the file to a separate location, might default to a specific move folder in the settings somewhere
-				if ( ImGui::Button( "Replace File" ) )
-				{
-					on_file_dialog_open();
-
-					char*                 cwd      = sys_get_cwd();
-					nfdu8char_t*          out_path = nullptr;
-
-					char*                 exts     = p_mpv_get_property_string( get_mpv(), "video-exts" );
-					nfdu8filteritem_t     filter   = { "MPV Supported Videos", exts };
-
-					nfdopendialogu8args_t args     = { 0 };
-
-					args.filterList                = &filter;
-					args.filterCount               = 1;
-					//args.defaultPath               = cwd;
-
-					nfdresult_t result             = NFD_OpenDialogU8_With( &out_path, &args );
-
-					if ( result == NFD_OKAY )
-					{
-						source.path     = util_strdup_r( source.path, out_path );
-
-						if ( source.filename )
-							free( source.filename );
-
-						source.filename = fs_get_filename( source.path );
-
-						clip_get_video_metadata( source );
-						clip_check_video( *clip_data::current_clip, true );
-
-						// replay_editor_current_set_group( clip_data::current_group, clip_data::get_current_group_source() );
-
-						NFD_FreePathU8( out_path );
-
-						mpv_cmd_loadfile( source.path );
-					}
-					else if ( result == NFD_ERROR )
-					{
-						printf( "NativeFileDialog Error: %s\n", NFD_GetError() );
-					}
-
-					free( cwd );
-
-					on_file_dialog_exit();
-				}
+				//ImGui::SameLine();
+				//
+				//if ( ImGui::Button( "Replace File" ) )
+				//{
+				//	replace_source_video( source );
+				//}
 
 				ImGui::SameLine();
 
@@ -993,24 +900,11 @@ clip_loop_continue:
 				ImGui::SameLine();
 
 				ImGui::EndDisabled();
-				ImGui::BeginDisabled( missing );
 
 				if ( ImGui::Button( "Remove" ) )
 				{
 					delete_source = source_i;
 				}
-
-				ImGui::EndDisabled();
-
-				//if ( missing )
-				//{
-				//	ImGui::SameLine();
-				//
-				//	if ( ImGui::Button( "Refresh" ) )
-				//	{
-				//		clip_check_video( *clip_data::current_clip, true );
-				//	}
-				//}
 			}
 
 			ImGui::EndChild();

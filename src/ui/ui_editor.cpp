@@ -729,7 +729,7 @@ void draw_replay_editor_window( int window_size[ 2 ] )
 
 	if ( ImGui::BeginTabBar( "##sidebar_tabs" ) )
 	{
-		if ( ImGui::BeginTabItem( "Clips" ) )
+		if ( ImGui::BeginTabItem( "Editor" ) )
 		{
 			draw_replay_list( element_size );
 			ImGui::EndTabItem();
@@ -741,7 +741,7 @@ void draw_replay_editor_window( int window_size[ 2 ] )
 			ImGui::EndTabItem();
 		}
 
-		if ( ImGui::BeginTabItem( "Prefixes" ) )
+		if ( ImGui::BeginTabItem( "Categories" ) )
 		{
 			draw_prefix_editor( element_size );
 			ImGui::EndTabItem();

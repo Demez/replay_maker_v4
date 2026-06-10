@@ -210,7 +210,7 @@ void clip_filtering_draw()
 		//ImGui::TextUnformatted( "Clips" );
 		//ImGui::Separator();
 
-		ImVec2 prefix_filter_size = ImGui::CalcTextSize( "Prefix Filter" );
+		ImVec2 prefix_filter_size = ImGui::CalcTextSize( "Category" );
 		ImVec2 search_size        = ImGui::CalcTextSize( "Search" );
 
 		ImGui::TextUnformatted( "Search" );
@@ -228,14 +228,14 @@ void clip_filtering_draw()
 		if ( clip_filter::prefix < UINT32_MAX )
 			clip_filter::prefix = MIN( clip_data::prefix_count, clip_filter::prefix );
 
-		ImGui::TextUnformatted( "Prefix Filter" );
+		ImGui::TextUnformatted( "Category" );
 
 		ImGui::SameLine();
 		ImGui::SetNextItemWidth( -FLT_MIN );
 
-		if ( ImGui::BeginCombo( "##prefix_filter", clip_filter::prefix == UINT32_MAX ? "" : clip_data::prefix[ clip_filter::prefix ].name ) )
+		if ( ImGui::BeginCombo( "##prefix_filter", clip_filter::prefix == UINT32_MAX ? "All" : clip_data::prefix[ clip_filter::prefix ].name ) )
 		{
-			if ( ImGui::Selectable( "None", clip_filter::prefix == UINT32_MAX ) )
+			if ( ImGui::Selectable( "All", clip_filter::prefix == UINT32_MAX ) )
 				clip_filter::prefix = UINT32_MAX;
 
 			for ( u32 i = 0; i < clip_data::prefix_count; i++ )
@@ -603,7 +603,6 @@ void draw_playback_controls( int size[ 2 ] )
 
 	if ( show_timeline )
 	{
-		ImGui::Separator();
 		timeline_draw();
 	}
 	else
