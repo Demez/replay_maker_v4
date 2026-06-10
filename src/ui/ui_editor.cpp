@@ -552,18 +552,18 @@ void draw_preset_dropdown( clip_t& clip, clip_group_t& group )
 				for ( u32 used_preset_i = 0; used_preset_i < group_.presets.size(); used_preset_i++ )
 				{
 					if ( group_.presets[ used_preset_i ] == i )
-						goto preset_selectable;
+						goto preset_not_selectable;
 				}
 			}
 
-			// none found
-			continue;
-
-preset_selectable:
 			if ( ImGui::Selectable( clip_data::preset[ i ].name ) )
 			{
 				clip_group_add_preset( clip, group, i );
 			}
+
+			// none found
+preset_not_selectable:
+			continue;
 		}
 
 		ImGui::EndCombo();
