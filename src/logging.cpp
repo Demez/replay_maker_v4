@@ -135,17 +135,17 @@ bool log_init()
 
 	strftime( g_date_str, 32, "%F_%H-%M-%S", time_info );
 
-	g_file_name           = fs_get_filename_no_ext( g_videos_file_path );
-
-	std::string file_path = log_build_name( "results" );
-
-	g_log_file_results = fopen( file_path.data(), "w" );
-
-	if ( !g_log_file_results )
-	{
-		printf( "LOG INIT FAILED: FAILED TO OPEN RESULTS LOG FILE FOR WRITING\n" );
-		return false;
-	}
+	//g_file_name           = fs_get_filename_no_ext( g_videos_file_path );
+	//
+	//std::string file_path = log_build_name( "results" );
+	//
+	//g_log_file_results = fopen( file_path.data(), "w" );
+	//
+	//if ( !g_log_file_results )
+	//{
+	//	printf( "LOG INIT FAILED: FAILED TO OPEN RESULTS LOG FILE FOR WRITING\n" );
+	//	return false;
+	//}
 
 	//if ( !log_set_file( "init" ) )
 	//	return false;
