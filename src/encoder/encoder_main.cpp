@@ -70,7 +70,30 @@ void encode_thread_stop()
 		g_encode_thread = nullptr;
 	}
 
-	// TODO: FREE MEMORY !!!!
+	// free memory
+	if ( g_encoder_clips )
+	{
+		for ( u32 clip_i = 0; clip_i < clip_data::clip_count; clip_i++ )
+		{
+			enc_clip_t& enc_clip = g_encoder_clips[ clip_i ];
+
+			for ( u32 export_i = 0; export_i < enc_clip.exports.size(); export_i++ )
+			{
+				enc_segment_data_t& segment = enc_clip.exports[ export_i ].segment;
+
+				for ( u32 i = 0; i < segment.count; i++ )
+					free( segment.data[ i ].path );
+
+				free( segment.data );
+			}
+
+			free( enc_clip.ffmpeg_output );
+		}
+
+		free( g_encoder_clips );
+	}
+
+	g_encoder_clips = nullptr;
 }
 
 
@@ -124,6 +147,9 @@ enc_clip_preset_t* encode_get_enc_preset( enc_clip_t& enc_clip, u32 preset_idx )
 #endif
 
 
+enc_segment_data_t get_video_segments( enc_clip_t& enc_clip, clip_t& clip, clip_group_t& group, u32 preset_i );
+
+
 bool collect_video_info()
 {
 	if ( clip_data::prefix_count == 0 )
@@ -164,7 +190,15 @@ bool collect_video_info()
 		{
 			for ( u32 preset_i = 0; preset_i < clip.groups[ group_i ].presets.size(); preset_i++ )
 			{
-				enc_clip.group_state.push_back( e_enc_state_wait );
+				enc_segment_data_t video_data = get_video_segments( enc_clip, clip, clip.groups[ group_i ], clip.groups[ group_i ].presets[ preset_i ] );
+
+				enc_export_info_t info
+				{
+					.state   = e_enc_state_wait,
+					.segment = video_data,
+				};
+
+				enc_clip.exports.push_back( info );
 			}
 		}
 

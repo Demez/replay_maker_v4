@@ -311,16 +311,25 @@ void draw_replay_list_entry( u64& imgui_id, u32 out_i, bool collapse_all )
 	ImGui::PushID( imgui_id++ );
 
 	bool current_clip = &clip == clip_data::current_clip;
+	bool push_color   = false;
 
 	// TODO THEME: change to a green color
+	// these clip states could change on load
 	if ( current_clip )
+	{
 		ImGui::PushStyleColor( ImGuiCol_Button, { 0.28f, 1.f, 0.21f, 0.31f } );
-
+		push_color = true;
+	}
 	else if ( !clip.enabled )
+	{
 		ImGui::PushStyleColor( ImGuiCol_Button, COLOR_PURPLE );
-
+		push_color = true;
+	}
 	else if ( !clip.valid )
+	{
 		ImGui::PushStyleColor( ImGuiCol_Button, COLOR_BTN_RED );
+		push_color = true;
+	}
 
 	ImGui::PushStyleVar( ImGuiStyleVar_ButtonTextAlign, { 0.f, 0.5f } );
 
@@ -350,7 +359,7 @@ void draw_replay_list_entry( u64& imgui_id, u32 out_i, bool collapse_all )
 
 	ImGui::PopStyleVar();
 
-	if ( current_clip || !clip.valid || !clip.enabled )
+	if ( push_color )
 		ImGui::PopStyleColor();
 
 	if ( ImGui::BeginPopupContextItem( "##clip_ctx_menu" ) )

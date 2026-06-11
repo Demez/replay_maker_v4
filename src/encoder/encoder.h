@@ -8,19 +8,16 @@
 
 #include "vector.hpp"
 
+
+constexpr int MAX_TARGET_SIZE_RETRY = 10;
+
+
 enum e_target_size_state
 {
 	e_target_size_state_none,
 	e_target_size_state_smaller,
 	e_target_size_state_bigger,
 };
-
-
-//struct enc_clip_preset_t
-//{
-//	u32 preset;
-//	u32 group;
-//};
 
 
 enum e_enc_state
@@ -33,27 +30,19 @@ enum e_enc_state
 };
 
 
-struct enc_group_state_t
+struct target_size_pass_t
 {
-};
+	u32                 attempt         = 0;
+	bool                success         = false;
 
+	float*              prev_bitrates   = nullptr;  // unused
+	float*              max_bitrates    = nullptr;
+	float*              min_bitrates    = nullptr;
+	float*              ffmpeg_bitrates = nullptr;
 
-// encoder output video
-struct enc_clip_t
-{
-	clip_t*                       clip  = nullptr;
-	bool                          valid = false;
+	float               prev_file_size  = 0;
 
-	e_enc_state                   state;
-	ChVector< e_enc_state >       group_state;
-
-	// ffmpeg output
-	std::mutex                    ffmpeg_output_lock;
-	char*                         ffmpeg_output          = nullptr;
-	size_t                        ffmpeg_output_capacity = 0;
-	size_t                        ffmpeg_cursor_pos      = 0;
-
-	// markers for raw encodes here?
+	e_target_size_state last_state      = e_target_size_state_none;
 };
 
 
@@ -69,35 +58,71 @@ struct video_segment_t
 
 // data used for processing a video
 // used per encode preset
+struct enc_segment_data_t
+{
+	video_segment_t*   data;
+	u32                count;
+	u32                index = UINT32_MAX;  // currently running segment
+	target_size_pass_t target_size{};
+};
+
+
 struct enc_video_data_t
 {
-	enc_clip_t&      enc_clip;
-	clip_t&          clip;
-	clip_group_t&    group;
+	clip_t&             clip;
+	clip_group_t&       group;
+	enc_segment_data_t& segment;
+};
 
-	video_segment_t* segment;
-	u32              segment_count;
+
+struct enc_export_info_t
+{
+	e_enc_state        state;
+	enc_segment_data_t segment;
+};
+
+
+// encoder output video
+struct enc_clip_t
+{
+	clip_t*                       clip  = nullptr;
+	bool                          valid = false;
+
+	e_enc_state                   state = e_enc_state_wait;
+	ChVector< enc_export_info_t > exports{};
+	u32                           export_index           = 0;
+
+	// ffmpeg output
+	char*                         ffmpeg_output          = nullptr;
+	size_t                        ffmpeg_output_capacity = 0;
+	size_t                        ffmpeg_cursor_pos      = 0;
+
+	// markers for raw encodes here?
 };
 
 
 struct encoder_t
 {
-	std::string         output_dir;
-	std::string         temp_video_dir;
-	std::string         log_dir;
+	std::string output_dir;
+	std::string temp_video_dir;
+	std::string log_dir;
+
+	std::mutex  ffmpeg_output_lock;
 
 	//enc_clip_t*         output_videos  = nullptr;
 
 	// status info
-	u32                 scan_index       = 0;
+	u32         scan_index = 0;
 
-	u32                 clip_index       = 0;
-	u32                 clip_group_i     = 0;
-	u32                 clip_group_src_i = 0;
+	std::mutex  info_lock;
 
-	u32                 clip_index_prev  = 0;
+	u32         clip_index       = 0;
+	u32         clip_group_i     = 0;
+	u32         clip_group_src_i = 0;
 
-	u32                 encode_preset    = 0;
+	u32         clip_index_prev  = 0;
+
+	u32         encode_preset    = 0;
 };
 
 
@@ -125,7 +150,5 @@ bool                       encode_check_state();
 
 float                      get_video_bitrate( const char* path );
 std::string                get_video_output_name( clip_t& clip, clip_encode_preset_t& preset );
-
-//enc_clip_preset_t*         encode_get_enc_preset( enc_clip_t& enc_clip, u32 preset_idx );
 
 void                       encode_draw();

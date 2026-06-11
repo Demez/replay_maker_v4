@@ -294,7 +294,8 @@ void log_print( log_channel channel, const char* result, size_t len )
 
 		case log_ffmpeg:
 		{
-			printf( result );
+			fputs( result, stdout );
+			fflush( stdout );
 
 			// still buggy
 #if 0
@@ -312,7 +313,10 @@ void log_print( log_channel channel, const char* result, size_t len )
 		{
 			log_set_con_color( e_log_color_yellow );
 
-			printf( "warn: %s", result );
+			fputs( "warn: ", stdout );
+			fputs( result, stdout );
+			fflush( stdout );
+
 			log_write_quick( "warn: ", 6 );
 			log_write( result, len );
 
@@ -323,7 +327,9 @@ void log_print( log_channel channel, const char* result, size_t len )
 		{
 			log_set_con_color( e_log_color_red );
 
-			printf( "err: %s", result );
+			fputs( "err: ", stdout );
+			fputs( result, stdout );
+
 			log_write_quick( "err: ", 5 );
 			log_write( result, len );
 

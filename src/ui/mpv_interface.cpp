@@ -391,8 +391,8 @@ bool start_mpv( mpv_data_t& mpv )
 
 	p_mpv_set_property_string( mpv.mpv, "keep-open", "always" );
 
-	int observe_ret = p_mpv_observe_property( mpv.mpv, e_mpv_cmd_observe, "time-pos", MPV_FORMAT_DOUBLE );
-	observe_ret     = p_mpv_observe_property( mpv.mpv, e_mpv_cmd_observe, "duration", MPV_FORMAT_DOUBLE );
+	int observe_ret = p_mpv_observe_property( mpv.mpv, e_mpv_cmd_observe, "time-pos/full", MPV_FORMAT_DOUBLE );
+	observe_ret     = p_mpv_observe_property( mpv.mpv, e_mpv_cmd_observe, "duration/full", MPV_FORMAT_DOUBLE );
 	observe_ret     = p_mpv_observe_property( mpv.mpv, e_mpv_cmd_observe, "pause", MPV_FORMAT_FLAG );
 
 	observe_ret     = p_mpv_observe_property( mpv.mpv, e_mpv_cmd_observe, "dwidth", MPV_FORMAT_INT64 );
@@ -720,7 +720,7 @@ void mpv_update( mpv_data_t& data )
 
 			if ( property->name )
 			{
-				if ( strcmp( "time-pos", property->name ) == 0 )
+				if ( strcmp( "time-pos/full", property->name ) == 0 )
 				{
 					// what the fuck is this?
 					// if ( property->data == nullptr )
@@ -729,7 +729,7 @@ void mpv_update( mpv_data_t& data )
 					// 	data.time_pos = *(double*)property->data;
 					data.time_pos = get_mpv_value( property->data, 0.0 );
 				}
-				else if ( strcmp( "duration", property->name ) == 0 )
+				else if ( strcmp( "duration/full", property->name ) == 0 )
 				{
 					data.duration = get_mpv_value( property->data, 0.0 );
 				}

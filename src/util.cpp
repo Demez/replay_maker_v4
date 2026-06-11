@@ -229,6 +229,74 @@ void util_format_time( char* buffer, size_t buffer_size, double time, bool short
 }
 
 
+std::string util_format_time( double time, bool shorten )
+{
+	std::string buffer{};
+
+	time_t     time_time_pos = (time_t)time;
+
+	struct tm* tm_info;
+
+	tm_info = gmtime( &time_time_pos );
+
+	bool need_hour = false;
+	bool need_min  = false;
+	size_t buf_len   = 9;
+
+	if ( time > 60.0 )
+		need_min = true;
+
+	if ( time > 3600.0 )
+		need_hour = true;
+
+	char time_buf[ 9 ]{};
+
+	if ( shorten )
+	{
+		if ( need_hour )
+		{
+			buf_len = 9;
+			//buffer.resize( 9 );
+			strftime( time_buf, 9, "%H:%M:%S", tm_info );
+		}
+		else if ( need_min )
+		{
+			buf_len = 6;
+			//buffer.resize( 6 );
+			strftime( time_buf, 6, "%M:%S", tm_info );
+		}
+		else
+		{
+			buf_len = 3;
+			//buffer.resize( 3 );
+			strftime( time_buf, 3, "%S", tm_info );
+		}
+	}
+	else
+	{
+		//buffer.resize( 9 );
+		strftime( time_buf, 9, "%H:%M:%S", tm_info );
+	}
+
+	// add miliseconds
+	//buffer.resize( buffer.size() + 5 );
+	// snprintf( buffer.data() + ( buf_len - 1 ), buffer_size - ( buf_len - 1 ), "%.3f", fmod( time, 1 ) );
+	char ms_buf[ 5 ]{};
+	snprintf( ms_buf, 5, "%.3f", fmod( time, 1 ) );
+
+	buffer.reserve( buf_len + 4 );
+	buffer.append( time_buf );
+	buffer.append( ms_buf + 1 );
+
+	// move it back to get rid of the 0 lol
+	// memcpy( buffer + ( buf_len - 1 ), buffer + buf_len, buffer_size - buf_len );
+	// memcpy( buffer.data() + ( buf_len - 1 ), buffer.data() + buf_len, buf_len - 4 );
+	// buffer[ buffer_size - 1 ] = '0';
+
+	return buffer;
+}
+
+
 void util_format_time( char* buffer, double time )
 {
 	return util_format_time( buffer, TIME_BUFFER, time, false );

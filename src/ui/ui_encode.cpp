@@ -11,6 +11,8 @@ bool valid_time_range( clip_time_range_t& range, video_metadata_t& metadata );
 static int   preset_select         = -1;
 static int   output_select         = -1;
 
+static bool  g_cancel_encode       = false;
+
 static float clip_info_area_height = 0.f;
 
 #if 0
@@ -125,7 +127,9 @@ void encode_draw_sidebar()
 
 	if ( ImGui::BeginChild( "##encode_sidebar", {}, ImGuiChildFlags_ResizeX, ImGuiWindowFlags_None ) )
 	{
+		ImGui::PushFont( font::normal_bold, font::size + 2 );
 		ImGui::TextUnformatted( "Clip Filtering" );
+		ImGui::PopFont();
 
 		if ( ImGui::BeginChild( "##clip_filtering", {}, ImGuiChildFlags_Borders | ImGuiChildFlags_AutoResizeY, ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse ) )
 		{
@@ -207,7 +211,9 @@ void encode_draw_sidebar()
 				result_count++;
 		}
 
+		ImGui::PushFont( font::normal_bold, font::size + 2 );
 		ImGui::Text( "Video List - %u/%u Complete", g_encoder_data.clip_index, clip_data::clip_count );
+		ImGui::PopFont();
 
 		if ( result_count < clip_data::clip_count )
 		{
@@ -413,14 +419,14 @@ void encode_draw_sidebar()
 							ImGui::Separator();
 							ImGui::PushStyleVar( ImGuiStyleVar_ButtonTextAlign, ImVec2( 0, 0.5 ) );
 
-							u32 group_export_i = 0;
+							u32 export_i = 0;
 							for ( u32 group_i = 0; group_i < clip.groups.size(); group_i++ )
 							{
 								for ( u32 preset_i : clip.groups[ group_i ].presets )
 								{
 									bool        current        = focused && g_encoder_data.encode_preset == preset_i;
 
-									e_enc_state preset_state   = enc_clip.group_state[ group_export_i++ ];
+									e_enc_state preset_state   = enc_clip.exports[ export_i++ ].state;
 
 									ImVec2 region_avail   = ImGui::GetContentRegionAvail();
 									ImVec2 cursor_scr_pos = ImGui::GetCursorScreenPos();
@@ -552,7 +558,9 @@ void encode_draw_sidebar()
 
 void encode_draw_ffmpeg()
 {
+	ImGui::PushFont( font::normal_bold, font::size + 2 );
 	ImGui::TextUnformatted( "FFMpeg Output" );
+	ImGui::PopFont();
 
 	// ImGui::PushStyleColor( ImGuiCol_ChildBg,)
 
@@ -569,10 +577,13 @@ void encode_draw_ffmpeg()
 
 	ffmpeg_output_size -= clip_info_area_height;
 	ffmpeg_output_size -= style.ItemSpacing.y;
+	
+	ImGui::PushStyleColor( ImGuiCol_ChildBg, { 0, 0, 0, 1 } );
 
 	if ( !ImGui::BeginChild( "##ffmpeg_output", { -1, ffmpeg_output_size }, ImGuiChildFlags_Borders, ImGuiWindowFlags_AlwaysVerticalScrollbar ) )
 	{
 		ImGui::EndChild();
+		ImGui::PopStyleColor();
 		return;
 	}
 
@@ -590,9 +601,9 @@ void encode_draw_ffmpeg()
 		ImGui::PushTextWrapPos();
 		ImGui::PushFont( font::console );
 
-		enc_clip.ffmpeg_output_lock.lock();
+		g_encoder_data.ffmpeg_output_lock.lock();
 		ImGui::TextUnformatted( enc_clip.ffmpeg_output );
-		enc_clip.ffmpeg_output_lock.unlock();
+		g_encoder_data.ffmpeg_output_lock.unlock();
 
 		ImGui::PopFont();
 		ImGui::PopTextWrapPos();
@@ -605,6 +616,7 @@ void encode_draw_ffmpeg()
 	}
 
 	ImGui::EndChild();
+	ImGui::PopStyleColor();
 }
 
 
@@ -612,6 +624,7 @@ void encode_draw_output_info()
 {
 	u32         output_idx = g_encoder_data.clip_index;
 	u32         preset_idx = g_encoder_data.encode_preset;
+	u32         group_i    = g_encoder_data.clip_group_i;
 
 	ImGuiStyle& style      = ImGui::GetStyle();
 
@@ -649,11 +662,45 @@ void encode_draw_output_info()
 
 		std::string           filename = get_video_output_name( clip, preset );
 
-		ImGui::Text( "Output Path: %s", g_encoder_data.output_dir.c_str() );
+		ImGui::PushFont( font::normal_bold, font::size + 2 );
+		ImGui::Text( "%s%s", g_encoder_data.output_dir.c_str(), filename.c_str() );
+		ImGui::PopFont();
 
 		ImGui::Separator();
 
-		ImGui::Text( "File: %s", filename.c_str() );
+		ImGui::Text( "Encode Preset: %s", preset.name );
+
+		ImGui::PushStyleVar( ImGuiStyleVar_ItemSpacing, { 0.f, style.ItemSpacing.x } );
+
+		// ImGui::Text( "FFMpeg CMD: %s", preset.ffmpeg_cmd );
+
+		//float backup_cursor_pos = ImGui::GetCursorPosY();
+		//ImGui::SetCursorPosY( backup_cursor_pos + ( ( ImGui::GetFrameHeight() - ImGui::GetTextLineHeight() ) * 1.f ) );
+
+		ImGui::TextUnformatted( "FFMpeg Command Line:" );
+		//ImGui::SameLine();
+		//ImGui::SetCursorPosY( backup_cursor_pos );
+
+		ImGui::PushFont( font::console, font::size - 1 );
+		ImVec2 region_avail = ImGui::GetContentRegionAvail();
+
+		ImGui::SetNextWindowSizeConstraints( {}, { region_avail.x, ( ImGui::GetFrameHeightWithSpacing() * 3 ) * 2 } );
+
+		if ( ImGui::BeginChild( "##ffmpeg_cmd_preview", {}, ImGuiChildFlags_Border | ImGuiChildFlags_AutoResizeY, ImGuiWindowFlags_None ) )
+		{
+			ImGui::PushTextWrapPos( region_avail.x - style.WindowPadding.x );
+			ImGui::TextUnformatted( preset.ffmpeg_cmd );
+			ImGui::PopTextWrapPos();
+		}
+		ImGui::EndChild();
+
+		ImGui::PopFont();
+
+		ImGui::PopStyleVar();
+
+		//ImGui::Separator();
+		//
+		//ImGui::Text( "File: %s", filename.c_str() );
 
 		clip_info_area_height += ImGui::GetTextLineHeightWithSpacing() * 2;
 
@@ -665,12 +712,106 @@ void encode_draw_output_info()
 		// 	goto clip_info_draw;
 		// }
 
-		clip_group_t& group            = clip.groups[ g_encoder_data.clip_group_i ];
+		clip_group_t& group            = clip.groups[ group_i ];
 
 		float         duration         = 0.f;
 		bool          duration_invalid = false;
 
 		ImGui::Separator();
+
+		u32 export_index = enc_clip.export_index;
+
+		//for ( u32 group_i = 0; group_i < clip.groups.size(); group_i++ )
+		if ( export_index < enc_clip.exports.size() )
+		{
+			//for ( u32 preset_i : group.presets )
+			{
+				clip_encode_preset_t& preset       = clip_data::preset[ preset_idx ];
+				enc_segment_data_t&   segment_data = enc_clip.exports[ export_index ].segment;
+
+				// is this preset for target video sizes?
+				if ( preset.target_size > 0 )
+				{
+					//ImGui::Separator();
+					ImGui::Text( "Target Size Export - Attempt %d/%d", segment_data.target_size.attempt + 1, MAX_TARGET_SIZE_RETRY );
+					//ImGui::Text( "Target Bitrate: %.2f", segment_data.target_size.ffmpeg_bitrates[ seg_i ] );
+					//ImGui::Text( "Target Bitrate: %.2f", segment.bitrate );
+
+					if ( segment_data.target_size.attempt > 0 )
+					{
+						ImGui::SameLine();
+						ImGui::SeparatorEx( ImGuiSeparatorFlags_Vertical );
+						ImGui::SameLine();
+
+						if ( segment_data.target_size.last_state == e_target_size_state_smaller )
+							ImGui::TextUnformatted( "Previous Attempt Resulted in a file too small, trying higher bitrate" );
+						else if ( segment_data.target_size.last_state == e_target_size_state_bigger )
+							ImGui::TextUnformatted( "Previous Attempt Resulted in a file too big, trying lower bitrate" );
+					}
+				}
+
+				ImGui::SetNextWindowSizeConstraints( {}, { -FLT_MAX, ( ImGui::GetFrameHeightWithSpacing() * 3 ) * 2 } );
+
+				if ( ImGui::BeginChild( "##segment_scroll_area", {}, ImGuiChildFlags_AutoResizeY, ImGuiWindowFlags_None ) )
+				{
+					for ( u32 seg_i = 0; seg_i < segment_data.count; seg_i++ )
+					{
+						video_segment_t& segment  = segment_data.data[ seg_i ];
+
+						ImVec4           color_bg = style.Colors[ ImGuiCol_FrameBg ];
+
+						bool             current_segment = segment_data.index == seg_i;
+
+						if ( current_segment )
+							ImGui::PushStyleColor( ImGuiCol_ChildBg, color_bg );
+
+						if ( ImGui::BeginChild( "##segment_info", {}, ImGuiChildFlags_Border | ImGuiChildFlags_AutoResizeY, ImGuiWindowFlags_None ) )
+						{
+							ImGui::TextUnformatted( segment.path );
+							ImGui::Separator();
+
+							float       range_duration = segment.time.end - segment.time.start;
+
+							std::string str_time_start = util_format_time( segment.time.start, true );
+							std::string str_time_end   = util_format_time( segment.time.end, true );
+							std::string str_duration   = util_format_time( range_duration, true );
+
+							ImGui::Text( "%s - %s (%s)", str_time_start.data(), str_time_end.data(), str_duration.data() );
+
+							// is this preset for target video sizes?
+							if ( preset.target_size > 0 )
+							{
+								//if ( current_segment )
+								{
+									//ImGui::Text( "Attempt %d/%d", segment_data.target_size.attempt + 1, MAX_TARGET_SIZE_RETRY );
+									//ImGui::Text( "Target Bitrate: %.2f", segment_data.target_size.ffmpeg_bitrates[ seg_i ] );
+									ImGui::Text( "Target Bitrate: %.2f", segment.bitrate );
+
+									//if ( segment_data.target_size.attempt > 0 )
+									//{
+									//	ImGui::Separator();
+									//
+									//	if ( segment_data.target_size.last_state == e_target_size_state_smaller )
+									//		ImGui::TextUnformatted( "Previous Attempt Resulted in a file too small, trying higher bitrate" );
+									//	else if ( segment_data.target_size.last_state == e_target_size_state_bigger )
+									//		ImGui::TextUnformatted( "Previous Attempt Resulted in a file too big, trying lower bitrate" );
+									//}
+								}
+							}
+						}
+
+						ImGui::EndChild();
+
+						if ( current_segment )
+							ImGui::PopStyleColor();
+					}
+				}
+
+				ImGui::EndChild();
+			}
+		}
+
+		//ImGui::Separator();
 
 		for ( u32 src_i = 0; src_i < group.sources.size(); src_i++ )
 		{
@@ -685,17 +826,25 @@ void encode_draw_output_info()
 					continue;
 				}
 
-				float range_duration = source_use.time_range[ time_i ].end - source_use.time_range[ time_i ].start;
-				ImGui::Text( "    %.4f - %.4f (%.4f)", source_use.time_range[ time_i ].start, source_use.time_range[ time_i ].end, range_duration );
+				clip_time_range_t& time_range     = source_use.time_range[ time_i ];
+				float              range_duration = time_range.end - time_range.start;
+
+				//std::string        str_time_start = util_format_time( time_range.start, true );
+				//std::string        str_time_end   = util_format_time( time_range.end, true );
+				//std::string        str_duration   = util_format_time( range_duration, true );
+				
+				//ImGui::Text( "    %s - %s (%s)", str_time_start.data(), str_time_end.data(), str_duration.data() );
 				clip_info_area_height += ImGui::GetTextLineHeightWithSpacing();
 
-				duration += source_use.time_range[ time_i ].end - source_use.time_range[ time_i ].start;
+				duration += range_duration;
 			}
 		}
 
-		ImGui::Separator();
+		//ImGui::Separator();
 
-		ImGui::Text( "Duration: %.4f%s", duration, duration_invalid ? " [INVALID]" : "" );
+		std::string str_duration = util_format_time( duration, true );
+
+		ImGui::Text( "Final Video Duration: %s%s", str_duration.data(), duration_invalid ? " [INVALID]" : "" );
 		clip_info_area_height += ImGui::GetTextLineHeightWithSpacing();
 
 		// Output Path
@@ -735,7 +884,7 @@ void encode_draw_output_info()
 
 		if ( ImGui::Button( "Cancel" ) )
 		{
-			encode_thread_stop();
+			g_cancel_encode = true;
 		}
 		
 		clip_info_area_height += ImGui::GetFrameHeightWithSpacing() * 3;
@@ -811,6 +960,8 @@ void encode_draw()
 
 	if ( ImGui::Begin( "##encode_status", 0, ImGuiWindowFlags_NoNav | ImGuiWindowFlags_NoDecoration ) )
 	{
+		g_encoder_data.info_lock.lock();
+
 		encode_draw_sidebar();
 
 		ImGui::SameLine();
@@ -822,9 +973,17 @@ void encode_draw()
 		}
 
 		ImGui::EndChild();
+
+		g_encoder_data.info_lock.unlock();
 	}
 
 	ImGui::End();
 	ImGui::PopStyleVar();
+
+	if ( g_cancel_encode )
+	{
+		encode_thread_stop();
+		g_cancel_encode = false;
+	}
 }
 

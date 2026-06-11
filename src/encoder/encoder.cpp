@@ -95,17 +95,16 @@ e_exec_state ffmpeg_callback_read( char* buf, size_t buf_len )
 		log_print( log_ffmpeg, buf );
 
 		enc_clip_t& enc_clip  = g_encoder_clips[ g_encoder_data.clip_index ];
-		enc_clip.ffmpeg_output_lock.lock();
+		g_encoder_data.ffmpeg_output_lock.lock();
 
 		check_buf_capacity( enc_clip );
 
 		char* return_char = strchr( buf, '\r' );
 
 		// TODO: fix this crashing sometimes
-		// if ( return_char )
-		if ( false )
+		if ( return_char )
 		{
-			#if 0
+			#if 1
 			while ( return_char )
 			{
 				size_t return_len = strlen( return_char );
@@ -198,7 +197,7 @@ e_exec_state ffmpeg_callback_read( char* buf, size_t buf_len )
 			buf_cat_len( enc_clip, buf, buf_len );
 		}
 
-		enc_clip.ffmpeg_output_lock.unlock();
+		g_encoder_data.ffmpeg_output_lock.unlock();
 
 		// while ( return_char )
 		// {
@@ -441,10 +440,10 @@ bool create_output_video( enc_video_data_t& video_data, const char* full_out_pat
 		return false;
 	}
 
-	for ( u32 i = 0; i < video_data.segment_count; i++ )
+	for ( u32 i = 0; i < video_data.segment.count; i++ )
 	{
 		fwrite( "file '", 6, 1, fp );
-		fwrite( video_data.segment[ i ].path, strlen( video_data.segment[ i ].path ), 1, fp );
+		fwrite( video_data.segment.data[ i ].path, strlen( video_data.segment.data[ i ].path ), 1, fp );
 		fwrite( "'\n", 2, 1, fp );
 	}
 
@@ -492,9 +491,9 @@ void calc_target_bitrates( enc_video_data_t& video_data, clip_encode_preset_t& p
 	float total_duration = 0.f;
 	float total_bitrate  = 0.f;
 
-	for ( u32 seg_i = 0; seg_i < video_data.segment_count; seg_i++ )
+	for ( u32 seg_i = 0; seg_i < video_data.segment.count; seg_i++ )
 	{
-		video_segment_t&     segment    = video_data.segment[ seg_i ];
+		video_segment_t&     segment    = video_data.segment.data[ seg_i ];
 		clip_source_usage_t& source_use = video_data.group.sources[ segment.source ];
 		clip_source_t&       source     = video_data.clip.source[ source_use.source_index ];
 
@@ -515,35 +514,22 @@ void calc_target_bitrates( enc_video_data_t& video_data, clip_encode_preset_t& p
 	float average_bitrate = ( ( preset.target_size * 0.001 * 8192 ) / total_duration ) - preset.audio_bitrate;
 	float bitrate_mult    = average_bitrate / total_bitrate;
 
-	for ( u32 seg_i = 0; seg_i < video_data.segment_count; seg_i++ )
+	for ( u32 seg_i = 0; seg_i < video_data.segment.count; seg_i++ )
 	{
-		video_segment_t& segment = video_data.segment[ seg_i ];
+		video_segment_t& segment = video_data.segment.data[ seg_i ];
 		segment.bitrate *= bitrate_mult;
 	}
 }
 
 
-struct target_size_pass_t
-{
-	u32                 attempt         = 0;
-
-	float*              prev_bitrates   = nullptr;  // unused
-	float*              max_bitrates    = nullptr;
-	float*              min_bitrates    = nullptr;
-	float*              ffmpeg_bitrates = nullptr;
-
-	float               prev_file_size  = 0;
-
-	e_target_size_state last_state      = e_target_size_state_none;
-};
-
-
 // returns -1 if we failed and should cancel this, 0 if we need to try again, 1 if we suceeded
 int run_encode_inputs_target_size_pass( enc_video_data_t& video_data, clip_encode_preset_t& preset, target_size_pass_t& pass_data )
 {
-	for ( u32 seg_i = 0; seg_i < video_data.segment_count; seg_i++ )
+	for ( u32 seg_i = 0; seg_i < video_data.segment.count; seg_i++ )
 	{
-		video_segment_t&     segment    = video_data.segment[ seg_i ];
+		video_data.segment.index        = seg_i;
+
+		video_segment_t&     segment    = video_data.segment.data[ seg_i ];
 		clip_source_usage_t& source_use = video_data.group.sources[ segment.source ];
 		clip_source_t&       source     = video_data.clip.source[ source_use.source_index ];
 
@@ -551,10 +537,10 @@ int run_encode_inputs_target_size_pass( enc_video_data_t& video_data, clip_encod
 		char*                ffmpeg_cmd = gen_ffmpeg_cmd( preset, source, segment.time );
 		size_t               buf_len    = strlen( ffmpeg_cmd );
 
-		snprintf( ffmpeg_cmd + buf_len, FFMPEG_CMD_SIZE - buf_len, " -b:v %.4fk", segment.bitrate );
+		//snprintf( ffmpeg_cmd + buf_len, FFMPEG_CMD_SIZE - buf_len, " -b:v %.4fk -minrate %.4k", segment.bitrate );
 
 		// TEST
-		// snprintf( ffmpeg_cmd + buf_len, FFMPEG_CMD_SIZE - buf_len, " -b:v %.4fk -maxrate %.4fk -bufsize %.4fk -undershoot-pct 100 -overshoot-pct 100", segment.bitrate, segment.bitrate, segment.bitrate / 2.f );
+		snprintf( ffmpeg_cmd + buf_len, FFMPEG_CMD_SIZE - buf_len, " -b:v %.4fk -minrate %.4fk -maxrate %.4fk -bufsize %.4fk -undershoot-pct 100 -overshoot-pct 100", segment.bitrate, segment.bitrate, segment.bitrate / 2.f );
 		buf_len = strlen( ffmpeg_cmd );
 
 		if ( preset.audio_bitrate )
@@ -569,13 +555,15 @@ int run_encode_inputs_target_size_pass( enc_video_data_t& video_data, clip_encod
 			return -1;
 	}
 
+	video_data.segment.index = UINT32_MAX;
+
 	// check the segments created
 
 	// get the bitrates and total file size from the videos ffmpeg created
 	float total_file_size = 0;
-	for ( u32 seg_i = 0; seg_i < video_data.segment_count; seg_i++ )
+	for ( u32 seg_i = 0; seg_i < video_data.segment.count; seg_i++ )
 	{
-		video_segment_t& segment           = video_data.segment[ seg_i ];
+		video_segment_t& segment           = video_data.segment.data[ seg_i ];
 		float            bitrate           = get_video_bitrate( segment.path ) * 0.001;  // bytes to kb
 		pass_data.ffmpeg_bitrates[ seg_i ] = bitrate;
 
@@ -619,13 +607,13 @@ int run_encode_inputs_target_size_pass( enc_video_data_t& video_data, clip_encod
 	}
 
 	// reencode videos at an adjusted bitrate based on what ffmpeg felt like encoding it as
-	for ( u32 seg_i = 0; seg_i < video_data.segment_count; seg_i++ )
+	for ( u32 seg_i = 0; seg_i < video_data.segment.count; seg_i++ )
 	{
-		video_segment_t& segment        = video_data.segment[ seg_i ];
+		video_segment_t& segment        = video_data.segment.data[ seg_i ];
 		float            ffmpeg_bitrate = pass_data.ffmpeg_bitrates[ seg_i ];
 
 		// division
-		float            bitrate_base    = 0.f;  // numerator
+		float            bitrate_base   = 0.f;  // numerator
 		float            bitrate_div    = 0.f;  // denominator
 
 		if ( smaller )
@@ -702,27 +690,27 @@ int run_encode_inputs_target_size_pass( enc_video_data_t& video_data, clip_encod
 // encoding for a target file size, useful for creating discord videos
 bool run_encode_inputs_target_size( enc_video_data_t& video_data, clip_encode_preset_t& preset )
 {
+	int ret = 0;
+
 	// calculate target bitrates
 	calc_target_bitrates( video_data, preset );
 
-	target_size_pass_t pass_data{};
-	pass_data.prev_bitrates   = ch_calloc< float >( video_data.segment_count );
-	pass_data.max_bitrates    = ch_calloc< float >( video_data.segment_count );
-	pass_data.min_bitrates    = ch_calloc< float >( video_data.segment_count );
-	pass_data.ffmpeg_bitrates = ch_calloc< float >( video_data.segment_count );
+	target_size_pass_t& pass_data = video_data.segment.target_size;
+	pass_data.prev_bitrates       = ch_calloc< float >( video_data.segment.count );
+	pass_data.max_bitrates        = ch_calloc< float >( video_data.segment.count );
+	pass_data.min_bitrates        = ch_calloc< float >( video_data.segment.count );
+	pass_data.ffmpeg_bitrates     = ch_calloc< float >( video_data.segment.count );
 
 	if ( !pass_data.prev_bitrates || !pass_data.max_bitrates || !pass_data.min_bitrates || !pass_data.ffmpeg_bitrates )
-		return false;
+		goto target_size_free;
 
 	// set max bitrate really high by default so it lowers in passes
 	// either min or max bitrates should get closer to each other with each pass
-	for ( u32 seg_i = 0; seg_i < video_data.segment_count; seg_i++ )
+	for ( u32 seg_i = 0; seg_i < video_data.segment.count; seg_i++ )
 		pass_data.max_bitrates[ seg_i ] = FLT_MAX;
 
-	int ret = 0;
-
 	// max of 10 attempts
-	for ( ; pass_data.attempt < 10; pass_data.attempt++ )
+	for ( ; pass_data.attempt < MAX_TARGET_SIZE_RETRY; pass_data.attempt++ )
 	{
 		ret = run_encode_inputs_target_size_pass( video_data, preset, pass_data );
 
@@ -730,6 +718,7 @@ bool run_encode_inputs_target_size( enc_video_data_t& video_data, clip_encode_pr
 			break;
 	}
 
+target_size_free:
 	free( pass_data.prev_bitrates );
 	free( pass_data.max_bitrates );
 	free( pass_data.min_bitrates );
@@ -744,9 +733,11 @@ bool run_encode_inputs_target_size( enc_video_data_t& video_data, clip_encode_pr
 bool run_encode_inputs_standard( enc_video_data_t& video_data, clip_encode_preset_t& preset )
 {
 	// create all video segments
-	for ( u32 seg_i = 0; seg_i < video_data.segment_count; seg_i++ )
+	for ( u32 seg_i = 0; seg_i < video_data.segment.count; seg_i++ )
 	{
-		video_segment_t&     segment    = video_data.segment[ seg_i ];
+		video_data.segment.index        = seg_i;
+
+		video_segment_t&     segment    = video_data.segment.data[ seg_i ];
 		clip_source_usage_t& source_use = video_data.group.sources[ segment.source ];
 		clip_source_t&       source     = video_data.clip.source[ source_use.source_index ];
 
@@ -763,6 +754,8 @@ bool run_encode_inputs_standard( enc_video_data_t& video_data, clip_encode_prese
 
 		log_printf( log_result, "[PASS] [VIDEO SECTION] - %s\n", segment.path );
 	}
+
+	video_data.segment.index = UINT32_MAX;
 
 	return true;
 }
@@ -848,13 +841,10 @@ int qsort_time_range( const void* left, const void* right )
 }
 
 
-enc_video_data_t get_video_segments( enc_clip_t& enc_clip, clip_t& clip, clip_group_t& group, u32 preset_i )
+enc_segment_data_t get_video_segments( enc_clip_t& enc_clip, clip_t& clip, clip_group_t& group, u32 preset_i )
 {
-	enc_video_data_t video_data{
-		.enc_clip = enc_clip,
-		.clip     = clip,
-		.group    = group
-	};
+	enc_segment_data_t video_data{};
+	video_data.index             = UINT32_MAX;
 
 	clip_encode_preset_t& preset = clip_data::preset[ preset_i ];
 
@@ -877,7 +867,7 @@ enc_video_data_t get_video_segments( enc_clip_t& enc_clip, clip_t& clip, clip_gr
 		for ( u32 time_i = 0; time_i < sorted_times.size(); time_i++ )
 		{
 			// add it to the segment list
-			if ( array_append_err( video_data.segment, video_data.segment_count, "failed to allocate memory to store video segment path\n" ) )
+			if ( array_append_err( video_data.data, video_data.count, "failed to allocate memory to store video segment path\n" ) )
 			{
 				failed = true;
 				break;
@@ -885,19 +875,19 @@ enc_video_data_t get_video_segments( enc_clip_t& enc_clip, clip_t& clip, clip_gr
 
 			char temp_name[ 256 ] = { 0 };
 
-			snprintf( temp_name, 256, "%s" SEP_S "%d__%s.%s", g_temp_video_dir, video_data.segment_count, input_name, preset.ext );
-			video_data.segment[ video_data.segment_count ].path   = strdup( temp_name );
-			video_data.segment[ video_data.segment_count ].source = source_i;
-			video_data.segment[ video_data.segment_count ].time   = sorted_times[ time_i ];
-			video_data.segment_count++;
+			snprintf( temp_name, 256, "%s" SEP_S "%d__%s.%s", g_temp_video_dir, video_data.count, input_name, preset.ext );
+			video_data.data[ video_data.count ].path   = strdup( temp_name );
+			video_data.data[ video_data.count ].source = source_i;
+			video_data.data[ video_data.count ].time   = sorted_times[ time_i ];
+			video_data.count++;
 		}
 
 		free( input_name );
 
 		if ( failed )
 		{
-			free( video_data.segment );
-			video_data.segment_count = 0;
+			free( video_data.data );
+			video_data.count = 0;
 			return video_data;
 		}
 	}
@@ -955,6 +945,22 @@ bool encode_set_output_dir( u32 preset_i )
 }
 
 
+void next_export_index( enc_clip_t& enc_clip, e_enc_state state )
+{
+	g_encoder_data.info_lock.lock();
+	enc_clip.exports[ enc_clip.export_index++ ].state = state;
+	g_encoder_data.info_lock.unlock();
+}
+
+
+void set_export_index_state( enc_clip_t& enc_clip, e_enc_state state )
+{
+	g_encoder_data.info_lock.lock();
+	enc_clip.exports[ enc_clip.export_index ].state = state;
+	g_encoder_data.info_lock.unlock();
+}
+
+
 void run_encode_clip( clip_t& clip, enc_clip_t& enc_clip )
 {
 	clip_prefix_t& prefix = clip_data::prefix[ clip.prefix ];
@@ -967,28 +973,37 @@ void run_encode_clip( clip_t& clip, enc_clip_t& enc_clip )
 		return;
 	}
 
-	enc_clip.state = e_enc_state_running;
+	g_encoder_data.info_lock.lock();
+	enc_clip.state        = e_enc_state_running;
+	enc_clip.export_index = 0;
+	g_encoder_data.info_lock.unlock();
 
-	u32 group_export = 0;
 	for ( u32 group_i = 0; group_i < clip.groups.size(); group_i++ )
 	{
 		log_printf( "\n----------------------------------------------------\n\n" );
 
+		if ( !encode_check_state() )
+			break;
+
+		g_encoder_data.info_lock.lock();
 		clip_group_t& group         = clip.groups[ group_i ];
 		g_encoder_data.clip_group_i = group_i;
+		g_encoder_data.info_lock.unlock();
 
 		for ( u32 preset_i : group.presets )
 		{
 			if ( !encode_check_state() )
 				break;
 
-			g_encoder_data.encode_preset               = preset_i;
-			enc_clip.group_state[ group_export ] = e_enc_state_running;
+			g_encoder_data.info_lock.lock();
+			g_encoder_data.encode_preset                    = preset_i;
+			enc_clip.exports[ enc_clip.export_index ].state = e_enc_state_running;
+			g_encoder_data.info_lock.unlock();
 
 			if ( !encode_set_output_dir( preset_i ) )
 			{
 				log_printf( log_error, "Failed to set output directory\n" );
-				enc_clip.group_state[ group_export++ ] = e_enc_state_failed;
+				next_export_index( enc_clip, e_enc_state_failed );
 				continue;
 			}
 
@@ -1005,7 +1020,7 @@ void run_encode_clip( clip_t& clip, enc_clip_t& enc_clip )
 				{
 					log_printf( log_result, "[PASS] [ALREADY EXISTS] %s\n", filename.c_str() );
 					//clip.state = e_enc_state_already_finished;
-					enc_clip.group_state[ group_export++ ] = e_enc_state_finished;
+					next_export_index( enc_clip, e_enc_state_finished );
 					continue;
 				}
 			}
@@ -1013,15 +1028,23 @@ void run_encode_clip( clip_t& clip, enc_clip_t& enc_clip )
 			// ----------------------------------------------------------------------------
 			// get the list of source videos and time ranges we will use for this preset
 
-			enc_video_data_t video_data = get_video_segments( enc_clip, clip, group, preset_i );
+			// enc_video_data_t video_data = get_video_segments( enc_clip, clip, group, preset_i );
+			enc_segment_data_t& segment_data = enc_clip.exports[ enc_clip.export_index ].segment;
 
-			if ( video_data.segment_count == 0 )
+			if ( segment_data.count == 0 )
 			{
 				// no segments found somehow
-				enc_clip.state                         = e_enc_state_failed;
-				enc_clip.group_state[ group_export++ ] = e_enc_state_failed;
+				enc_clip.state = e_enc_state_failed;
+				next_export_index( enc_clip, e_enc_state_failed );
 				continue;
 			}
+
+			enc_video_data_t video_data
+			{
+				.clip = clip,
+				.group = group,
+				.segment = segment_data,
+			};
 		
 			bool skip_output = false;
 
@@ -1035,10 +1058,10 @@ void run_encode_clip( clip_t& clip, enc_clip_t& enc_clip )
 			if ( !encode_check_state() )
 			{
 				// free data
-				for ( u32 i = 0; i < video_data.segment_count; i++ )
-					free( video_data.segment[ i ].path );
-
-				free( video_data.segment );
+				//for ( u32 i = 0; i < video_data.segment_count; i++ )
+				//	free( video_data.segment[ i ].path );
+				//
+				//free( video_data.segment );
 				break;
 			}
 
@@ -1047,26 +1070,34 @@ void run_encode_clip( clip_t& clip, enc_clip_t& enc_clip )
 			{
 				// concat them together
 				if ( create_output_video( video_data, filename.c_str(), !preset.target_size, preset_i ) )
-					enc_clip.group_state[ group_export ] = e_enc_state_finished;
+					set_export_index_state( enc_clip, e_enc_state_finished );
 				else
-					enc_clip.group_state[ group_export ] = e_enc_state_failed;
+					set_export_index_state( enc_clip, e_enc_state_failed );
 			}
 			else
 			{
-				enc_clip.group_state[ group_export ] = e_enc_state_failed;
+				set_export_index_state( enc_clip, e_enc_state_failed );
 			}
 
 			// free data
-			for ( u32 i = 0; i < video_data.segment_count; i++ )
-				free( video_data.segment[ i ].path );
+			//for ( u32 i = 0; i < video_data.segment_count; i++ )
+			//	free( video_data.segment[ i ].path );
+			//
+			//free( video_data.segment );
 
-			free( video_data.segment );
+			g_encoder_data.info_lock.lock();
 
-			if ( enc_clip.group_state[ group_export++ ] == e_enc_state_failed )
+			if ( enc_clip.exports[ enc_clip.export_index ].state == e_enc_state_failed )
 			{
-				enc_clip.state = e_enc_state_failed;
+				next_export_index( enc_clip, e_enc_state_failed );
+				g_encoder_data.info_lock.unlock();
 				break;
 			}
+
+			if ( enc_clip.export_index < enc_clip.exports.size() )
+				enc_clip.export_index++;
+
+			g_encoder_data.info_lock.unlock();
 		}
 	}
 
@@ -1077,25 +1108,51 @@ void run_encode_clip( clip_t& clip, enc_clip_t& enc_clip )
 
 void run_encoding()
 {
+	g_encoder_data.info_lock.lock();
+
 	char* clip_list_name = fs_get_filename_no_ext( g_videos_file_path );
 	log_set_file( clip_list_name );
 	free( clip_list_name );
 
 	g_encoder_data.output_dir.clear();
 	g_encoder_data.output_dir.append( g_output_dir );
-	g_encoder_data.clip_index_prev = UINT32_MAX;
+	g_encoder_data.clip_index_prev  = UINT32_MAX;
+	g_encoder_data.clip_group_i     = 0;
+	g_encoder_data.clip_group_src_i = 0;
+	g_encoder_data.encode_preset    = 0;
+
+	g_encoder_data.info_lock.unlock();
 
 	for ( u32 clip_i = 0; clip_i < clip_data::clip_count; clip_i++ )
 	{
 		if ( !encode_check_state() )
 			break;
 
-		clip_t&     clip          = clip_data::clip[ clip_i ];
-		enc_clip_t& enc_clip      = g_encoder_clips[ clip_i ];
+		g_encoder_data.info_lock.lock();
+		{
+			g_encoder_data.clip_group_i     = 0;
+			g_encoder_data.clip_group_src_i = 0;
+			g_encoder_data.encode_preset    = 0;
+			g_encoder_data.clip_index       = clip_i;
+		}
+		g_encoder_data.info_lock.unlock();
+
+		clip_t&     clip     = clip_data::clip[ clip_i ];
+		enc_clip_t& enc_clip = g_encoder_clips[ clip_i ];
 
 		run_encode_clip( clip, enc_clip );
-		g_encoder_data.clip_index_prev = g_encoder_data.clip_index;
-		g_encoder_data.clip_index++;
+
+		if ( !encode_check_state() )
+			break;
+
+		g_encoder_data.info_lock.lock();
+		{
+			g_encoder_data.clip_index_prev  = g_encoder_data.clip_index;
+			g_encoder_data.clip_group_i     = 0;
+			g_encoder_data.clip_group_src_i = 0;
+			g_encoder_data.encode_preset    = 0;
+		}
+		g_encoder_data.info_lock.unlock();
 	}
 
 	//for ( u32 preset_i = 0; preset_i < clip_data::preset_count; preset_i++ )
