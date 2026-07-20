@@ -200,6 +200,7 @@ if ( WIN32 )
 		SRC_FILES
 		${SRC_FILES}
 		src/sys_win32.cpp
+		src/replay_maker.manifest
 	)
 else()
 	set(

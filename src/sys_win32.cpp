@@ -907,6 +907,7 @@ int sys_init()
 	// https://learn.microsoft.com/en-us/cpp/c-runtime-library/reference/setlocale-wsetlocale?view=msvc-170#utf-8-support
 	// Allows using utf8 in the C runtime in windows 10 1803 or newer
 	setlocale( LC_ALL, ".utf8" );
+	setlocale( LC_NUMERIC, "C" );
 
 	g_con_out = GetStdHandle( STD_OUTPUT_HANDLE );
 
